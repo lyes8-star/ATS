@@ -19,12 +19,19 @@ let techWhitelist = null;
 
 /**
  * Aho–Corasick minimal (lowercase patterns).
- * @param {string[]} patterns
+ * Accepts string labels or `{ label, tier }` lexicon entries.
+ * @param {(string|{label?: string, name?: string})[]} patterns
  */
 export function buildAho(patterns) {
   const root = { next: Object.create(null), fail: null, out: [] };
   for (const raw of patterns) {
-    const p = String(raw || "").toLowerCase().trim();
+    const label =
+      typeof raw === "string"
+        ? raw
+        : raw && typeof raw === "object"
+          ? raw.label || raw.name || ""
+          : "";
+    const p = String(label || "").toLowerCase().trim();
     if (!p || p.length < 2) continue;
     let node = root;
     for (const ch of p) {
@@ -94,8 +101,23 @@ async function fetchJson(path) {
 export async function loadSkillsLexicon() {
   if (skillsCache) return skillsCache;
   const data = await fetchJson("data/analysis/skills-fr-en.min.json");
-  const skills = (data.skills || []).map((s) => String(s).toLowerCase());
-  skillsCache = { skills, automaton: buildAho(skills) };
+  const entries = (data.skills || []).map((s) => {
+    if (typeof s === "string") return { label: String(s).toLowerCase(), tier: "hard" };
+    return {
+      label: String(s.label || s.name || "").toLowerCase(),
+      tier: s.tier === "soft" ? "soft" : "hard",
+    };
+  }).filter((e) => e.label.length >= 2);
+  const skills = entries.map((e) => e.label);
+  const tierByLabel = Object.fromEntries(entries.map((e) => [e.label, e.tier]));
+  skillsCache = {
+    skills,
+    tierByLabel,
+    hardSkills: entries.filter((e) => e.tier === "hard").map((e) => e.label),
+    softSkills: entries.filter((e) => e.tier === "soft").map((e) => e.label),
+    automaton: buildAho(skills),
+    hardAutomaton: buildAho(entries.filter((e) => e.tier === "hard").map((e) => e.label)),
+  };
   return skillsCache;
 }
 
@@ -133,19 +155,63 @@ export async function loadAtsLayoutRules() {
 
 /**
  * @param {string} text
- * @returns {Promise<{ hits: string[], count: number, density: number }>}
+ * @returns {Promise<{ hits: string[], hardHits: string[], softHits: string[], count: number, density: number, catalogSize: number }>}
  */
 export async function matchSkills(text) {
-  const { automaton, skills } = await loadSkillsLexicon();
+  const { automaton, skills, tierByLabel } = await loadSkillsLexicon();
   const found = ahoFind(automaton, text || "");
-  // Tokens < 3 chars excluded (false hits on short patterns)
   const hits = [...found.keys()].filter((h) => String(h).length >= 3).sort();
+  const hardHits = hits.filter((h) => (tierByLabel?.[h] || "hard") === "hard");
+  const softHits = hits.filter((h) => tierByLabel?.[h] === "soft");
   const words = (text || "").split(/\s+/).filter(Boolean).length || 1;
   return {
     hits,
-    count: hits.length,
-    density: hits.length / Math.max(1, words / 100),
+    hardHits,
+    softHits,
+    count: hardHits.length,
+    density: hardHits.length / Math.max(1, words / 100),
     catalogSize: skills.length,
+  };
+}
+
+/**
+ * Infère un pack de rôle et liste les termes hard manquants.
+ * @param {string} text
+ * @param {{ headline?: string, roleTitle?: string }} [hints]
+ */
+export async function matchRoleKeywordGaps(text, hints = {}) {
+  const roles = await loadRoleKeywords();
+  const { automaton, tierByLabel } = await loadSkillsLexicon();
+  const cvHits = ahoFind(automaton, text || "");
+  const head = `${hints.headline || ""} ${hints.roleTitle || ""} ${text.slice(0, 600)}`.toLowerCase();
+
+  const roleScores = [];
+  for (const [role, terms] of Object.entries(roles.roles || {})) {
+    let score = 0;
+    for (const t of terms) {
+      const k = String(t).toLowerCase();
+      if (head.includes(k) || cvHits.has(k)) score += 1;
+    }
+    roleScores.push({ role, score, terms });
+  }
+  roleScores.sort((a, b) => b.score - a.score);
+  const best = roleScores[0];
+  if (!best || best.score < 2) {
+    return { role: null, missing: [], present: [], packSize: 0 };
+  }
+  const present = best.terms
+    .map((t) => String(t).toLowerCase())
+    .filter((t) => cvHits.has(t) || (text || "").toLowerCase().includes(t));
+  const missing = best.terms
+    .map((t) => String(t).toLowerCase())
+    .filter((t) => !present.includes(t) && (tierByLabel?.[t] || "hard") !== "soft")
+    .slice(0, 8);
+  return {
+    role: best.role,
+    missing,
+    present,
+    packSize: best.terms.length,
+    score: best.score,
   };
 }
 

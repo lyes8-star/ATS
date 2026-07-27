@@ -22,9 +22,10 @@ import {
   downloadBlob,
 } from "./pro-client.js";
 import * as extractApi from "./extract.js";
+import { patchDocxInPlace, ensurePizZipScript, cloneArrayBuffer } from "./export-docx.js";
 
 function freshParsed(session) {
-  const text = session.optimizedText || session.extracted?.text || "";
+  const text = session.workingText || session.optimizedText || session.extracted?.text || "";
   try {
     return parseCv(text);
   } catch {
@@ -49,6 +50,9 @@ function exportMeta(session, extra = {}) {
  * @property {object[]} annotations
  * @property {string|null} selectedId
  * @property {string|null} optimizedText
+ * @property {string|null} [workingText]
+ * @property {ArrayBuffer|null} [workingDocxBuffer]
+ * @property {boolean} [previewShowsWorking]
  * @property {object|null} retestReport
  * @property {number|null} scoreBefore
  * @property {boolean} [previewOptimized]
@@ -69,6 +73,19 @@ export async function mountStudio(root, session, hooks = {}) {
   session.selectedId = session.selectedId || session.annotations[0]?.id || null;
   session.scoreBefore = session.report?.total ?? null;
   session.previewOptimized = !!session.previewOptimized;
+  session.workingText = session.workingText || session.extracted?.text || "";
+  session.previewShowsWorking = !!session.previewShowsWorking;
+  if (
+    session.extracted?.format === "docx" &&
+    session.extracted?.originalBuffer &&
+    !session.workingDocxBuffer
+  ) {
+    try {
+      session.workingDocxBuffer = cloneArrayBuffer(session.extracted.originalBuffer);
+    } catch {
+      session.workingDocxBuffer = session.extracted.originalBuffer;
+    }
+  }
 
   root.innerHTML = studioShell(session);
   bindStudio(root, session, hooks);
@@ -110,6 +127,16 @@ function studioShell(session) {
   const checklistOk = checklist.filter((c) => c.ok).length;
   const checklistTotal = checklist.length;
   const checklistFail = checklist.filter((c) => !c.ok);
+  const failIdsHtml = checklistFail.length
+    ? `<div class="studio-checklist-kos" id="studio-checklist-kos">${checklistFail
+        .map(
+          (c) =>
+            `<button type="button" class="studio-ko-id" data-check-id="${escapeHtml(
+              c.id
+            )}" title="${escapeHtml(c.label)}">${escapeHtml(c.id)}</button>`
+        )
+        .join("")}</div>`
+    : "";
 
   return `
   <div class="studio" id="studio">
@@ -135,7 +162,7 @@ function studioShell(session) {
                 )}</span>`
               : ""
           }
-        </button>`
+        </button>${failIdsHtml}`
             : ""
         }
         <p id="studio-count" class="studio-count-inline"></p>
@@ -166,13 +193,13 @@ function studioShell(session) {
       <p id="studio-bar-count" class="studio-bar-count"></p>
       <div class="studio-bar-actions">
         <button type="button" class="btn-secondary" id="btn-accept-all">${escapeHtml(t("studio.acceptAll"))}</button>
-        <button type="button" class="btn-secondary" id="btn-generate" disabled>${escapeHtml(t("studio.generate.button"))}</button>
-        <button type="button" class="analyze-btn hidden" id="btn-download">${escapeHtml(t("studio.actions.download"))}</button>
-        <button type="button" class="btn-secondary hidden" id="btn-download-ats">${escapeHtml(t("studio.actions.downloadAts"))}</button>
-        <button type="button" class="btn-secondary hidden" id="btn-print">${escapeHtml(t("studio.actions.print"))}</button>
+        <button type="button" class="analyze-btn" id="btn-download">${escapeHtml(t("studio.actions.downloadWorking"))}</button>
+        <button type="button" class="btn-secondary" id="btn-download-ats">${escapeHtml(t("studio.actions.downloadAts"))}</button>
+        <button type="button" class="btn-secondary" id="btn-generate">${escapeHtml(t("studio.generate.button"))}</button>
+        <button type="button" class="btn-secondary" id="btn-print">${escapeHtml(t("studio.actions.print"))}</button>
         <button type="button" class="btn-secondary hidden" id="btn-pro-analyze">${escapeHtml(t("studio.actions.proAnalyze"))}</button>
         <button type="button" class="btn-secondary hidden" id="btn-pro-pdf">${escapeHtml(t("studio.actions.proPdf"))}</button>
-        <button type="button" class="analyze-btn hidden" id="btn-retest">${escapeHtml(t("studio.actions.retest"))}</button>
+        <button type="button" class="analyze-btn" id="btn-retest">${escapeHtml(t("studio.actions.retest"))}</button>
       </div>
     </div>
     <div id="retest-banner" class="retest-banner hidden" role="status"></div>
@@ -180,11 +207,16 @@ function studioShell(session) {
   </div>`;
 }
 
-function focusFailedChecklist(root, session) {
+function focusFailedChecklist(root, session, preferredCheckId = null) {
   const checklist = session.report?.checklist || [];
   const failedIds = new Set(checklist.filter((c) => !c.ok).map((c) => c.id));
-  if (!failedIds.size) return;
+  if (!failedIds.size && !preferredCheckId) return;
+  const want = preferredCheckId && failedIds.has(preferredCheckId) ? preferredCheckId : null;
   const ann =
+    (want &&
+      session.annotations.find(
+        (a) => a.status === "pending" && a.checkId === want
+      )) ||
     session.annotations.find(
       (a) => a.status === "pending" && a.checkId && failedIds.has(a.checkId)
     ) ||
@@ -200,6 +232,7 @@ function focusFailedChecklist(root, session) {
         graphic_skills: "graphic_skills",
         reading_order: "reading_order",
         header_sparse: "contact_plaintext",
+        role_keywords: "role_keywords",
         layout: a.checkId || "single_column",
         missing_section:
           /expérience|experience/i.test(a.title || "")
@@ -229,12 +262,60 @@ function focusFailedChecklist(root, session) {
   root.querySelector("#ann-list")?.focus?.();
 }
 
+/**
+ * Applique toutes les annotations acceptées sur workingText (+ DOCX buffer).
+ */
+async function applyAcceptedInPlace(session) {
+  const source = session.extracted?.text || "";
+  const { text } = applyAll(source, session.annotations);
+  session.workingText = text;
+  session.optimizedText = text;
+  session.previewShowsWorking = true;
+  try {
+    session.report = session.report || {};
+    session.report.parsed = parseCv(text);
+  } catch {
+    /* ignore */
+  }
+
+  if (session.extracted?.format === "docx") {
+    try {
+      await ensurePizZipScript();
+      let base =
+        session.extracted?.originalBuffer && !session.extracted.originalBuffer.detached
+          ? cloneArrayBuffer(session.extracted.originalBuffer)
+          : null;
+      if (!base && session.originalFile) {
+        base = await session.originalFile.arrayBuffer();
+        if (session.extracted) session.extracted.originalBuffer = cloneArrayBuffer(base);
+      }
+      if (base) {
+        const accepted = (session.annotations || []).filter((a) => a.status === "accepted");
+        const { blob } = await patchDocxInPlace(base, accepted);
+        const buf = await blob.arrayBuffer();
+        session.workingDocxBuffer = buf;
+        if (window.mammoth) {
+          const htmlResult = await window.mammoth.convertToHtml({ arrayBuffer: cloneArrayBuffer(buf) });
+          session.extracted.html = htmlResult.value || session.extracted.html;
+        }
+      }
+    } catch (err) {
+      console.warn("DOCX in-place patch failed", err);
+    }
+  }
+}
+
 function bindStudio(root, session, hooks) {
   root.querySelector("#studio-checklist-recap")?.addEventListener("click", () => {
     focusFailedChecklist(root, session);
   });
+  root.querySelector("#studio-checklist-kos")?.addEventListener("click", (e) => {
+    const btn = e.target.closest?.("[data-check-id]");
+    if (!btn) return;
+    focusFailedChecklist(root, session, btn.getAttribute("data-check-id"));
+  });
 
-  root.querySelector("#btn-accept-all")?.addEventListener("click", () => {
+  root.querySelector("#btn-accept-all")?.addEventListener("click", async () => {
     // Remplacements sûrs uniquement (typos / passifs / métriques replace)
     const safeKinds = new Set(["typo", "passive_verb", "missing_metric"]);
     let changed = 0;
@@ -251,34 +332,29 @@ function bindStudio(root, session, hooks) {
     });
     if (changed) {
       window.ATSAnalytics?.track?.("ats_accept_all", { count: changed });
+      await applyAcceptedInPlace(session);
       afterDecision(root, session);
     }
   });
 
   root.querySelector("#btn-generate")?.addEventListener("click", () => {
-    const { text } = applyAll(session.extracted.text, session.annotations);
+    // Secondaire : export ATS linéaire à partir du working text
+    const text =
+      session.workingText ||
+      applyAll(session.extracted.text, session.annotations).text;
+    session.workingText = text;
     session.optimizedText = text;
-    // Reparse after apply so export sees new bullets / header fields
     try {
       session.report = session.report || {};
       session.report.parsed = parseCv(text);
     } catch (e) {
       console.warn("reparse after generate failed", e);
     }
-    root.querySelector("#btn-download")?.classList.remove("hidden");
-    root.querySelector("#btn-download-ats")?.classList.remove("hidden");
-    root.querySelector("#btn-print")?.classList.remove("hidden");
-    root.querySelector("#btn-retest")?.classList.remove("hidden");
-    if (session.proEnabled || (hasProConsent() && isProConfigured())) {
-      root.querySelector("#btn-pro-analyze")?.classList.remove("hidden");
-      if (session.extracted?.format === "pdf" || session.extracted?.originalBuffer) {
-        root.querySelector("#btn-pro-pdf")?.classList.remove("hidden");
-      }
-    }
+    downloadAtsHtml(text, exportMeta(session));
     window.ATSAnalytics?.track?.("ats_cv_generated", {
       accepted: session.annotations.filter((a) => a.status === "accepted").length,
+      mode: "ats_linear_export",
     });
-    runRetest(root, session, hooks);
   });
 
   root.querySelector("#btn-pro-analyze")?.addEventListener("click", () => {
@@ -290,50 +366,66 @@ function bindStudio(root, session, hooks) {
   });
 
   root.querySelector("#btn-download")?.addEventListener("click", () => {
-    if (!session.optimizedText) return;
+    ensureWorkingText(session);
     downloadPrimary(session);
   });
 
   root.querySelector("#btn-download-ats")?.addEventListener("click", () => {
-    if (!session.optimizedText) return;
-    downloadAtsHtml(session.optimizedText, exportMeta(session));
+    ensureWorkingText(session);
+    downloadAtsHtml(session.workingText || session.optimizedText, exportMeta(session));
   });
 
   root.querySelector("#btn-print")?.addEventListener("click", () => {
-    if (!session.optimizedText) return;
+    ensureWorkingText(session);
     printPrimary(session);
   });
 
   root.querySelector("#btn-retest")?.addEventListener("click", () => {
-    if (!session.optimizedText) {
-      const { text } = applyAll(session.extracted.text, session.annotations);
-      session.optimizedText = text;
-      try {
-        session.report = session.report || {};
-        session.report.parsed = parseCv(text);
-      } catch {
-        /* ignore */
-      }
-    }
+    ensureWorkingText(session);
     runRetest(root, session, hooks);
   });
+
+  if (session.proEnabled || (hasProConsent() && isProConfigured())) {
+    root.querySelector("#btn-pro-analyze")?.classList.remove("hidden");
+    if (session.extracted?.format === "pdf" || session.extracted?.originalBuffer) {
+      root.querySelector("#btn-pro-pdf")?.classList.remove("hidden");
+    }
+  }
 
   showJdOverlap(root, session);
 }
 
+function ensureWorkingText(session) {
+  if (session.workingText) {
+    session.optimizedText = session.workingText;
+    return;
+  }
+  const { text } = applyAll(session.extracted?.text || "", session.annotations);
+  session.workingText = text;
+  session.optimizedText = text;
+  try {
+    session.report = session.report || {};
+    session.report.parsed = parseCv(text);
+  } catch {
+    /* ignore */
+  }
+}
+
 function downloadPrimary(session) {
+  ensureWorkingText(session);
   const meta = exportMeta(session);
   downloadLayoutFaithful(session, meta).catch((err) => {
     console.error(err);
-    downloadAtsHtml(session.optimizedText, meta);
+    downloadAtsHtml(session.workingText || session.optimizedText, meta);
   });
 }
 
 function printPrimary(session) {
+  ensureWorkingText(session);
   const meta = exportMeta(session, {
     layoutHostile: session.report?.layoutHostile,
   });
-  openFaithfulPrintable(session.optimizedText, meta.parsed, meta);
+  openFaithfulPrintable(session.workingText || session.optimizedText, meta.parsed, meta);
 }
 
 function showJdOverlap(root, session) {
@@ -433,11 +525,12 @@ function textToPreviewHtml(text) {
 async function runRetest(root, session, hooks) {
   try {
     const t = window.ATSi18n?.t || ((k) => k);
+    ensureWorkingText(session);
     const report = await analyzeCvAsync(
-      session.optimizedText,
+      session.workingText || session.optimizedText,
       {
         fileName: session.originalFile?.name || "cv-optimise",
-        pages: estimatePagesFromText(session.optimizedText),
+        pages: estimatePagesFromText(session.workingText || session.optimizedText),
         lang: window.ATSi18n?.getLang?.() || "fr",
         pagesGeo: session.extracted?.pagesGeo,
         tableCount: session.extracted?.tableCount || 0,
@@ -472,7 +565,7 @@ async function runRetest(root, session, hooks) {
             ${
               ready
                 ? `<button type="button" class="analyze-btn" id="btn-retest-download">${escapeHtml(
-                    t("studio.actions.download")
+                    t("studio.actions.downloadWorking")
                   )}</button>
                    <button type="button" class="btn-secondary" id="btn-retest-ats">${escapeHtml(
                      t("studio.actions.downloadAts")
@@ -491,14 +584,14 @@ async function runRetest(root, session, hooks) {
         downloadPrimary(session);
       });
       banner.querySelector("#btn-retest-ats")?.addEventListener("click", () => {
-        downloadAtsHtml(session.optimizedText, exportMeta(session));
+        downloadAtsHtml(session.workingText || session.optimizedText, exportMeta(session));
       });
       banner.querySelector("#btn-retest-print")?.addEventListener("click", () => {
         printPrimary(session);
       });
       banner.querySelector("#btn-continue-opt")?.addEventListener("click", () => {
         banner.classList.add("hidden");
-        // Preview HTML du texte optimisé (plus le PDF original — évite dérive géométrie)
+        // Keep original preview (PDF/DOCX) — merge new annotations, do not replace with regenerated HTML
         const freshAnns = (report.annotations || []).map((a) => ({
           ...a,
           status: "pending",
@@ -510,16 +603,11 @@ async function runRetest(root, session, hooks) {
         session.report = report;
         session.selectedId = session.annotations[0]?.id || null;
         session.scoreBefore = after;
-        session.previewOptimized = true;
-        session.extracted = {
-          ...session.extracted,
-          text: session.optimizedText,
-          html: textToPreviewHtml(session.optimizedText),
-          format: session.extracted?.format === "docx" ? "docx" : "html",
-          pdfDoc: null,
-          pagesGeo: [],
-          approximate: true,
-        };
+        session.previewOptimized = false;
+        session.previewShowsWorking = true;
+        if (session.extracted) {
+          session.extracted.text = session.workingText || session.extracted.text;
+        }
         const scoreEl = root.querySelector("#studio-score-before");
         if (scoreEl) scoreEl.textContent = String(after);
         refreshPreview(root, session);
@@ -529,12 +617,9 @@ async function runRetest(root, session, hooks) {
         showJdOverlap(root, session);
       });
     }
-    root.querySelector("#btn-download")?.classList.remove("hidden");
-    root.querySelector("#btn-download-ats")?.classList.remove("hidden");
-    root.querySelector("#btn-print")?.classList.remove("hidden");
     showJdOverlap(root, session);
     window.ATSAnalytics?.track?.("ats_retest", { before, after, delta });
-    hooks.onRetest?.(report, session.optimizedText);
+    hooks.onRetest?.(report, session.workingText || session.optimizedText);
   } catch (err) {
     console.error(err);
     const banner = root.querySelector("#retest-banner");
@@ -574,17 +659,20 @@ async function refreshPreview(root, session) {
     await renderPdfPreview(preview, session.extracted.pdfDoc, session.annotations, {
       onSelect,
       selectedId: session.selectedId,
+      showAppliedSuggestions: true,
     });
   } else {
+    const plain =
+      session.previewShowsWorking && session.workingText
+        ? session.workingText
+        : session.extracted.text;
     const html =
-      session.extracted.html || textToPreviewHtml(session.extracted.text || "");
-    renderHtmlPreview(
-      preview,
-      html,
-      session.extracted.text,
-      session.annotations,
-      { onSelect, selectedId: session.selectedId }
-    );
+      session.extracted.html || textToPreviewHtml(plain || "");
+    renderHtmlPreview(preview, html, plain, session.annotations, {
+      onSelect,
+      selectedId: session.selectedId,
+      showAppliedSuggestions: true,
+    });
   }
 }
 
@@ -743,16 +831,17 @@ function renderDetail(root, session) {
   const originalSuggestion = ann.suggestion || "";
 
   // Accepter = suggestion d'origine (ignore les edits textarea non validés via "Modifier")
-  detail.querySelector("#btn-accept")?.addEventListener("click", () => {
+  detail.querySelector("#btn-accept")?.addEventListener("click", async () => {
     session.annotations = updateAnnotation(session.annotations, ann.id, {
       status: "accepted",
       suggestion: originalSuggestion,
     });
+    await applyAcceptedInPlace(session);
     afterDecision(root, session);
   });
 
   // Modifier puis accepter = utilise le contenu édité du textarea
-  detail.querySelector("#btn-edit-accept")?.addEventListener("click", () => {
+  detail.querySelector("#btn-edit-accept")?.addEventListener("click", async () => {
     if (document.activeElement !== input) {
       input?.focus();
       input?.classList.add("is-editing");
@@ -766,6 +855,7 @@ function renderDetail(root, session) {
       status: "accepted",
       suggestion: input?.value ?? ann.suggestion,
     });
+    await applyAcceptedInPlace(session);
     afterDecision(root, session);
   });
 
@@ -796,8 +886,6 @@ function updateBar(root, session) {
   const text = t("studio.side.count", { total, accepted, pending });
   if (bar) bar.textContent = text;
   if (count) count.textContent = text;
-  const gen = root.querySelector("#btn-generate");
-  if (gen) gen.disabled = accepted === 0;
   const acceptAll = root.querySelector("#btn-accept-all");
   if (acceptAll) {
     const safePending = session.annotations.some(

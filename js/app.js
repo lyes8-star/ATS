@@ -162,16 +162,37 @@ function renderResults(report) {
   const diagItems = report.diagnostics
     .map(
       (d) => `
-    <div class="diag-item ${d.severity}">
+    <div class="diag-item ${d.severity}"${d.checkId ? ` data-check-id="${escapeHtml(d.checkId)}"` : ""}>
       <div class="diag-item-title">
         <span>${severityEmoji(d.severity)}</span>
-        <p>${escapeHtml(d.title)}</p>
+        <p>${escapeHtml(d.title)}${
+          d.checkId
+            ? ` <code class="diag-check-id">${escapeHtml(d.checkId)}</code>`
+            : ""
+        }</p>
       </div>
       <p class="diag-body">${escapeHtml(d.body)}</p>
       <p class="diag-tip">${escapeHtml(d.tip)}</p>
     </div>`
     )
     .join("");
+
+  const failedChecks = (report.checklist || []).filter((c) => !c.ok);
+  const failedChecklistHtml = failedChecks.length
+    ? `<div class="failed-checklist">
+        <h2 class="section-title">${t("results.checklist.fail.heading")} (${failedChecks.length})</h2>
+        <ul class="failed-checklist-list">
+          ${failedChecks
+            .map(
+              (c) =>
+                `<li data-check-id="${escapeHtml(c.id)}"><code>${escapeHtml(
+                  c.id
+                )}</code> — ${escapeHtml(c.label)}</li>`
+            )
+            .join("")}
+        </ul>
+      </div>`
+    : "";
 
   const tags = report.tags
     .map((t) => `<span class="diag-tag">${escapeHtml(t)}</span>`)
@@ -280,6 +301,8 @@ function renderResults(report) {
       </div>
       ${diagItems}
     </div>
+
+    ${failedChecklistHtml}
 
     <div>
       <h2 class="section-title">${t("results.categories.heading")}</h2>
