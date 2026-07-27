@@ -57,8 +57,8 @@
             url: "https://www.testmoncv.fr/",
             gaId: "",
             adsId: "",
-            themeColor: "#0e1218",
-            backgroundColor: "#f3f5f7",
+            themeColor: "#2c4a3e",
+            backgroundColor: "#faf8f5",
             legal: {},
           };
           return window.ATS_SITE;
