@@ -1,0 +1,56 @@
+{
+  "hook": {
+    "enabled": true,
+    "quiet": false
+  },
+  "detector": {
+    "ignoreRules": [
+      "design-system-font-size",
+      "design-system-color",
+      "design-system-radius",
+      "design-system-spacing",
+      "cream-palette"
+    ],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "fraunces",
+        "reason": "Intentional display serif for ATS Check (DESIGN.md)"
+      },
+      {
+        "rule": "overused-font",
+        "value": "Fraunces",
+        "reason": "Intentional display serif for ATS Check (DESIGN.md)"
+      },
+      {
+        "rule": "overused-font",
+        "value": "DM Sans",
+        "reason": "Intentional UI sans for ATS Check (DESIGN.md)"
+      },
+      {
+        "rule": "overused-font",
+        "value": "dm sans",
+        "reason": "Intentional UI sans for ATS Check (DESIGN.md)"
+      },
+      {
+        "rule": "layout-transition",
+        "value": "width",
+        "reason": "Progress bar score animation (category cards)"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "#faf6f0",
+        "reason": "Warm paper ground intentional — brand heritage (DESIGN.md)"
+      },
+      {
+        "rule": "cream-palette",
+        "value": "#f5f0e8",
+        "reason": "Warm paper secondary surface — intentional brand token"
+      }
+    ],
+    "designSystem": {
+      "enabled": true
+    }
+  }
+}

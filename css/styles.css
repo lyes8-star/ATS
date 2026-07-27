@@ -1427,7 +1427,7 @@ html.a11y-spacing body {
 }
 
 html.a11y-readable body {
-  font-family: "Atkinson Hyperlegible", "Comic Sans MS", "DM Sans", sans-serif;
+  font-family: Verdana, Geneva, sans-serif;
 }
 
 html.a11y-motion *,
@@ -1617,3 +1617,7 @@ html.a11y-motion *::after {
     flex: 1;
   }
 }
+
+/* Soft protect (disabled when .a11y-* on html) */
+html.protect-lock img { -webkit-user-drag: none; }
+html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; user-select: text; }

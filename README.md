@@ -59,6 +59,23 @@ sw.js / manifest…       # PWA
 mentions-legales/ …     # Quartet légal
 ```
 
+## Qualité & sécurité (skills Test / Test2)
+
+Ce dépôt embarque la **même stack Impeccable** que Test2 :
+
+- `.cursor/skills/impeccable` + hook Cursor `preToolUse`
+- `.github/skills/impeccable` + hook GitHub Copilot
+- `PRODUCT.md` / `DESIGN.md` / `QUALITY.md`
+- Soft protect `js/protect.js`, headers `_headers`, `security.txt`
+
+```bash
+npm run audit          # tests moteur + checklist PWA/RGPD/sécurité
+npm run audit:static
+npm run detect         # anti-patterns Impeccable
+```
+
+Dans Cursor : `/impeccable audit`, `/impeccable harden`, `/impeccable polish`.
+
 ## Tests
 
 ```bash
