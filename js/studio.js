@@ -46,16 +46,17 @@ export async function mountStudio(root, session, hooks = {}) {
 }
 
 function studioShell(session) {
+  const t = window.ATSi18n?.t || ((k) => k);
   const total = session.report?.total ?? "—";
   const label = session.report?.label?.text ?? "";
   return `
   <div class="studio" id="studio">
     <div class="studio-score-strip">
       <div>
-        <p class="studio-kicker">Atelier d'optimisation ATS</p>
-        <p class="studio-score-line">Score initial <strong id="studio-score-before">${total}</strong>/100 <span class="studio-label">${escapeHtml(label)}</span></p>
+        <p class="studio-kicker">${escapeHtml(t("studio.kicker"))}</p>
+        <p class="studio-score-line">${escapeHtml(t("studio.score.initial"))} <strong id="studio-score-before">${total}</strong>/100 <span class="studio-label">${escapeHtml(label)}</span></p>
       </div>
-      <p class="studio-hint">Cliquez une zone colorée ou une suggestion pour corriger précisément.</p>
+      <p class="studio-hint">${escapeHtml(t("studio.hint"))}</p>
     </div>
     <div class="studio-split">
       <div class="studio-preview-col">
@@ -63,7 +64,7 @@ function studioShell(session) {
       </div>
       <aside class="studio-side" aria-label="Suggestions">
         <div class="studio-side-head">
-          <h2>Suggestions</h2>
+          <h2>${escapeHtml(t("studio.side.title"))}</h2>
           <p id="studio-count"></p>
         </div>
         <div id="ann-list" class="ann-list" role="listbox" aria-label="Liste des annotations"></div>
@@ -73,10 +74,10 @@ function studioShell(session) {
     <div class="studio-bar" role="region" aria-label="Actions d'optimisation">
       <p id="studio-bar-count" class="studio-bar-count"></p>
       <div class="studio-bar-actions">
-        <button type="button" class="btn-secondary" id="btn-generate" disabled>Générer mon CV ATS optimisé</button>
-        <button type="button" class="btn-secondary hidden" id="btn-download">Télécharger HTML</button>
-        <button type="button" class="btn-secondary hidden" id="btn-print">Imprimer / PDF</button>
-        <button type="button" class="analyze-btn hidden" id="btn-retest">Retester</button>
+        <button type="button" class="btn-secondary" id="btn-generate" disabled>${escapeHtml(t("studio.generate.button"))}</button>
+        <button type="button" class="btn-secondary hidden" id="btn-download">${escapeHtml(t("studio.actions.download"))}</button>
+        <button type="button" class="btn-secondary hidden" id="btn-print">${escapeHtml(t("studio.actions.print"))}</button>
+        <button type="button" class="analyze-btn hidden" id="btn-retest">${escapeHtml(t("studio.actions.retest"))}</button>
       </div>
     </div>
     <div id="retest-banner" class="retest-banner hidden" role="status"></div>
@@ -126,9 +127,11 @@ function bindStudio(root, session, hooks) {
 
 function runRetest(root, session, hooks) {
   try {
+    const t = window.ATSi18n?.t || ((k) => k);
     const report = analyzeCv(session.optimizedText, {
       fileName: session.originalFile?.name || "cv-optimise",
       pages: estimatePagesFromText(session.optimizedText),
+      lang: window.ATSi18n?.getLang?.() || "fr",
     });
     session.retestReport = report;
     const before = session.scoreBefore ?? 0;
@@ -142,8 +145,10 @@ function runRetest(root, session, hooks) {
           <p class="retest-delta">Score <strong>${before}</strong> → <strong>${after}</strong>
             <span class="${delta >= 0 ? "delta-up" : "delta-down"}">(${delta >= 0 ? "+" : ""}${delta})</span>
           </p>
-          <p>${report.passes ? "Le CV optimisé passe mieux les filtres ATS." : "Continuez l'optimisation pour viser 70+."}</p>
-          <button type="button" class="btn-secondary" id="btn-continue-opt">Continuer l'optimisation</button>
+          <p>${report.passes ? t("studio.retest.pass") : t("studio.retest.continue")}</p>
+          <button type="button" class="btn-secondary" id="btn-continue-opt">${escapeHtml(
+            t("studio.retest.continueButton")
+          )}</button>
         </div>`;
       banner.querySelector("#btn-continue-opt")?.addEventListener("click", () => {
         banner.classList.add("hidden");
@@ -217,10 +222,15 @@ function renderList(root, session) {
   const list = root.querySelector("#ann-list");
   const count = root.querySelector("#studio-count");
   if (!list) return;
+  const t = window.ATSi18n?.t || ((k) => k);
   const pending = session.annotations.filter((a) => a.status === "pending").length;
   const accepted = session.annotations.filter((a) => a.status === "accepted").length;
   if (count) {
-    count.textContent = `${session.annotations.length} suggestion${session.annotations.length > 1 ? "s" : ""} · ${accepted} acceptée${accepted > 1 ? "s" : ""} · ${pending} en attente`;
+    count.textContent = t("studio.side.count", {
+      total: session.annotations.length,
+      accepted,
+      pending,
+    });
   }
 
   list.innerHTML = session.annotations
@@ -255,34 +265,38 @@ function renderList(root, session) {
 }
 
 function statusLabel(s) {
-  if (s === "accepted") return "Acceptée";
-  if (s === "ignored") return "Ignorée";
-  return "À traiter";
+  const t = window.ATSi18n?.t || ((k) => k);
+  if (s === "accepted") return t("studio.accepted");
+  if (s === "ignored") return t("studio.ignored");
+  return t("studio.pending");
 }
 
 function renderDetail(root, session) {
   const detail = root.querySelector("#ann-detail");
   if (!detail) return;
   const ann = session.annotations.find((a) => a.id === session.selectedId);
+  const t = window.ATSi18n?.t || ((k) => k);
   if (!ann) {
-    detail.innerHTML = `<p class="ann-empty">Sélectionnez une suggestion pour voir le détail.</p>`;
+    detail.innerHTML = `<p class="ann-empty">${escapeHtml(
+      t("studio.detail.empty")
+    )}</p>`;
     return;
   }
 
   detail.innerHTML = `
     <div class="ann-detail-card severity-${ann.severity}">
-      <p class="ann-where"><span>Où</span> ${
+      <p class="ann-where"><span>${escapeHtml(t("studio.detail.where"))}</span> ${
         ann.page ? `Page ${ann.page}` : "Document"
       }${ann.section ? ` · ${escapeHtml(ann.section)}` : ""}</p>
       <p class="ann-quote">« ${escapeHtml(ann.quote || "")} »</p>
       <h3>${escapeHtml(ann.title)}</h3>
       <p class="ann-problem">${escapeHtml(ann.detail || "")}</p>
-      <label class="ann-suggest-label" for="ann-suggest-input">Correction proposée</label>
+      <label class="ann-suggest-label" for="ann-suggest-input">${escapeHtml(t("studio.detail.correction"))}</label>
       <textarea id="ann-suggest-input" class="ann-suggest" rows="3">${escapeHtml(ann.suggestion || "")}</textarea>
       <div class="ann-actions">
-        <button type="button" class="analyze-btn" id="btn-accept">Accepter</button>
-        <button type="button" class="btn-secondary" id="btn-ignore">Ignorer</button>
-        <button type="button" class="btn-ghost-text" id="btn-edit-accept">Modifier puis accepter</button>
+        <button type="button" class="analyze-btn" id="btn-accept">${escapeHtml(t("studio.actions.accept"))}</button>
+        <button type="button" class="btn-secondary" id="btn-ignore">${escapeHtml(t("studio.actions.ignore"))}</button>
+        <button type="button" class="btn-ghost-text" id="btn-edit-accept">${escapeHtml(t("studio.actions.editAccept"))}</button>
       </div>
     </div>`;
 
@@ -325,8 +339,11 @@ async function afterDecision(root, session) {
 function updateBar(root, session) {
   const total = session.annotations.length;
   const accepted = session.annotations.filter((a) => a.status === "accepted").length;
+  const pending = session.annotations.filter((a) => a.status === "pending").length;
+  const t = window.ATSi18n?.t || ((k) => k);
   const bar = root.querySelector("#studio-bar-count");
-  if (bar) bar.textContent = `${total} suggestion${total > 1 ? "s" : ""} · ${accepted} acceptée${accepted > 1 ? "s" : ""}`;
+  if (bar)
+    bar.textContent = t("studio.side.count", { total, accepted, pending });
   const gen = root.querySelector("#btn-generate");
   if (gen) gen.disabled = accepted === 0;
 }

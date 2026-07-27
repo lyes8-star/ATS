@@ -20,6 +20,10 @@ Ouvrir http://localhost:8080/
 - **Atelier annoté** : prévisualisation CV (PDF canvas / DOCX HTML) + surcouches localisées
 - Acceptation / ignore / édition des suggestions, puis **génération d’un CV ATS 1 colonne**
 - **Retest automatique** avec delta de score avant / après
+- **Parité Crevia** : barre contact avec adresse + popup Google Maps **chargée après consentement** (CMP)
+- **Bascule FR/EN** (i18n) de l’interface, du studio et des contenus UI
+- **Typographie** : Space Grotesk (display) + IBM Plex Sans (body)
+- **Footer crédit** : « Fait par Crevia » avec lien vers crevia.fr
 
 ## Normes production (modèle Test / Test2)
 
@@ -61,6 +65,8 @@ js/optimize.js          # Application des suggestions
 js/export-cv.js         # Export CV ATS HTML / impression
 js/app.js               # Orchestration upload → studio → retest
 js/consent.js           # CMP + Consent Mode v2
+js/i18n.js              # dictionnaire FR/EN + switcher (pas de /en routes)
+js/map-google.js        # popup Google Maps chargée après consentement CMP
 js/analytics.js         # gtag gated
 js/a11y.js / chat.js    # FABs accessibilité & assistant
 sw.js / manifest…       # PWA

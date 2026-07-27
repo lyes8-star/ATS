@@ -17,22 +17,22 @@ colors:
   danger: "#991b1b"
 typography:
   display:
-    fontFamily: "Fraunces, Georgia, serif"
+    fontFamily: "Space Grotesk, system-ui, sans-serif"
     fontSize: "clamp(2rem, 5vw, 3rem)"
     fontWeight: 800
     lineHeight: 1.15
   heading:
-    fontFamily: "Fraunces, Georgia, serif"
+    fontFamily: "Space Grotesk, system-ui, sans-serif"
     fontSize: "clamp(1.35rem, 2.5vw, 1.75rem)"
     fontWeight: 700
     lineHeight: 1.25
   body:
-    fontFamily: "DM Sans, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, system-ui, sans-serif"
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.5
   label:
-    fontFamily: "DM Sans, system-ui, sans-serif"
+    fontFamily: "IBM Plex Sans, system-ui, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 600
     letterSpacing: "0.06em"
@@ -80,7 +80,7 @@ components:
 
 ## Overview
 
-ATS Check is a brand-first marketing + tool surface for a free ATS CV checker. Visual system: charcoal + gold + terracotta accents on a warm paper background (product heritage from the reference verifier UX), Fraunces for display, DM Sans for UI. One composition on first viewport: brand, headline, short support, upload CTA.
+ATS Check is a brand-first marketing + tool surface for a free ATS CV checker. Visual system: charcoal + gold + terracotta accents on a warm paper background (product heritage from the reference verifier UX), Space Grotesk for display, IBM Plex Sans for UI. One composition on first viewport: brand, headline, short support, upload CTA.
 
 ## Colors
 
@@ -92,8 +92,8 @@ ATS Check is a brand-first marketing + tool surface for a free ATS CV checker. V
 
 ## Typography
 
-- Display / headings: Fraunces
-- Body / UI: DM Sans
+- Display / headings: Space Grotesk
+- Body / UI: IBM Plex Sans
 - A11y readable mode: Verdana fallback via `.a11y-readable`
 
 ## Layout
