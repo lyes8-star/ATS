@@ -414,6 +414,32 @@ img {
   outline-offset: 1px;
 }
 
+.pro-row {
+  margin-top: 1rem;
+  text-align: left;
+}
+
+.pro-consent-label {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--stone-600, #57534e);
+  cursor: pointer;
+}
+
+.pro-consent-label input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.pro-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  color: var(--stone-500, #78716c);
+}
+
 .studio-jd-overlap {
   margin: 0.75rem 1.25rem 0;
   font-size: 0.9rem;

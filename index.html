@@ -179,6 +179,14 @@
             <textarea id="jd-input" rows="3" data-i18n="upload.jd.placeholder" data-i18n-attr="placeholder" placeholder="Collez l'annonce pour mesurer l'alignement mots-clés CV ↔ offre"></textarea>
           </div>
 
+          <div class="pro-row" id="pro-consent-row">
+            <label class="pro-consent-label">
+              <input type="checkbox" id="pro-consent" />
+              <span data-i18n="upload.pro.consent">Mode Pro (optionnel) — j’accepte l’envoi temporaire de mon CV au serveur pour suggestions LLM, ESCO et PDF avancé. Aucune conservation longue.</span>
+            </label>
+            <p class="pro-hint" data-i18n="upload.pro.hint">Sans Mode Pro, l’analyse reste 100 % locale dans votre navigateur.</p>
+          </div>
+
           <button type="button" id="analyze-btn" class="analyze-btn" disabled data-i18n="upload.analyze.button">
             Analyser mon CV
           </button>

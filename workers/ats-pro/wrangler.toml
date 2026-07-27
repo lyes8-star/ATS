@@ -1,0 +1,11 @@
+name = "ats-pro"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+PRO_CORS_ORIGIN = "*"
+
+# Secrets (set via wrangler secret put):
+# OPENAI_API_KEY
+# ANTHROPIC_API_KEY

@@ -67,7 +67,7 @@ window.ATSSeo = (function () {
               name: "L’analyse envoie-t-elle mon CV sur un serveur ?",
               acceptedAnswer: {
                 "@type": "Answer",
-                text: "Non. L’analyse est effectuée localement dans votre navigateur.",
+                text: "Par défaut non : l’analyse est locale. Le Mode Pro optionnel peut envoyer temporairement le texte du CV à un Worker (LLM/ESCO/PDF) sans conservation longue.",
               },
             },
             {

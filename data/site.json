@@ -36,6 +36,8 @@
     "social": {
       "linkedin": "",
       "twitter": ""
-    }
+    },
+    "proApiBase": "",
+    "proEnabled": false
   }
 }

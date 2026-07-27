@@ -14,7 +14,11 @@ window.ATSChat = (function () {
       },
       {
         q: "Mes données sont-elles envoyées sur un serveur ?",
-        a: "Non. L’analyse se fait entièrement dans votre navigateur. Aucun fichier CV n’est uploadé. Voir la politique de confidentialité.",
+        a: "Par défaut non : l’analyse locale reste dans votre navigateur. Si vous cochez Mode Pro, le texte du CV est envoyé temporairement à notre Worker (LLM / ESCO / PDF) sans conservation longue. Voir la politique de confidentialité.",
+      },
+      {
+        q: "Qu’est-ce que le Mode Pro ?",
+        a: "Option consentie : suggestions LLM, matching compétences ESCO, et export PDF avancé via un Worker Cloudflare. Sans Mode Pro, tout reste 100 % local.",
       },
       {
         q: "Que faire si mon score est faible ?",
@@ -36,7 +40,11 @@ window.ATSChat = (function () {
       },
       {
         q: "Are my data sent to a server?",
-        a: "No. The analysis runs entirely in your browser. No CV file is uploaded. See the privacy policy.",
+        a: "By default no — local analysis stays in your browser. If you enable Pro mode, CV text is sent temporarily to our Worker (LLM / ESCO / PDF) with no long-term retention. See the privacy policy.",
+      },
+      {
+        q: "What is Pro mode?",
+        a: "An opt-in: LLM suggestions, ESCO skill matching, and advanced PDF export via a Cloudflare Worker. Without Pro mode, everything stays 100% local.",
       },
       {
         q: "What should I do if my score is low?",

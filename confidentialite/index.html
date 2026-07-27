@@ -121,19 +121,30 @@
         <p>Délégué à la protection des données (DPO) : <a href="mailto:dpo@ats-check.fr">dpo@ats-check.fr</a></p>
 
         <h2>Analyse de CV (traitement local)</h2>
-        <p><strong>Votre fichier CV n’est pas envoyé sur nos serveurs.</strong> L’extraction de texte et le calcul du score s’effectuent exclusivement dans votre navigateur. Nous n’avons donc pas accès au contenu de votre CV via cet outil.</p>
+        <p><strong>Par défaut, votre fichier CV n’est pas envoyé sur nos serveurs.</strong> L’extraction de texte et le calcul du score s’effectuent exclusivement dans votre navigateur.</p>
+
+        <h2>Mode Pro (optionnel)</h2>
+        <p>Si vous activez explicitement le <strong>Mode Pro</strong> (case à cocher), le texte de votre CV peut être transmis temporairement à notre Worker (hébergement Cloudflare) afin de :</p>
+        <ul>
+          <li>générer des suggestions via un fournisseur LLM (OpenAI et/ou Anthropic) ;</li>
+          <li>interroger des référentiels de compétences (ex. ESCO) ;</li>
+          <li>produire un PDF réécrit / reflow.</li>
+        </ul>
+        <p>Ces traitements sont réalisés <strong>sans conservation longue</strong> du contenu (mémoire de requête uniquement). Nous n’utilisons pas vos CV pour entraîner des modèles sans consentement distinct. Vous pouvez rester en mode 100&nbsp;% local en ne cochant pas Mode Pro.</p>
 
         <h2>Données éventuellement collectées</h2>
         <ul>
           <li><strong>Cookies / mesure d’audience</strong> (si vous acceptez) : statistiques de fréquentation via Google Analytics (IP anonymisée).</li>
           <li><strong>Publicité / Google Ads</strong> (si vous acceptez) : mesure de campagnes.</li>
           <li><strong>Contact e-mail</strong> : si vous nous écrivez, les données fournies dans votre message.</li>
+          <li><strong>Mode Pro</strong> (si vous consentez) : texte CV / offre transmis temporairement au Worker pour suggestions — pas de stockage durable.</li>
         </ul>
 
         <h2>Bases légales</h2>
         <ul>
           <li>Intérêt légitime / exécution du service pour le fonctionnement technique du site.</li>
           <li>Consentement pour analytics et publicité (Consent Mode v2).</li>
+          <li>Consentement explicite pour le Mode Pro (envoi temporaire du CV).</li>
         </ul>
 
         <h2>Durées de conservation</h2>

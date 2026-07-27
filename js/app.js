@@ -2,6 +2,13 @@ import { analyzeCvAsync, attachGeometry } from "./analyzer.js";
 import { extractDocument } from "./extract.js";
 import * as extractApi from "./extract.js";
 import { mountStudio } from "./studio.js";
+import {
+  hasProConsent,
+  setProConsent,
+  isProConfigured,
+  proAnalyze,
+  proSkills,
+} from "./pro-client.js";
 
 const CIRCUMFERENCE = 2 * Math.PI * 90;
 const ARC = CIRCUMFERENCE * 0.75;
@@ -17,6 +24,7 @@ const els = {
   analyzeBtn: document.getElementById("analyze-btn"),
   emailInput: document.getElementById("email-input"),
   jdInput: document.getElementById("jd-input"),
+  proConsent: document.getElementById("pro-consent"),
   errorBanner: document.getElementById("error-banner"),
   loading: document.getElementById("loading"),
   loadingStep: document.getElementById("loading-step"),
@@ -407,7 +415,42 @@ async function runAnalysis() {
       retestReport: null,
       scoreBefore: report.total,
       jobDescription: els.jdInput?.value || "",
+      proEnabled: hasProConsent() && isProConfigured(),
     };
+
+    // Mode Pro enrichissement (opt-in) — annotations LLM + overlap ESCO
+    if (session.proEnabled) {
+      try {
+        setLoading(true, 2);
+        const [proAnns, proSk] = await Promise.all([
+          proAnalyze({
+            text: extracted.text,
+            jobDescription: session.jobDescription,
+            lang: window.ATSi18n?.getLang?.() || "fr",
+          }).catch(() => null),
+          session.jobDescription
+            ? proSkills({
+                text: extracted.text,
+                jobDescription: session.jobDescription,
+                lang: window.ATSi18n?.getLang?.() || "fr",
+              }).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+        if (proAnns?.annotations?.length) {
+          const geo = attachGeometry(proAnns.annotations, extracted.pagesGeo, extractApi);
+          session.annotations = [...session.annotations, ...geo];
+          report.annotations = session.annotations;
+          session.selectedId = session.annotations[0]?.id || null;
+        }
+        if (proSk && proSk.score != null) {
+          report.jdOverlap = proSk;
+          session.report = report;
+        }
+        window.ATSAnalytics?.track?.("ats_pro_enabled", { anns: proAnns?.annotations?.length || 0 });
+      } catch (proErr) {
+        console.warn("Mode Pro skipped", proErr);
+      }
+    }
 
     window.ATSAnalytics?.track?.("ats_analysis_complete", {
       score: report.total,
@@ -457,6 +500,13 @@ els.fileInput.addEventListener("change", () => {
 });
 els.analyzeBtn.addEventListener("click", runAnalysis);
 els.btnNewTest.addEventListener("click", resetToUpload);
+
+if (els.proConsent) {
+  els.proConsent.checked = hasProConsent();
+  els.proConsent.addEventListener("change", () => {
+    setProConsent(els.proConsent.checked);
+  });
+}
 
 document.querySelectorAll("[data-scroll-top]").forEach((el) => {
   el.addEventListener("click", (e) => {

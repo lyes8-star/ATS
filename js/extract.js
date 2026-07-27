@@ -121,6 +121,11 @@ export async function extractFromPdf(file) {
   }
 
   const approximate = itemCount < 8 || text.replace(/\s/g, "").length < 40;
+  // Keep original bytes for Mode Pro PDF rewrite / local re-download
+  const originalBuffer = data.buffer.slice(
+    data.byteOffset,
+    data.byteOffset + data.byteLength
+  );
 
   return {
     text,
@@ -131,7 +136,7 @@ export async function extractFromPdf(file) {
     html: null,
     approximate,
     tableCount: 0,
-    originalBuffer: null,
+    originalBuffer,
   };
 }
 
