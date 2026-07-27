@@ -15,9 +15,9 @@ Ouvrir http://localhost:8080/
 ## Fonctionnalités produit
 
 - Upload PDF / DOCX — analyse **100 % navigateur** (aucun CV envoyé au serveur)
-- Score /100 + 4 axes /25 (lisibilité, structure, qualité, mots-clés)
+- **Atelier annoté = expérience principale** après analyse : prévisualisation CV + surcouches localisées + accept / ignore
+- Score /100 + 4 axes /25 (lisibilité, structure, qualité, mots-clés) — rapport détaillé en lien secondaire
 - Diagnostic, points bloquants / forts, fautes d’orthographe courantes
-- **Atelier annoté** : prévisualisation CV (PDF canvas / DOCX HTML) + surcouches localisées
 - Acceptation / ignore / édition des suggestions, puis **génération d’un CV ATS 1 colonne**
 - **Retest automatique** avec delta de score avant / après
 - **Parité Crevia** : barre contact avec adresse + popup Google Maps **chargée après consentement** (CMP)

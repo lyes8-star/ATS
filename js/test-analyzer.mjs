@@ -3,6 +3,7 @@
  */
 import { analyzeCv, attachGeometry } from "./analyzer.js";
 import { applyAll } from "./optimize.js";
+import { rectsForRange } from "./extract.js";
 import assert from "node:assert/strict";
 
 const goodCv = `
@@ -103,6 +104,51 @@ const geo = attachGeometry(passiveReport.annotations, [], {
 });
 assert.ok(geo.every((a) => Array.isArray(a.rects) && a.rects.length > 0));
 console.log("✓ attachGeometry fallback rects OK");
+
+// Offsets must align with pagesGeo for precise PDF overlays
+{
+  const src = "acceuil client et professionel\n";
+  const reportAligned = analyzeCv(src + "texte pour passer le seuil de caractères extractibles minimum ici.");
+  const typoAligned = reportAligned.annotations.find((a) => a.kind === "typo");
+  assert.ok(typoAligned, "typo expected on aligned sample");
+  assert.equal(
+    reportAligned.text.slice(typoAligned.textStart, typoAligned.textEnd).toLowerCase(),
+    typoAligned.quote.toLowerCase()
+  );
+  const pagesGeo = [
+    {
+      page: 1,
+      width: 600,
+      height: 800,
+      items: [
+        {
+          page: 1,
+          str: reportAligned.text.slice(0, 40),
+          textStart: 0,
+          textEnd: 40,
+          rect: { x: 0.1, y: 0.1, w: 0.5, h: 0.03 },
+        },
+        {
+          page: 1,
+          str: reportAligned.text.slice(typoAligned.textStart, typoAligned.textEnd),
+          textStart: typoAligned.textStart,
+          textEnd: typoAligned.textEnd,
+          rect: { x: 0.1, y: 0.2, w: 0.2, h: 0.03 },
+        },
+      ],
+    },
+  ];
+  const hit = rectsForRange(pagesGeo, typoAligned.textStart, typoAligned.textEnd);
+  assert.ok(hit.rects.length >= 1, "rectsForRange should hit typo span");
+  const withGeo = attachGeometry([typoAligned], pagesGeo, {
+    rectsForRange,
+    headerBannerRects: () => [{ x: 0.05, y: 0.02, w: 0.9, h: 0.06 }],
+    footerAnchorRects: () => [{ x: 0.05, y: 0.9, w: 0.9, h: 0.06 }],
+  });
+  assert.equal(withGeo[0].approximate, false);
+  assert.equal(withGeo[0].placement, "exact");
+  console.log("✓ Offset/pagesGeo alignment OK");
+}
 
 // optimize.applyAll
 const anns = [

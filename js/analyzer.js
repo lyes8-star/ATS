@@ -85,12 +85,9 @@ const COMMON_TYPOS = [
 ];
 
 function normalizeText(text) {
-  return (text || "")
-    .replace(/\u0000/g, "")
-    .replace(/\r\n/g, "\n")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  // Offset-preserving: keep alignment with PDF pagesGeo / applyAll.
+  // Only strip nulls and normalize CRLF — do NOT trim or collapse newlines.
+  return (text || "").replace(/\u0000/g, "").replace(/\r\n/g, "\n");
 }
 
 function countMatches(text, patterns) {
@@ -505,6 +502,7 @@ export function attachGeometry(annotations, pagesGeo, extractApi) {
     let page = ann.page || 1;
     let rects = [];
     let approximate = ann.approximate !== false;
+    let placement = "exact";
 
     if (pagesGeo?.length && rectsForRange && ann.textStart != null && ann.textEnd != null) {
       const hit = rectsForRange(pagesGeo, ann.textStart, ann.textEnd);
@@ -512,6 +510,7 @@ export function attachGeometry(annotations, pagesGeo, extractApi) {
         page = hit.page;
         rects = hit.rects;
         approximate = false;
+        placement = "exact";
       }
     }
 
@@ -519,22 +518,24 @@ export function attachGeometry(annotations, pagesGeo, extractApi) {
       if (ann.applyMode === "insert_header" && headerBannerRects) {
         rects = headerBannerRects();
         page = 1;
+        placement = "insert";
       } else if ((ann.applyMode === "insert_after" || ann.kind === "missing_section") && footerAnchorRects) {
         rects = footerAnchorRects();
         page = pagesGeo?.length || 1;
+        placement = "insert";
       } else {
         // bandeau approximatif autour de l'offset relatif
-        const ratio = ann.textStart != null && ann.textEnd != null
-          ? ann.textStart / Math.max(1, (ann.textEnd || 1))
-          : 0.3;
-        // Better: use text position ratio in full doc if we know length
-        rects = [{ x: 0.06, y: Math.min(0.85, 0.08 + (ann.textStart || 0) * 0.00015), w: 0.88, h: 0.045 }];
-        void ratio;
+        const y =
+          ann.textStart != null
+            ? Math.min(0.85, 0.08 + Number(ann.textStart) * 0.00015)
+            : 0.3;
+        rects = [{ x: 0.06, y, w: 0.88, h: 0.045 }];
+        placement = "approx";
       }
       approximate = true;
     }
 
-    return { ...ann, page, rects, approximate };
+    return { ...ann, page, rects, approximate, placement };
   });
 }
 
