@@ -15,12 +15,11 @@ Ouvrir http://localhost:8080/
 ## Fonctionnalités produit
 
 - Upload PDF / DOCX — analyse **locale par défaut** (aucun envoi sans case Extrait / Pro)
-- **Rapport détaillé** après analyse ; atelier = suggestions à copier
+- **Rapport détaillé** après analyse ; suggestions optionnelles à **copier** (l’utilisateur modifie son CV lui-même)
 - Score /100 + 4 axes ; parse structuré, lexiques, overlap offre
-- **Rapport + correctifs** — l’utilisateur modifie son CV lui-même (pas d’export produit)
+- **Pas d’export CV produit** — pas de téléchargement / PDF reflow / retest automatique
 - **Enrichissement Extrait** opt-in : LanguageTool, géocode, classification photo (extrait)
-- **Mode Pro** opt-in : Worker Cloudflare (LLM annotations, ESCO, PDF reflow + Extrait)
-- **Retest automatique** avec delta de score
+- **Mode Pro** opt-in : Worker Cloudflare (suggestions LLM + ESCO + Extrait)
 - Domaine : `https://www.testmoncv.fr/` — i18n FR/EN, PWA / RGPD / a11y
 
 ## Normes production (modèle Test / Test2)
@@ -53,7 +52,7 @@ Compléter SIRET, forme juridique, adresse et hébergeur dans `data/site.json` �
 ## Structure
 
 ```
-index.html              # Accueil + analyseur + atelier
+index.html              # Accueil + analyseur + rapport
 data/site.json          # Config marque / IDs SEA / légal
 data/analysis/          # Lexiques compétences / verbes / règles ATS (offline)
 js/analyzer.js          # Moteur de score approfondi + annotations
@@ -61,14 +60,14 @@ js/parse-cv.js          # Parse structuré (sections, rôles, dates)
 js/skills-match.js      # Aho–Corasick + lexiques lazy
 js/extract.js           # Extraction PDF (géométrie) / DOCX (HTML + tables)
 js/annotate.js          # Overlays preview
-js/studio.js            # UI atelier split + accept/ignore + exports
-js/optimize.js          # Application des suggestions
-js/export-cv.js         # Export CV ATS Clean 1 page (HTML)
-js/export-reconstruct.js# DOCX reconstruit + download layout
-js/export-docx.js       # DOCX in-place (PizZip)
+js/studio.js            # Suggestions à copier / ignorer (pas d’export)
+js/optimize.js          # Helpers annotations (updateAnnotation)
+js/export-cv.js         # Legacy — non branché UI
+js/export-reconstruct.js# Legacy — non branché UI
+js/export-docx.js       # Legacy — non branché UI
 js/pro-client.js        # Client Mode Pro + Extrait (consent + Worker)
-workers/ats-pro/        # Cloudflare Worker LLM / ESCO / PDF
-js/app.js               # Orchestration upload → studio → retest
+workers/ats-pro/        # Cloudflare Worker LLM / ESCO
+js/app.js               # Orchestration upload → rapport → suggestions
 js/consent.js           # CMP + Consent Mode v2
 js/i18n.js              # dictionnaire FR/EN + switcher (pas de /en routes)
 js/map-google.js        # popup Google Maps chargée après consentement CMP

@@ -14,7 +14,7 @@ window.ATSChat = (function () {
       },
       {
         q: "Mes données sont-elles envoyées sur un serveur ?",
-        a: "Par défaut non : l’analyse locale reste dans votre navigateur. Avec « Enrichissement Extrait », un extrait (texte / image d’en-tête) part temporairement vers notre Worker (grammaire, géocode, photo). Avec Mode Pro, le texte du CV part aussi pour LLM / ESCO / PDF. Aucune conservation longue. Voir la politique de confidentialité.",
+        a: "Par défaut non : l’analyse locale reste dans votre navigateur. Avec « Enrichissement Extrait », un extrait (texte / image d’en-tête) part temporairement vers notre Worker (grammaire, géocode, photo). Avec Mode Pro, le texte du CV part aussi pour LLM / ESCO. Aucune conservation longue. Voir la politique de confidentialité.",
       },
       {
         q: "Qu’est-ce que le Mode Pro ?",

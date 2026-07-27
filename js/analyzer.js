@@ -802,8 +802,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ? "Layout may confuse ATS (columns/tables)"
         : "Mise en page risquée pour les ATS (colonnes/tableaux)",
       detail: isEn
-        ? "We detected column or table signals. Prefer a linear export for ATS applications."
-        : "Colonnes ou tableaux détectés. Préférez un export linéaire pour les candidatures ATS.",
+        ? "We detected column or table signals. Prefer a single-column, linear layout in your original file for ATS applications."
+        : "Colonnes ou tableaux détectés. Préférez une mise en page linéaire (une colonne) dans votre fichier d’origine pour les candidatures ATS.",
       suggestion: "",
       applyMode: "replace",
       approximate: true,
@@ -2106,7 +2106,7 @@ function buildDiagnostics(text, scores) {
       severity: "warning",
       title: "Mise en page potentiellement hostile ATS",
       body: "Colonnes ou tableaux peuvent faire lire le texte dans le désordre par certains robots.",
-      tip: "→ Préférez une lecture linéaire ; gardez le design si vous exportez aussi une version ATS linéaire.",
+      tip: "→ Préférez une lecture linéaire (une colonne) dans votre fichier d’origine ; évitez colonnes et tableaux pour les candidatures ATS.",
     });
   }
 
@@ -2449,7 +2449,7 @@ export function analyzeCv(rawText, fileMeta = {}) {
         "Mise en page potentiellement hostile ATS": {
           title: "Layout may be ATS-hostile",
           body: "Columns or tables can make some parsers read text out of order.",
-          tip: "→ Prefer linear reading order; keep the design if you also export a linear ATS version.",
+          tip: "→ Prefer linear reading order (single column) in your original file; avoid columns and tables for ATS applications.",
         },
         "Manque de résultats chiffrés": {
           title: "Missing quantified results",
