@@ -310,4 +310,135 @@ assert.ok(ok);
 assert.ok(fixed.includes("accueil"));
 console.log("✓ DOCX merge/replace OK");
 
+// —— Precision checklist / heuristics ——
+{
+  const bulletOnlyFormation = `
+Samir Benali
+samir@exemple.com | 06 11 22 33 44
+EXPÉRIENCE PROFESSIONNELLE
+Consultant — Acme (2018 - 2020)
+- Suivi de la formation interne des nouveaux arrivants
+COMPÉTENCES
+Excel, reporting
+`;
+  const r = analyzeCv(bulletOnlyFormation, { pages: 1 });
+  const eduOk = r.checklist.find((c) => c.id === "section_education");
+  assert.ok(eduOk && eduOk.ok === false, "« formation » in bullet must not count as Education section");
+  assert.ok(
+    r.annotations.some((a) => a.kind === "missing_section" && /formation|education/i.test(a.title)),
+    "missing Formation annotation expected"
+  );
+  console.log("✓ heading-only sections (no false Formation) OK");
+}
+
+{
+  const dateHeavy = `
+Alex Martin
+alex@mail.com | 01 23 45 67 89
+EXPÉRIENCE
+Analyste — Co (2020 - 2022)
+- Présent de 2019 à 2021 sur le site de Paris
+FORMATION
+Master (2018 - 2020)
+COMPÉTENCES
+Excel
+`;
+  const r = analyzeCv(dateHeavy, { pages: 1 });
+  const metricsCheck = r.checklist.find((c) => c.id === "metrics");
+  assert.ok(metricsCheck && metricsCheck.ok === false, "year-only digits must not count as metrics");
+  assert.ok(
+    r.annotations.some((a) => a.kind === "missing_metric"),
+    "missing metric annotation when only years present"
+  );
+  console.log("✓ date-only metrics do not boost content OK");
+}
+
+{
+  const linkedinWord = `
+Marie Test
+marie@test.com | 06 12 34 56 78
+LinkedIn
+EXPÉRIENCE
+Dev — Co (2021 - 2023)
+- Développé une API
+FORMATION
+Licence
+COMPÉTENCES
+JS
+`;
+  const r = analyzeCv(linkedinWord, { pages: 1 });
+  const li = r.checklist.find((c) => c.id === "linkedin");
+  assert.ok(li && li.ok === false, "word LinkedIn alone is not enough");
+  assert.ok(r.annotations.some((a) => a.kind === "missing_linkedin"));
+  console.log("✓ strict LinkedIn URL OK");
+}
+
+{
+  const adjacentDates = `
+EXPÉRIENCE PROFESSIONNELLE
+Développeuse Full Stack — TechCorp
+2021 - aujourd'hui
+- Piloté une équipe de 4 développeurs
+Lead Frontend — StartupXYZ
+2019 - 2021
+- Créé le design system
+`;
+  const p = parseCv(`Marie\nmarie@x.com\n${adjacentDates}\nFORMATION\nMaster\nCOMPÉTENCES\nReact`);
+  assert.ok(p.roles.length >= 2, `expected 2 roles with adjacent dates, got ${p.roles.length}`);
+  assert.ok(p.roles[0].startYear === 2021 || p.roles.some((r) => r.startYear === 2021));
+  assert.ok(p.roles.some((r) => /TechCorp/i.test(r.company) || /TechCorp/i.test(r.title)));
+  console.log("✓ parseRoles adjacent date lines OK", p.roles.map((r) => `${r.title}|${r.company}|${r.startYear}`));
+}
+
+{
+  const graphic = parseCv(`COMPÉTENCES\nJavaScript ★★★★☆\nPython ████░\nExcel 5/5`);
+  // Need section header
+  const g2 = parseCv(`Marie\n\nCOMPÉTENCES\nJavaScript ★★★★☆\nPython ████░\nniveau : ░░`);
+  assert.equal(g2.graphicSkills, true, "graphic skills detected");
+  const r = analyzeCv(
+    `Marie Dupont\nmarie@x.com | 06 12 34 56 78\nEXPÉRIENCE\nDev — Co (2020 - 2021)\n- Fait des choses\nFORMATION\nMaster\nCOMPÉTENCES\nJavaScript ★★★★☆\nPython ████░\nniveau :`,
+    { pages: 1 }
+  );
+  assert.ok(r.annotations.some((a) => a.kind === "graphic_skills"));
+  console.log("✓ graphic skills annotation OK");
+}
+
+{
+  const r = analyzeCv(goodCv, { pages: 1 });
+  assert.ok(Array.isArray(r.checklist) && r.checklist.length >= 8, "checklist present");
+  const ids = r.checklist.map((c) => c.id);
+  assert.ok(ids.includes("extractable_text"));
+  assert.ok(ids.includes("email"));
+  assert.ok(ids.includes("section_experience"));
+  assert.ok(ids.includes("metrics"));
+  assert.ok(new Set(ids).size === ids.length, "checklist ids unique");
+  console.log("✓ checklist stable ids OK", r.checklist.filter((c) => c.ok).length + "/" + r.checklist.length);
+}
+
+{
+  const { analyzePdfLayout } = await import("./extract.js");
+  const layout = analyzePdfLayout([
+    {
+      page: 1,
+      width: 600,
+      height: 800,
+      items: Array.from({ length: 24 }, (_, i) => ({
+        str: i < 2 ? "x" : `Cell${i % 4}`,
+        page: 1,
+        textStart: i * 5,
+        textEnd: i * 5 + 4,
+        rect: {
+          x: 0.1 + (i % 4) * 0.2,
+          y: 0.2 + Math.floor(i / 4) * 0.08,
+          w: 0.08,
+          h: 0.02,
+        },
+      })),
+    },
+  ]);
+  assert.equal(typeof layout.tableHint, "boolean");
+  assert.equal(typeof layout.readingOrderOk, "boolean");
+  console.log("✓ PDF layout heuristics OK", layout);
+}
+
 console.log("Tous les tests OK");

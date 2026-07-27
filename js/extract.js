@@ -27,6 +27,9 @@
  *   html: string|null,
  *   approximate: boolean,
  *   tableCount?: number,
+ *   tableHint?: boolean,
+ *   headerSparse?: boolean,
+ *   readingOrderOk?: boolean,
  *   originalBuffer?: ArrayBuffer|null
  * }} ExtractResult
  */
@@ -124,6 +127,7 @@ export async function extractFromPdf(file) {
   }
 
   const approximate = itemCount < 8 || text.replace(/\s/g, "").length < 40;
+  const layout = analyzePdfLayout(pagesGeo);
 
   return {
     text,
@@ -133,9 +137,102 @@ export async function extractFromPdf(file) {
     pagesGeo,
     html: null,
     approximate,
-    tableCount: 0,
+    tableCount: layout.tableCount,
+    tableHint: layout.tableHint,
+    headerSparse: layout.headerSparse,
+    readingOrderOk: layout.readingOrderOk,
     originalBuffer,
   };
+}
+
+/**
+ * Heuristiques layout PDF : tableaux / bandeau contact / ordre de lecture.
+ * @param {PageGeo[]} pagesGeo
+ */
+export function analyzePdfLayout(pagesGeo) {
+  const page1 = pagesGeo?.[0];
+  if (!page1?.items?.length) {
+    return { tableCount: 0, tableHint: false, headerSparse: false, readingOrderOk: true };
+  }
+
+  const items = page1.items.filter((it) => it.str?.trim() && it.rect);
+  const tableHint = detectTableHint(items);
+  const tableCount = tableHint ? 1 : 0;
+
+  // Contact header density: few items in top band while body is rich → likely graphic header
+  const headerItems = items.filter((it) => (it.rect?.y ?? 1) < 0.12);
+  const bodyItems = items.filter((it) => (it.rect?.y ?? 0) >= 0.12);
+  const headerChars = headerItems.reduce((n, it) => n + (it.str?.trim().length || 0), 0);
+  const headerSparse = bodyItems.length >= 20 && headerItems.length <= 2 && headerChars < 12;
+
+  const readingOrderOk = !detectReadingOrderDivergence(page1);
+
+  return { tableCount, tableHint, headerSparse, readingOrderOk };
+}
+
+/**
+ * Grille / fragments courts alignés → indices de tableau.
+ * @param {TextItem[]} items
+ */
+function detectTableHint(items) {
+  if (!items || items.length < 12) return false;
+  // Bucket by Y row
+  const rows = new Map();
+  for (const it of items) {
+    const yKey = Math.round((it.rect?.y ?? 0) * 50) / 50; // ~0.02 bands
+    if (!rows.has(yKey)) rows.set(yKey, []);
+    rows.get(yKey).push(it);
+  }
+  let multiColRows = 0;
+  let shortFragRows = 0;
+  for (const row of rows.values()) {
+    if (row.length < 3) continue;
+    const xs = row.map((r) => r.rect.x).sort((a, b) => a - b);
+    const gaps = [];
+    for (let i = 1; i < xs.length; i++) gaps.push(xs[i] - xs[i - 1]);
+    const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    const regular =
+      gaps.length >= 2 &&
+      gaps.every((g) => Math.abs(g - avgGap) < Math.max(0.04, avgGap * 0.45));
+    if (regular && xs[xs.length - 1] - xs[0] > 0.35) multiColRows += 1;
+    const short = row.filter((r) => (r.str || "").trim().length <= 12).length;
+    if (short >= 3 && row.length >= 3) shortFragRows += 1;
+  }
+  if (multiColRows >= 3) return true;
+  if (shortFragRows >= 4) return true;
+  // Dense micro-fragments overall
+  const micro = items.filter((it) => (it.str || "").trim().length <= 4).length;
+  if (micro >= 25 && micro / items.length > 0.35) return true;
+  return false;
+}
+
+/**
+ * Compare ordre d'extraction (textStart) vs ordre géométrique (y puis x).
+ * Divergence forte → colonnes / sidebar.
+ * @param {PageGeo} page
+ */
+function detectReadingOrderDivergence(page) {
+  const items = (page.items || []).filter((it) => it.str?.trim() && it.rect && it.textStart != null);
+  if (items.length < 16) return false;
+  const byExtract = [...items].sort((a, b) => a.textStart - b.textStart);
+  const byGeo = [...items].sort(
+    (a, b) => (a.rect.y - b.rect.y) || (a.rect.x - b.rect.x)
+  );
+  // Kendall-ish: count pairwise inversions on a sample of indices
+  let disagree = 0;
+  let compared = 0;
+  const n = Math.min(byExtract.length, 80);
+  const geoRank = new Map(byGeo.map((it, i) => [it, i]));
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j += Math.max(1, Math.floor(n / 20))) {
+      compared += 1;
+      const ri = geoRank.get(byExtract[i]);
+      const rj = geoRank.get(byExtract[j]);
+      if (ri != null && rj != null && ri > rj) disagree += 1;
+    }
+  }
+  if (!compared) return false;
+  return disagree / compared > 0.28;
 }
 
 /**

@@ -2,6 +2,8 @@
  * Moteur d'analyse ATS — évaluations côté client
  */
 
+import { parseCv } from "./parse-cv.js";
+
 const ACTION_VERBS = [
   "dirigé", "dirigée", "dirigé", "piloté", "pilotée", "géré", "gérée", "coordonné", "coordonnée",
   "développé", "développée", "conçu", "conçue", "créé", "créée", "lancé", "lancée", "mis en place",
@@ -124,7 +126,46 @@ function detectPhone(text) {
 }
 
 function detectLinkedIn(text) {
-  return /linkedin\.com\/in\/|linkedin\.com\/pub\/|\blinkedin\b/i.test(text);
+  return /linkedin\.com\/in\/[\w\-.%]+/i.test(text || "");
+}
+
+const PHONE_LIKE_RE = /(\+?\d[\d\s.\-]{7,}\d)|(\b0[1-9](?:[\s.\-]?\d{2}){4}\b)/;
+
+/** Métriques « résultat » uniquement (pas dates / tél / CP). */
+function countResultMetrics(text) {
+  if (!text) return 0;
+  const patterns = [
+    /\b\d+([.,]\d+)?\s*(%|€|\$|k€|m€|M€)\b/gi,
+    /\b\d+([.,]\d+)?\s*k\b/gi,
+    /\b\d{1,3}(?:[\s.,]\d{3})+\s*(?:clients?|users?|utilisateurs?|membres?|personnes?|collaborateurs?|développeurs?|équipes?|jours?|semaines?|mois|projets?|tickets?|commandes?|ventes?|leads?)?\b/gi,
+    /\b\d+([.,]\d+)?\s*(?:clients?|users?|utilisateurs?|membres?|personnes?|collaborateurs?|développeurs?|équipes?|jours?|semaines?|mois|projets?|tickets?|commandes?|ventes?|leads?)\b/gi,
+    /\b(?:équipe|team|budget|ca|chiffre)\s*(?:de\s+)?\d+/gi,
+  ];
+  const seen = new Set();
+  let count = 0;
+  for (const re of patterns) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const t = m[0].trim();
+      if (seen.has(t.toLowerCase())) continue;
+      // Pure year or year-looking without unit/volume word
+      if (/^(19|20)\d{2}$/.test(t.replace(/\s/g, ""))) continue;
+      if (PHONE_LIKE_RE.test(t) && t.replace(/\D/g, "").length >= 10) continue;
+      if (/^\d{5}$/.test(t.replace(/\s/g, ""))) continue;
+      seen.add(t.toLowerCase());
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function bulletHasResultMetric(bullet) {
+  return countResultMetrics(bullet) > 0;
+}
+
+function hasParsedSection(parsed, key) {
+  return Array.isArray(parsed?.sections?.[key]) && parsed.sections[key].length > 0;
 }
 
 function detectDates(text) {
@@ -254,13 +295,42 @@ function locateQuote(text, quote, fromIndex = 0) {
   return { textStart: idx, textEnd: idx + quote.length, quote };
 }
 
-function sectionAnchor(text, kind) {
+function sectionAnchor(text, kind, parsed) {
+  // Prefer structured section headings over anywhere-in-text matches
+  if (parsed?.lines?.length) {
+    const headerKeys = {
+      experience: /exp[ée]rience|work\s+experience|professional/i,
+      education: /formation|education|éducation|dipl[ôo]me/i,
+      skills: /comp[ée]tence|skills|technologies|outils/i,
+      languages: /langues?|languages?/i,
+      summary: /profil|r[ée]sum[ée]|summary|objectif/i,
+    };
+    const re = headerKeys[kind];
+    if (re) {
+      for (const line of parsed.lines) {
+        const t = (line.text || "").replace(/[:：]\s*$/, "").trim();
+        if (t.length <= 48 && re.test(t) && (line.textStart != null || line.textStart === 0)) {
+          const start = line.textStart ?? text.indexOf(line.text);
+          if (start >= 0) {
+            return {
+              textStart: start,
+              textEnd: start + (line.text?.length || t.length),
+              quote: line.text,
+            };
+          }
+        }
+      }
+    }
+  }
   const re = SECTION_PATTERNS[kind];
   if (!re) return null;
-  re.lastIndex = 0;
-  const m = re.exec(text);
+  // Line-start only to avoid false positives (« formation » in a bullet)
+  const lineRe = new RegExp(`(?:^|\\n)\\s*(${re.source})`, re.flags.includes("i") ? "im" : "m");
+  const m = lineRe.exec(text);
   if (!m) return null;
-  return { textStart: m.index, textEnd: m.index + m[0].length, quote: m[0] };
+  const quote = m[1] || m[0];
+  const idx = m.index + m[0].indexOf(quote);
+  return { textStart: idx, textEnd: idx + quote.length, quote };
 }
 
 /**
@@ -268,7 +338,7 @@ function sectionAnchor(text, kind) {
  * Titres / details / suggestions concrets — pas de faux chiffres ni phrases bateau.
  * Les rects PDF sont enrichis plus tard via attachGeometry().
  */
-function buildAnnotations(text, scores, spelling, lang) {
+function buildAnnotations(text, scores, spelling, lang, parsed = null) {
   const annotations = [];
   let seq = 0;
   const nextId = () => `ann-${++seq}`;
@@ -388,7 +458,8 @@ function buildAnnotations(text, scores, spelling, lang) {
     },
   ];
   for (const ms of missingSections) {
-    if (!SECTION_PATTERNS[ms.key].test(text)) {
+    // Heading-only: never treat « formation » inside a bullet as a section
+    if (!hasParsedSection(parsed, ms.key)) {
       const end = text.length;
       push({
         kind: ms.kind,
@@ -404,6 +475,7 @@ function buildAnnotations(text, scores, spelling, lang) {
         applyMode: "insert_after",
         section: "Document",
         approximate: true,
+        checkId: `section_${ms.key}`,
       });
     }
   }
@@ -443,7 +515,7 @@ function buildAnnotations(text, scores, spelling, lang) {
     let metricAnns = 0;
     while ((bm = bulletRe.exec(text)) !== null && metricAnns < 4) {
       const line = bm[1].trim();
-      if (/\d/.test(line)) continue;
+      if (bulletHasResultMetric(line)) continue;
       if (!/[a-záàâäéèêëíìîïóòôöúùûüç]/i.test(line)) continue;
       const suggestion = `${line.replace(/\.$/, "")} [${
         isEn ? "metric: % or volume you owned" : "chiffre : % ou volume dont vous êtes responsable"
@@ -468,7 +540,7 @@ function buildAnnotations(text, scores, spelling, lang) {
     }
     if (metricAnns === 0) {
       const exp =
-        sectionAnchor(text, "experience") || {
+        sectionAnchor(text, "experience", parsed) || {
           textStart: 0,
           textEnd: Math.min(60, text.length),
           quote: text.slice(0, 40),
@@ -492,13 +564,9 @@ function buildAnnotations(text, scores, spelling, lang) {
     }
   }
 
-  const empGaps = scores.structure?.employmentGaps || [];
-  const gap =
-    empGaps[0] ||
-    (() => {
-      const years = detectDates(text);
-      return findEmploymentGap(years);
-    })();
+  // Gaps: employment roles only (no year-soup fallback)
+  const empGaps = scores.structure?.employmentGaps || parsed?.employmentGaps || [];
+  const gap = empGaps[0];
   if (gap) {
     const yearQuote = String(gap.from);
     const loc = locateQuote(text, yearQuote) || { textStart: 0, textEnd: 4, quote: yearQuote };
@@ -521,6 +589,7 @@ function buildAnnotations(text, scores, spelling, lang) {
         : `${gap.from}–${gap.to} — [formation / projet / bénévolat] : [ce que vous avez réalisé ou appris]`,
       applyMode: "insert_after",
       approximate: true,
+      checkId: "employment_gap",
     });
   }
 
@@ -528,16 +597,22 @@ function buildAnnotations(text, scores, spelling, lang) {
     scores.keywords.keywords.length < 8 ||
     (scores.keywords.jdOverlap && scores.keywords.jdOverlap.score < 50)
   ) {
-    const skills = sectionAnchor(text, "skills");
+    const skills = sectionAnchor(text, "skills", parsed);
     const jd = scores.keywords.jdOverlap;
     let terms = [];
+    const lower = text.toLowerCase();
+    const hasTerm = (t) => {
+      const k = String(t).toLowerCase();
+      if (k.length < 3) return true;
+      if (scores.keywords.keywords.map((x) => String(x).toLowerCase()).includes(k)) return true;
+      const re = new RegExp(`\\b${escapeReg(k)}\\b`, "i");
+      return re.test(lower);
+    };
     if (jd?.jdTerms?.length) {
-      terms = jd.jdTerms
-        .filter((t) => !text.toLowerCase().includes(String(t).toLowerCase()))
-        .slice(0, 5);
+      terms = jd.jdTerms.filter((t) => !hasTerm(t)).slice(0, 5);
     }
     if (!terms.length) {
-      terms = PROFESSIONAL_KEYWORDS.filter((k) => !text.toLowerCase().includes(k)).slice(0, 5);
+      terms = PROFESSIONAL_KEYWORDS.filter((k) => k.length >= 3 && !hasTerm(k)).slice(0, 5);
     }
     if (terms.length) {
       const anchor =
@@ -596,7 +671,7 @@ function buildAnnotations(text, scores, spelling, lang) {
     });
   }
 
-  if (!detectLinkedIn(text)) {
+  if (!(parsed?.contact?.linkedin || detectLinkedIn(text))) {
     push({
       kind: "missing_linkedin",
       axis: "structure",
@@ -607,12 +682,13 @@ function buildAnnotations(text, scores, spelling, lang) {
       quote: text.slice(0, Math.min(50, text.length)).trim(),
       title: isEn ? "Add your LinkedIn URL" : "Ajouter votre URL LinkedIn",
       detail: isEn
-        ? "Edit the placeholder with your real profile slug, then accept to insert it in the header."
-        : "Remplacez le placeholder par le slug de votre vrai profil, puis acceptez pour l'insérer en tête.",
+        ? "Use a full linkedin.com/in/… URL (the word “LinkedIn” alone is not enough)."
+        : "Indiquez une URL linkedin.com/in/… complète (le mot « LinkedIn » seul ne suffit pas).",
       suggestion: "[linkedin.com/in/votre-profil]",
       applyMode: "insert_header",
       section: "Coordonnées",
       approximate: true,
+      checkId: "linkedin",
     });
   }
 
@@ -634,6 +710,131 @@ function buildAnnotations(text, scores, spelling, lang) {
       suggestion: "",
       applyMode: "replace",
       approximate: true,
+      checkId: scores.readability.hasTables ? "no_tables" : "single_column",
+    });
+  }
+
+  if (scores.readability.readingOrderOk === false) {
+    push({
+      kind: "reading_order",
+      axis: "readability",
+      shortLabel: isEn ? "Order" : "Ordre",
+      severity: "warning",
+      textStart: 0,
+      textEnd: Math.min(30, text.length),
+      quote: text.slice(0, Math.min(30, text.length)).trim() || "(document)",
+      title: isEn
+        ? "Inconsistent reading order (columns/sidebar)"
+        : "Ordre de lecture incohérent (colonnes/sidebar)",
+      detail: isEn
+        ? "Extraction order diverges from visual order — ATS may scramble sections."
+        : "L'ordre d'extraction diverge de l'ordre visuel — un ATS peut mélanger les sections.",
+      suggestion: "",
+      applyMode: "replace",
+      approximate: true,
+      checkId: "reading_order",
+    });
+  }
+
+  if (parsed?.layout?.headerSparse || scores.readability.headerSparse) {
+    push({
+      kind: "header_sparse",
+      axis: "readability",
+      shortLabel: isEn ? "Header" : "En-tête",
+      severity: "critical",
+      textStart: 0,
+      textEnd: Math.min(40, text.length),
+      quote: text.slice(0, Math.min(40, text.length)).trim() || "(début)",
+      title: isEn
+        ? "Contact likely in a graphic header"
+        : "Contact probablement dans une en-tête graphique",
+      detail: isEn
+        ? "Very little plain text in the top band while the body is rich — put email/phone as selectable text."
+        : "Peu de texte extractible en haut de page alors que le corps est riche — placez e-mail/téléphone en texte sélectionnable.",
+      suggestion: "[votre.email@domaine.fr] · [06 XX XX XX XX]",
+      applyMode: "insert_header",
+      section: "Coordonnées",
+      approximate: true,
+      checkId: "contact_plaintext",
+    });
+  }
+
+  if (parsed?.graphicSkills) {
+    const sk = sectionAnchor(text, "skills", parsed) || {
+      textStart: Math.max(0, text.length - 1),
+      textEnd: text.length,
+      quote: "(compétences)",
+    };
+    push({
+      kind: "graphic_skills",
+      axis: "readability",
+      shortLabel: isEn ? "Skills" : "Compétences",
+      severity: "warning",
+      ...sk,
+      title: isEn
+        ? "Skills shown as graphics (ATS-blind)"
+        : "Compétences en graphiques illisibles ATS",
+      detail: isEn
+        ? "Stars, bars or level gauges are not read as keywords. List skill names in plain text."
+        : "Étoiles, barres ou jauges de niveau ne sont pas lues comme mots-clés. Listez les compétences en texte clair.",
+      suggestion: isEn
+        ? "Skills: [tool], [method], [domain]"
+        : "Compétences : [outil], [méthode], [domaine]",
+      applyMode: "insert_after",
+      section: "Compétences",
+      approximate: !sk.quote || sk.quote === "(compétences)",
+      checkId: "graphic_skills",
+    });
+  }
+
+  if (!parsed?.contact?.name) {
+    push({
+      kind: "missing_name",
+      axis: "structure",
+      shortLabel: isEn ? "Name" : "Nom",
+      severity: "warning",
+      textStart: 0,
+      textEnd: Math.min(40, text.length),
+      quote: text.slice(0, Math.min(40, text.length)).trim(),
+      title: isEn ? "Add your full name in plain text" : "Ajouter votre nom complet en texte",
+      detail: isEn
+        ? "ATS need a clear candidate name at the top (not only in a logo/image)."
+        : "Les ATS ont besoin d'un nom candidat clair en tête (pas seulement dans un logo/image).",
+      suggestion: "[Prénom Nom]",
+      applyMode: "insert_header",
+      section: "Coordonnées",
+      approximate: true,
+      checkId: "identity_name",
+    });
+  }
+
+  const completeRole = (parsed?.roles || []).some(
+    (r) => r.title && r.company && r.startYear
+  );
+  if ((parsed?.roles?.length || 0) > 0 && !completeRole && hasParsedSection(parsed, "experience")) {
+    const exp = sectionAnchor(text, "experience", parsed) || {
+      textStart: 0,
+      textEnd: 20,
+      quote: "EXPÉRIENCE",
+    };
+    push({
+      kind: "incomplete_role",
+      axis: "structure",
+      shortLabel: isEn ? "Role" : "Poste",
+      severity: "warning",
+      ...exp,
+      title: isEn
+        ? "Complete at least one role (title + company + dates)"
+        : "Compléter au moins un poste (intitulé + entreprise + dates)",
+      detail: isEn
+        ? "No role was fully parsed with title, company and dates — ATS struggle to map your career."
+        : "Aucun poste n'a été entièrement parsé (intitulé, entreprise, dates) — les ATS peinent à cartographier le parcours.",
+      suggestion: isEn
+        ? "Job title — Company (YYYY – YYYY)"
+        : "Intitulé — Entreprise (AAAA – AAAA)",
+      applyMode: "insert_after",
+      approximate: true,
+      checkId: "complete_role",
     });
   }
 
@@ -647,12 +848,17 @@ function shortLabelFor(kind) {
     missing_phone: "Téléphone",
     missing_linkedin: "LinkedIn",
     missing_section: "Section",
+    missing_name: "Nom",
+    incomplete_role: "Poste",
     passive_verb: "Verbe",
     missing_metric: "Chiffre",
     gap: "Gap",
     keyword: "Mots-clés",
     length: "Longueur",
     layout: "Mise en page",
+    reading_order: "Ordre",
+    header_sparse: "En-tête",
+    graphic_skills: "Compétences",
   };
   return map[kind] || "Correction";
 }
@@ -744,45 +950,163 @@ function scoreReadability(text, fileMeta) {
   const extractable = len > 80;
   if (extractable) {
     score += 10;
-    checks.push({ ok: true, label: "Texte correctement extractible par les ATS." });
+    checks.push({
+      id: "extractable_text",
+      ok: true,
+      label: "Texte correctement extractible par les ATS.",
+    });
   } else {
-    checks.push({ ok: false, label: "Texte difficilement extractible — le CV semble scanné ou en image." });
+    checks.push({
+      id: "extractable_text",
+      ok: false,
+      label: "Texte difficilement extractible — le CV semble scanné ou en image.",
+    });
   }
 
   const pages = estimatePages(text, fileMeta);
   if (pages <= 2) {
     score += 8;
-    checks.push({ ok: true, label: pages === 1 ? "Longueur idéale (1 page)." : `Longueur acceptable (${pages} pages).` });
+    checks.push({
+      id: "page_length",
+      ok: true,
+      label: pages === 1 ? "Longueur idéale (1 page)." : `Longueur acceptable (${pages} pages).`,
+    });
   } else if (pages === 3) {
     score += 4;
-    checks.push({ ok: false, label: "CV un peu long (3 pages) — visez 1 à 2 pages." });
+    checks.push({
+      id: "page_length",
+      ok: false,
+      label: "CV un peu long (3 pages) — visez 1 à 2 pages.",
+    });
   } else {
-    checks.push({ ok: false, label: `CV trop long (${pages} pages) — risque de rejet ATS/RH.` });
+    checks.push({
+      id: "page_length",
+      ok: false,
+      label: `CV trop long (${pages} pages) — risque de rejet ATS/RH.`,
+    });
   }
 
   const weirdChars = (text.match(/[□�]|[\uFFFD]/g) || []).length;
   const layout = fileMeta.parsed?.layout;
-  // Prefer geometry-based column detection; fall back to whitespace heuristic (stricter threshold)
   const hasColumnsSmell = layout
     ? !!layout.columnSmell
     : (text.match(/\t{2,}| {8,}/g) || []).length > 12;
-  const hasTables = !!(layout?.tableHint || (fileMeta.tableCount || 0) > 0);
+  const hasTables = !!(layout?.tableHint || fileMeta.tableHint || (fileMeta.tableCount || 0) > 0);
+  const headerSparse = !!(layout?.headerSparse || fileMeta.headerSparse);
+  const readingOrderOk = layout?.readingOrderOk !== false && fileMeta.readingOrderOk !== false;
 
-  if (weirdChars === 0 && !hasColumnsSmell && !hasTables) {
+  if (weirdChars === 0 && !hasColumnsSmell && !hasTables && readingOrderOk) {
     score += 7;
-    checks.push({ ok: true, label: "Mise en page linéaire, favorable aux ATS." });
+    checks.push({
+      id: "single_column",
+      ok: true,
+      label: "Mise en page linéaire, favorable aux ATS.",
+    });
+    checks.push({ id: "no_tables", ok: true, label: "Pas de tableaux détectés." });
   } else if (weirdChars > 0) {
     score += 2;
-    checks.push({ ok: false, label: "Caractères illisibles détectés (encodage ou OCR défaillant)." });
+    checks.push({
+      id: "encoding",
+      ok: false,
+      label: "Caractères illisibles détectés (encodage ou OCR défaillant).",
+    });
+    checks.push({
+      id: "single_column",
+      ok: !hasColumnsSmell,
+      label: hasColumnsSmell
+        ? "Indices de colonnes/tableaux — certains ATS mélangent l'ordre du texte."
+        : "Mise en page linéaire, favorable aux ATS.",
+    });
+    checks.push({
+      id: "no_tables",
+      ok: !hasTables,
+      label: hasTables
+        ? "Tableaux détectés — certains ATS mélangent l'ordre des cellules."
+        : "Pas de tableaux détectés.",
+    });
   } else if (hasTables) {
     score += 3;
-    checks.push({ ok: false, label: "Tableaux détectés — certains ATS mélangent l'ordre des cellules." });
+    checks.push({
+      id: "no_tables",
+      ok: false,
+      label: "Tableaux détectés — certains ATS mélangent l'ordre des cellules.",
+    });
+    checks.push({
+      id: "single_column",
+      ok: !hasColumnsSmell,
+      label: hasColumnsSmell
+        ? "Indices de colonnes — certains ATS mélangent l'ordre du texte."
+        : "Mise en page mono-colonne.",
+    });
+  } else if (!readingOrderOk) {
+    score += 3;
+    checks.push({
+      id: "reading_order",
+      ok: false,
+      label: "Ordre de lecture incohérent (colonnes/sidebar) — risque de mélange ATS.",
+    });
+    checks.push({ id: "no_tables", ok: true, label: "Pas de tableaux détectés." });
+    checks.push({
+      id: "single_column",
+      ok: false,
+      label: "Indices de colonnes/tableaux — certains ATS mélangent l'ordre du texte.",
+    });
   } else {
     score += 3;
-    checks.push({ ok: false, label: "Indices de colonnes/tableaux — certains ATS mélangent l'ordre du texte." });
+    checks.push({
+      id: "single_column",
+      ok: false,
+      label: "Indices de colonnes/tableaux — certains ATS mélangent l'ordre du texte.",
+    });
+    checks.push({ id: "no_tables", ok: true, label: "Pas de tableaux détectés." });
   }
 
-  return { score: Math.min(25, score), checks, pages, hasColumnsSmell, hasTables };
+  if (readingOrderOk && !checks.some((c) => c.id === "reading_order")) {
+    checks.push({
+      id: "reading_order",
+      ok: true,
+      label: "Ordre de lecture cohérent.",
+    });
+  }
+
+  if (headerSparse) {
+    score = Math.max(0, score - 2);
+    checks.push({
+      id: "contact_plaintext",
+      ok: false,
+      label: "Bandeau haut peu textuel — contact probablement dans une image/en-tête graphique.",
+    });
+  }
+
+  if (fileMeta.parsed?.graphicSkills) {
+    score = Math.max(0, score - 1);
+    checks.push({
+      id: "graphic_skills",
+      ok: false,
+      label: "Compétences représentées en graphiques (étoiles/barres) — illisibles pour les ATS.",
+    });
+  }
+
+  // Apply labels from ats-layout-rules.json when available
+  const rules = fileMeta.layoutRules?.rules;
+  if (Array.isArray(rules)) {
+    for (const rule of rules) {
+      const existing = checks.find((c) => c.id === rule.id);
+      if (existing && !existing.ok && rule.label_fr) {
+        existing.label = rule.label_fr;
+      }
+    }
+  }
+
+  return {
+    score: Math.min(25, score),
+    checks,
+    pages,
+    hasColumnsSmell,
+    hasTables,
+    headerSparse,
+    readingOrderOk,
+  };
 }
 
 function scoreStructure(text, fileMeta = {}) {
@@ -793,61 +1117,126 @@ function scoreStructure(text, fileMeta = {}) {
 
   if (contact?.email || detectEmail(text)) {
     score += 5;
-    checks.push({ ok: true, label: "Adresse e-mail présente." });
+    checks.push({ id: "email", ok: true, label: "Adresse e-mail présente." });
   } else {
-    checks.push({ ok: false, label: "Aucune adresse e-mail détectée." });
+    checks.push({ id: "email", ok: false, label: "Aucune adresse e-mail détectée." });
   }
 
   if (contact?.phone || detectPhone(text)) {
     score += 4;
-    checks.push({ ok: true, label: "Numéro de téléphone détecté." });
+    checks.push({ id: "phone", ok: true, label: "Numéro de téléphone détecté." });
   } else {
-    checks.push({ ok: false, label: "Téléphone manquant ou non reconnu." });
+    checks.push({ id: "phone", ok: false, label: "Téléphone manquant ou non reconnu." });
   }
 
   if (contact?.linkedin || detectLinkedIn(text)) {
     score += 3;
-    checks.push({ ok: true, label: "Profil LinkedIn mentionné." });
+    checks.push({ id: "linkedin", ok: true, label: "Profil LinkedIn mentionné." });
   } else {
-    checks.push({ ok: false, label: "Lien LinkedIn absent." });
+    checks.push({ id: "linkedin", ok: false, label: "Lien LinkedIn absent." });
+  }
+
+  if (contact?.email && contact?.phone) {
+    checks.push({
+      id: "contact_plaintext",
+      ok: true,
+      label: "Coordonnées en texte clair.",
+    });
+  } else if (!checks.some((c) => c.id === "contact_plaintext")) {
+    checks.push({
+      id: "contact_plaintext",
+      ok: false,
+      label: "Coordonnées absentes ou non textuelles.",
+    });
+  }
+
+  if (contact?.name) {
+    score += 1;
+    checks.push({ id: "identity_name", ok: true, label: "Nom candidat détecté." });
+  } else {
+    checks.push({ id: "identity_name", ok: false, label: "Nom candidat peu identifiable." });
+  }
+
+  if (contact?.location) {
+    checks.push({ id: "identity_location", ok: true, label: "Localisation détectée." });
+  } else {
+    checks.push({
+      id: "identity_location",
+      ok: false,
+      label: "Localisation absente (ville/CP) — utile pour le filtrage ATS.",
+    });
   }
 
   const hasTitle =
     (parsed?.roles?.[0]?.title && parsed.roles[0].title.length > 2) ||
     JOB_TITLE_HINTS.test(text.slice(0, 800));
   if (hasTitle) {
-    score += 5;
-    checks.push({ ok: true, label: "Titre/intitulé de poste présent." });
+    score += 4;
+    checks.push({ id: "job_title", ok: true, label: "Titre/intitulé de poste présent." });
   } else {
-    checks.push({ ok: false, label: "Intitulé de poste peu identifiable en tête de CV." });
+    checks.push({
+      id: "job_title",
+      ok: false,
+      label: "Intitulé de poste peu identifiable en tête de CV.",
+    });
   }
 
-  const hasExp =
-    (parsed?.sections?.experience?.length > 0) || SECTION_PATTERNS.experience.test(text);
+  const completeRole = (parsed?.roles || []).some((r) => r.title && r.company && r.startYear);
+  if (completeRole) {
+    score += 1;
+    checks.push({
+      id: "complete_role",
+      ok: true,
+      label: "Au moins un poste avec intitulé, entreprise et dates.",
+    });
+  } else if (hasParsedSection(parsed, "experience")) {
+    checks.push({
+      id: "complete_role",
+      ok: false,
+      label: "Aucun poste complet (intitulé + entreprise + dates) parsable.",
+    });
+  }
+
+  const hasExp = hasParsedSection(parsed, "experience");
   if (hasExp) {
     score += 4;
-    checks.push({ ok: true, label: "Section Expérience clairement identifiée." });
+    checks.push({
+      id: "section_experience",
+      ok: true,
+      label: "Section Expérience clairement identifiée.",
+    });
   } else {
-    checks.push({ ok: false, label: "Section Expérience non détectée." });
+    checks.push({ id: "section_experience", ok: false, label: "Section Expérience non détectée." });
   }
 
-  const hasEdu =
-    (parsed?.sections?.education?.length > 0) || SECTION_PATTERNS.education.test(text);
+  const hasEdu = hasParsedSection(parsed, "education");
   if (hasEdu) {
     score += 2;
-    checks.push({ ok: true, label: "Section Formation présente." });
+    checks.push({ id: "section_education", ok: true, label: "Section Formation présente." });
   } else {
-    checks.push({ ok: false, label: "Section Formation absente ou mal intitulée." });
+    checks.push({
+      id: "section_education",
+      ok: false,
+      label: "Section Formation absente ou mal intitulée.",
+    });
   }
 
-  const hasSkills =
-    (parsed?.sections?.skills?.length > 0) || SECTION_PATTERNS.skills.test(text);
+  const hasSkills = hasParsedSection(parsed, "skills");
   if (hasSkills) {
     score += 2;
-    checks.push({ ok: true, label: "Section Compétences présente." });
+    checks.push({ id: "section_skills", ok: true, label: "Section Compétences présente." });
   } else {
-    checks.push({ ok: false, label: "Section Compétences manquante." });
+    checks.push({ id: "section_skills", ok: false, label: "Section Compétences manquante." });
   }
+
+  const standardHeadings = hasExp && hasEdu && hasSkills;
+  checks.push({
+    id: "standard_headings",
+    ok: standardHeadings,
+    label: standardHeadings
+      ? "Titres de sections standards détectés."
+      : "Titres de sections standards recommandés.",
+  });
 
   return {
     score: Math.min(25, score),
@@ -869,24 +1258,32 @@ function scoreContent(text, fileMeta = {}) {
 
   if (verbHits >= 6) {
     score += 9;
-    checks.push({ ok: true, label: `Verbes d'action bien utilisés (${verbHits}).` });
+    checks.push({ id: "action_verbs", ok: true, label: `Verbes d'action bien utilisés (${verbHits}).` });
   } else if (verbHits >= 3) {
     score += 5;
-    checks.push({ ok: false, label: `Peu de verbes d'action (${verbHits}) — renforcez l'impact.` });
+    checks.push({
+      id: "action_verbs",
+      ok: false,
+      label: `Peu de verbes d'action (${verbHits}) — renforcez l'impact.`,
+    });
   } else {
     score += 1;
-    checks.push({ ok: false, label: "Verbes d'action quasi absents — reformulez en réalisations." });
+    checks.push({
+      id: "action_verbs",
+      ok: false,
+      label: "Verbes d'action quasi absents — reformulez en réalisations.",
+    });
   }
 
   if (weakHits >= 3) {
     score = Math.max(0, score - 2);
     checks.push({
+      id: "weak_verbs",
       ok: false,
       label: `Formulations faibles détectées (${weakHits}) — préférez des verbes d'action.`,
     });
   }
 
-  // Metrics per bullet when roles available
   const roles = fileMeta.parsed?.roles || [];
   let bullets = 0;
   let bulletsWithMetrics = 0;
@@ -894,36 +1291,51 @@ function scoreContent(text, fileMeta = {}) {
     for (const r of roles) {
       for (const b of r.bullets || []) {
         bullets += 1;
-        if (/\d/.test(b)) bulletsWithMetrics += 1;
+        if (bulletHasResultMetric(b)) bulletsWithMetrics += 1;
       }
     }
   }
-  const metrics = (text.match(/\b\d+([.,]\d+)?\s?(%|€|\$|k€|m€|M€)?\b/g) || []).length;
+  const metrics = countResultMetrics(text);
   if (bullets >= 3) {
     const ratio = bulletsWithMetrics / bullets;
     if (ratio >= 0.4) {
       score += 9;
       checks.push({
+        id: "metrics",
         ok: true,
         label: `Résultats chiffrés présents (${bulletsWithMetrics}/${bullets} puces).`,
       });
     } else if (ratio >= 0.15) {
       score += 5;
-      checks.push({ ok: false, label: "Quelques chiffres — ajoutez davantage de métriques." });
+      checks.push({
+        id: "metrics",
+        ok: false,
+        label: "Quelques chiffres — ajoutez davantage de métriques.",
+      });
     } else {
       checks.push({
+        id: "metrics",
         ok: false,
         label: "Presque aucun résultat chiffré — les ATS et RH valorisent les preuves.",
       });
     }
   } else if (metrics >= 5) {
     score += 9;
-    checks.push({ ok: true, label: `Résultats chiffrés présents (${metrics} indicateurs).` });
+    checks.push({
+      id: "metrics",
+      ok: true,
+      label: `Résultats chiffrés présents (${metrics} indicateurs).`,
+    });
   } else if (metrics >= 2) {
     score += 5;
-    checks.push({ ok: false, label: "Quelques chiffres — ajoutez davantage de métriques." });
+    checks.push({
+      id: "metrics",
+      ok: false,
+      label: "Quelques chiffres — ajoutez davantage de métriques.",
+    });
   } else {
     checks.push({
+      id: "metrics",
       ok: false,
       label: "Presque aucun résultat chiffré — les ATS et RH valorisent les preuves.",
     });
@@ -932,13 +1344,17 @@ function scoreContent(text, fileMeta = {}) {
   const wordCount = words.length;
   if (wordCount >= 250 && wordCount <= 900) {
     score += 7;
-    checks.push({ ok: true, label: `Concision correcte (~${wordCount} mots).` });
+    checks.push({ id: "concision", ok: true, label: `Concision correcte (~${wordCount} mots).` });
   } else if (wordCount < 250) {
     score += 3;
-    checks.push({ ok: false, label: `Contenu trop court (~${wordCount} mots).` });
+    checks.push({ id: "concision", ok: false, label: `Contenu trop court (~${wordCount} mots).` });
   } else {
     score += 3;
-    checks.push({ ok: false, label: `Contenu dense (~${wordCount} mots) — allégez.` });
+    checks.push({
+      id: "concision",
+      ok: false,
+      label: `Contenu dense (~${wordCount} mots) — allégez.`,
+    });
   }
 
   return {
@@ -953,44 +1369,73 @@ function scoreKeywords(text, fileMeta = {}) {
   const checks = [];
   let score = 0;
   const skillsMatch = fileMeta.skillsMatch;
-  const lower = text.toLowerCase();
-  const found = skillsMatch?.hits?.length
-    ? skillsMatch.hits
-    : PROFESSIONAL_KEYWORDS.filter((k) => lower.includes(k));
+  // Prefer Aho–Corasick hits; never naive substring for scoring
+  let found = [];
+  if (skillsMatch?.hits?.length) {
+    found = skillsMatch.hits.filter((k) => String(k).length >= 3);
+  } else {
+    const lower = text.toLowerCase();
+    found = PROFESSIONAL_KEYWORDS.filter((k) => {
+      if (k.length < 3) return false;
+      const re = new RegExp(`\\b${escapeReg(k)}\\b`, "i");
+      return re.test(lower);
+    });
+  }
   const unique = new Set(found);
 
   if (unique.size >= 12) {
     score += 12;
-    checks.push({ ok: true, label: `Vocabulaire professionnel riche (${unique.size} mots-clés).` });
+    checks.push({
+      id: "keyword_density",
+      ok: true,
+      label: `Vocabulaire professionnel riche (${unique.size} mots-clés).`,
+    });
   } else if (unique.size >= 6) {
     score += 8;
-    checks.push({ ok: false, label: `Densité de mots-clés moyenne (${unique.size}).` });
+    checks.push({
+      id: "keyword_density",
+      ok: false,
+      label: `Densité de mots-clés moyenne (${unique.size}).`,
+    });
   } else {
     score += 3;
-    checks.push({ ok: false, label: "Peu de mots-clés métier — alignez-vous sur les offres cibles." });
+    checks.push({
+      id: "keyword_density",
+      ok: false,
+      label: "Peu de mots-clés métier — alignez-vous sur les offres cibles.",
+    });
   }
 
   const diversity = unique.size;
   if (diversity >= 8) {
     score += 8;
-    checks.push({ ok: true, label: "Bonne diversité lexicale pour matcher les offres." });
+    checks.push({
+      id: "keyword_diversity",
+      ok: true,
+      label: "Bonne diversité lexicale pour matcher les offres.",
+    });
   } else {
     score += 3;
-    checks.push({ ok: false, label: "Diversifiez le vocabulaire (outils, soft skills, domaines)." });
+    checks.push({
+      id: "keyword_diversity",
+      ok: false,
+      label: "Diversifiez le vocabulaire (outils, soft skills, domaines).",
+    });
   }
 
-  // JD overlap bonus / penalty
   const jd = fileMeta.jdOverlap;
   if (jd && jd.score != null) {
     if (jd.score >= 50) {
       score += 5;
       checks.push({
+        id: "jd_overlap",
         ok: true,
         label: `Alignement offre ↔ CV : ${jd.score}% (${jd.overlap.length} termes communs).`,
       });
     } else {
       score += 1;
       checks.push({
+        id: "jd_overlap",
         ok: false,
         label: `Faible alignement avec l'offre (${jd.score}%) — reprenez les termes clés.`,
       });
@@ -1003,6 +1448,30 @@ function scoreKeywords(text, fileMeta = {}) {
     keywords: [...unique].slice(0, 24),
     jdOverlap: jd || null,
   };
+}
+
+/**
+ * Checklist ATS explicite dérivée des 4 axes.
+ * @returns {{ id: string, axis: string, ok: boolean, label: string }[]}
+ */
+function buildChecklist(readability, structure, content, keywords) {
+  const axes = [
+    ["readability", readability],
+    ["structure", structure],
+    ["content", content],
+    ["keywords", keywords],
+  ];
+  const out = [];
+  const seen = new Set();
+  for (const [axis, block] of axes) {
+    for (const c of block.checks || []) {
+      const id = c.id || `${axis}_${out.length}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, axis, ok: !!c.ok, label: c.label });
+    }
+  }
+  return out;
 }
 
 function buildTags(text, content, structure) {
@@ -1157,10 +1626,22 @@ export function analyzeCv(rawText, fileMeta = {}) {
 
   const uiLang = fileMeta.lang === "en" ? "en" : "fr";
   const detectedLang = detectLanguage(text);
-  const readability = scoreReadability(text, fileMeta);
-  const structure = scoreStructure(text, fileMeta);
-  const content = scoreContent(text, fileMeta);
-  const keywords = scoreKeywords(text, fileMeta);
+  const parsed =
+    fileMeta.parsed ||
+    parseCv(text, {
+      pagesGeo: fileMeta.pagesGeo || null,
+      tableCount: fileMeta.tableCount || 0,
+      tableHint: fileMeta.tableHint,
+      headerSparse: fileMeta.headerSparse,
+      readingOrderOk: fileMeta.readingOrderOk,
+    });
+  const meta = { ...fileMeta, parsed };
+
+  const readability = scoreReadability(text, meta);
+  const structure = scoreStructure(text, meta);
+  const content = scoreContent(text, meta);
+  const keywords = scoreKeywords(text, meta);
+  const checklist = buildChecklist(readability, structure, content, keywords);
 
   const total = readability.score + structure.score + content.score + keywords.score;
   let label = labelForScore(total);
@@ -1173,7 +1654,8 @@ export function analyzeCv(rawText, fileMeta = {}) {
     text,
     { readability, structure, content, keywords },
     spelling,
-    uiLang
+    uiLang,
+    parsed
   );
 
   const strengths = [
@@ -1218,6 +1700,28 @@ export function analyzeCv(rawText, fileMeta = {}) {
           "Column/table layout clues — some ATS may mix text order.",
         "Tableaux détectés — certains ATS mélangent l'ordre des cellules.":
           "Tables detected — some ATS mix cell reading order.",
+        "Pas de tableaux détectés.": "No tables detected.",
+        "Mise en page mono-colonne.": "Single-column layout.",
+        "Ordre de lecture cohérent.": "Consistent reading order.",
+        "Ordre de lecture incohérent (colonnes/sidebar) — risque de mélange ATS.":
+          "Inconsistent reading order (columns/sidebar) — ATS scramble risk.",
+        "Bandeau haut peu textuel — contact probablement dans une image/en-tête graphique.":
+          "Sparse top band — contact likely in an image/graphic header.",
+        "Compétences représentées en graphiques (étoiles/barres) — illisibles pour les ATS.":
+          "Skills shown as graphics (stars/bars) — ATS cannot read them.",
+        "Coordonnées en texte clair.": "Contact details in plain text.",
+        "Coordonnées absentes ou non textuelles.": "Contact details missing or not plain text.",
+        "Nom candidat détecté.": "Candidate name detected.",
+        "Nom candidat peu identifiable.": "Candidate name not clearly identifiable.",
+        "Localisation détectée.": "Location detected.",
+        "Localisation absente (ville/CP) — utile pour le filtrage ATS.":
+          "Location missing (city/ZIP) — useful for ATS filtering.",
+        "Au moins un poste avec intitulé, entreprise et dates.":
+          "At least one role with title, company and dates.",
+        "Aucun poste complet (intitulé + entreprise + dates) parsable.":
+          "No complete role (title + company + dates) parseable.",
+        "Titres de sections standards détectés.": "Standard section headings detected.",
+        "Titres de sections standards recommandés.": "Standard section headings recommended.",
         "Longueur idéale (1 page).": "Ideal length (1 page).",
         "CV un peu long (3 pages) — visez 1 à 2 pages.":
           "A bit long (3 pages) — aim for 1 to 2 pages.",
@@ -1495,10 +1999,11 @@ export function analyzeCv(rawText, fileMeta = {}) {
     blockers,
     spelling,
     annotations,
+    checklist,
     text,
     wordCount: text.split(/\s+/).filter(Boolean).length,
     pages: readability.pages,
-    parsed: fileMeta.parsed || null,
+    parsed: parsed || null,
     skillsMatch: fileMeta.skillsMatch || null,
     jdOverlap: fileMeta.jdOverlap || keywords.jdOverlap || null,
     layoutHostile: !!(readability.hasColumnsSmell || readability.hasTables),
@@ -1512,26 +2017,35 @@ export function analyzeCv(rawText, fileMeta = {}) {
  * @param {{ jobDescription?: string }} [opts]
  */
 export async function analyzeCvAsync(rawText, fileMeta = {}, opts = {}) {
-  const { parseCv } = await import("./parse-cv.js");
   const {
     preloadAnalysisData,
     matchSkills,
     matchJdOverlap,
     countVerbs,
     loadTechWhitelist,
+    loadAtsLayoutRules,
   } = await import("./skills-match.js");
 
   await preloadAnalysisData();
   let techWhitelist = null;
+  let layoutRules = null;
   try {
     techWhitelist = await loadTechWhitelist();
   } catch {
     techWhitelist = null;
   }
+  try {
+    layoutRules = await loadAtsLayoutRules();
+  } catch {
+    layoutRules = null;
+  }
 
   const parsed = parseCv(rawText, {
     pagesGeo: fileMeta.pagesGeo || null,
     tableCount: fileMeta.tableCount || 0,
+    tableHint: fileMeta.tableHint,
+    headerSparse: fileMeta.headerSparse,
+    readingOrderOk: fileMeta.readingOrderOk,
   });
   const detectedLang = detectLanguage(normalizeText(rawText));
   const [skillsMatch, verbStats] = await Promise.all([
@@ -1561,6 +2075,7 @@ export async function analyzeCvAsync(rawText, fileMeta = {}, opts = {}) {
     jdOverlap,
     techWhitelist,
     spelling,
+    layoutRules,
   });
 }
 

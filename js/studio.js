@@ -86,6 +86,11 @@ function studioShell(session) {
     </div>`;
   };
 
+  const checklist = report.checklist || [];
+  const checklistOk = checklist.filter((c) => c.ok).length;
+  const checklistTotal = checklist.length;
+  const checklistFail = checklist.filter((c) => !c.ok);
+
   return `
   <div class="studio" id="studio">
     <div class="studio-score-strip studio-report-strip">
@@ -96,6 +101,23 @@ function studioShell(session) {
           <span class="studio-label">${escapeHtml(label)}</span>
           <span class="studio-pass-pill ${pass ? "is-ok" : "is-risk"}">${escapeHtml(passLabel)}</span>
         </p>
+        ${
+          checklistTotal
+            ? `<button type="button" class="studio-checklist-recap" id="studio-checklist-recap" title="${escapeHtml(
+                t("studio.checklist.hint")
+              )}">
+          <span class="studio-checklist-score">${checklistOk}/${checklistTotal}</span>
+          ${escapeHtml(t("studio.checklist.recap"))}
+          ${
+            checklistFail.length
+              ? `<span class="studio-checklist-fail">${checklistFail.length} ${escapeHtml(
+                  t("studio.checklist.fail")
+                )}</span>`
+              : ""
+          }
+        </button>`
+            : ""
+        }
         <p id="studio-count" class="studio-count-inline"></p>
       </div>
       <div class="studio-axes" aria-label="${escapeHtml(t("studio.axes.label"))}">
@@ -138,7 +160,60 @@ function studioShell(session) {
   </div>`;
 }
 
+function focusFailedChecklist(root, session) {
+  const checklist = session.report?.checklist || [];
+  const failedIds = new Set(checklist.filter((c) => !c.ok).map((c) => c.id));
+  if (!failedIds.size) return;
+  const ann =
+    session.annotations.find(
+      (a) => a.status === "pending" && a.checkId && failedIds.has(a.checkId)
+    ) ||
+    session.annotations.find((a) => {
+      if (a.status !== "pending") return false;
+      // Map common kinds to checklist ids
+      const map = {
+        missing_email: "email",
+        missing_phone: "phone",
+        missing_linkedin: "linkedin",
+        missing_name: "identity_name",
+        incomplete_role: "complete_role",
+        graphic_skills: "graphic_skills",
+        reading_order: "reading_order",
+        header_sparse: "contact_plaintext",
+        layout: a.checkId || "single_column",
+        missing_section:
+          /expérience|experience/i.test(a.title || "")
+            ? "section_experience"
+            : /formation|education/i.test(a.title || "")
+              ? "section_education"
+              : "section_skills",
+        gap: "employment_gap",
+        missing_metric: "metrics",
+        length: "page_length",
+      };
+      const id = typeof map[a.kind] === "string" ? map[a.kind] : map[a.kind];
+      return id && failedIds.has(id);
+    }) ||
+    session.annotations.find((a) => a.status === "pending");
+  if (!ann) return;
+  session.selectedId = ann.id;
+  renderList(root, session);
+  renderDetail(root, session);
+  highlightSelection(root, session);
+  const preview = root.querySelector("#cv-preview");
+  if (preview) scrollPreviewToAnnotation(preview, ann.id);
+  root.querySelector(`.ann-item[data-id="${ann.id}"]`)?.scrollIntoView({
+    behavior: "smooth",
+    block: "nearest",
+  });
+  root.querySelector("#ann-list")?.focus?.();
+}
+
 function bindStudio(root, session, hooks) {
+  root.querySelector("#studio-checklist-recap")?.addEventListener("click", () => {
+    focusFailedChecklist(root, session);
+  });
+
   root.querySelector("#btn-accept-all")?.addEventListener("click", () => {
     // Remplacements sûrs uniquement (typos / passifs / métriques replace)
     const safeKinds = new Set(["typo", "passive_verb", "missing_metric"]);
@@ -338,6 +413,9 @@ async function runRetest(root, session, hooks) {
         lang: window.ATSi18n?.getLang?.() || "fr",
         pagesGeo: session.extracted?.pagesGeo,
         tableCount: session.extracted?.tableCount || 0,
+        tableHint: session.extracted?.tableHint,
+        headerSparse: session.extracted?.headerSparse,
+        readingOrderOk: session.extracted?.readingOrderOk,
       },
       { jobDescription: session.jobDescription || "" }
     );

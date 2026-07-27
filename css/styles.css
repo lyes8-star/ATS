@@ -1973,6 +1973,39 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
   color: var(--stone-500);
 }
 
+.studio-checklist-recap {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  margin: 0.45rem 0 0;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--stone-200, #e7e5e4);
+  border-radius: 6px;
+  background: var(--stone-50, #fafaf9);
+  color: var(--stone-700, #44403c);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.studio-checklist-recap:hover {
+  border-color: var(--terra, #c2410c);
+  color: var(--stone-900, #1c1917);
+}
+
+.studio-checklist-score {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--stone-900, #1c1917);
+}
+
+.studio-checklist-fail {
+  color: var(--amber-700, #b45309);
+  font-weight: 600;
+}
+
 .studio-report-link {
   background: none;
   border: none;
