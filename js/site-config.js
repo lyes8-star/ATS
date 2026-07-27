@@ -39,8 +39,18 @@
           console.warn("[ATSSiteConfig]", err);
           window.ATS_SITE = {
             name: "ATS Check",
-            email: "contact@ats-check.fr",
-            dpoEmail: "dpo@ats-check.fr",
+          phone: "+33 1 84 80 00 00",
+          phoneDisplay: "01 84 80 00 00",
+          email: "contact@crevia.fr",
+          dpoEmail: "dpo@crevia.fr",
+          hours: "Lun – Ven : 9h00 – 18h00",
+          address: {
+            street: "10 rue Jean Baptiste",
+            postalCode: "95240",
+            city: "Cormeilles-en-Parisis",
+            country: "France",
+          },
+          publisher: { name: "Crevia", url: "https://crevia.fr" },
             url: "https://www.ats-check.fr/",
             gaId: "",
             adsId: "",

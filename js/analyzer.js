@@ -830,7 +830,7 @@ function scoreColor(score, max = 25) {
 
 /**
  * @param {string} rawText
- * @param {{ fileName?: string, pages?: number, fileType?: string }} fileMeta
+ * @param {{ fileName?: string, pages?: number, fileType?: string, lang?: 'fr'|'en' }} fileMeta
  */
 export function analyzeCv(rawText, fileMeta = {}) {
   const text = normalizeText(rawText);
@@ -840,22 +840,23 @@ export function analyzeCv(rawText, fileMeta = {}) {
     );
   }
 
-  const lang = detectLanguage(text);
+  const uiLang = fileMeta.lang === "en" ? "en" : "fr";
+  const detectedLang = detectLanguage(text);
   const readability = scoreReadability(text, fileMeta);
   const structure = scoreStructure(text);
   const content = scoreContent(text);
   const keywords = scoreKeywords(text);
 
   const total = readability.score + structure.score + content.score + keywords.score;
-  const label = labelForScore(total);
+  let label = labelForScore(total);
   const tags = buildTags(text, content, structure);
   const diagnostics = buildDiagnostics(text, { readability, structure, content, keywords });
-  const spelling = findSpellingIssues(text, lang);
+  const spelling = findSpellingIssues(text, detectedLang);
   const annotations = buildAnnotations(
     text,
     { readability, structure, content, keywords },
     spelling,
-    lang
+    detectedLang
   );
 
   const strengths = [
@@ -872,45 +873,352 @@ export function analyzeCv(rawText, fileMeta = {}) {
     ...keywords.checks.filter((c) => !c.ok).map((c) => ({ category: "Mots-clés", ...c })),
   ];
 
+  if (uiLang === "en") {
+    const translateCategory = (cat) => {
+      switch (cat) {
+        case "Lisibilité ATS":
+          return "ATS readability";
+        case "Qualité du contenu":
+          return "Content quality";
+        case "Mots-clés":
+          return "Keywords";
+        default:
+          return cat;
+      }
+    };
+
+    const translateCheckLabel = (label) => {
+      const s = String(label || "").trim();
+      const exact = {
+        "Texte correctement extractible par les ATS.": "Text clearly extractable by ATS.",
+        "Texte difficilement extractible — le CV semble scanné ou en image.":
+          "Text hard to extract — the CV looks scanned/image-based.",
+        "Mise en page linéaire, favorable aux ATS.":
+          "Linear layout, ATS-friendly.",
+        "Caractères illisibles détectés (encodage ou OCR défaillant).":
+          "Unreadable characters detected (encoding/OCR issue).",
+        "Indices de colonnes/tableaux — certains ATS mélangent l'ordre du texte.":
+          "Column/table layout clues — some ATS may mix text order.",
+        "Longueur idéale (1 page).": "Ideal length (1 page).",
+        "CV un peu long (3 pages) — visez 1 à 2 pages.":
+          "A bit long (3 pages) — aim for 1 to 2 pages.",
+        "Adresse e-mail présente.": "Email address present.",
+        "Aucune adresse e-mail détectée.": "No email address detected.",
+        "Numéro de téléphone détecté.": "Phone number detected.",
+        "Téléphone manquant ou non reconnu.": "Phone number missing or unrecognized.",
+        "Profil LinkedIn mentionné.": "LinkedIn profile mentioned.",
+        "Lien LinkedIn absent.": "LinkedIn link missing.",
+        "Titre/intitulé de poste présent.": "Job title present.",
+        "Intitulé de poste peu identifiable en tête de CV.":
+          "Job title not clearly identifiable at the top.",
+        "Section Expérience clairement identifiée.":
+          "Experience section clearly identified.",
+        "Section Expérience non détectée.": "Experience section missing.",
+        "Section Formation présente.": "Education/Training section present.",
+        "Section Formation absente ou mal intitulée.":
+          "Education/Training section missing or poorly titled.",
+        "Section Compétences présente.": "Skills section present.",
+        "Section Compétences manquante.": "Skills section missing.",
+        "Verbes d'action quasi absents — reformulez en réalisations.":
+          "Action verbs almost absent — rephrase as achievements.",
+        "Quelques chiffres — ajoutez davantage de métriques.":
+          "Some figures — add more metrics.",
+        "Presque aucun résultat chiffré — les ATS et RH valorisent les preuves.":
+          "Almost no quantified results — ATS and HR value proof.",
+        "Bonne diversité lexicale pour matcher les offres.":
+          "Good lexical diversity to match job postings.",
+        "Diversifiez le vocabulaire (outils, soft skills, domaines).":
+          "Diversify vocabulary (tools, soft skills, domains).",
+        "Peu de mots-clés métier — alignez-vous sur les offres cibles.":
+          "Few industry keywords — align with target job postings.",
+      };
+      if (exact[s]) return exact[s];
+
+      let m;
+      m = s.match(/^Longueur acceptable \((\d+) pages\)\.$/);
+      if (m) return `Acceptable length (${m[1]} pages).`;
+
+      m = s.match(/^CV trop long \((\d+) pages\) — risque de rejet ATS\/RH\.$/);
+      if (m) return `Too long (${m[1]} pages) — risk of ATS/HR rejection.`;
+
+      m = s.match(/^Longueur acceptable \((\d+) page\)\.$/);
+      if (m) return `Acceptable length (${m[1]} page).`;
+
+      m = s.match(/^Verbes d'action bien utilisés \((\d+)\)\.$/);
+      if (m) return `Action verbs used (${m[1]}).`;
+
+      m = s.match(/^Peu de verbes d'action \((\d+)\) — renforcez l'impact\.$/);
+      if (m) return `Few action verbs (${m[1]}) — strengthen your impact.`;
+
+      m = s.match(/^Résultats chiffrés présents \((\d+) indicateurs\)\.$/);
+      if (m) return `Quantified results present (${m[1]} indicators).`;
+
+      m = s.match(/^Concision correcte \(~(\d+) mots\)\.$/);
+      if (m) return `Proper concision (~${m[1]} words).`;
+
+      m = s.match(/^Contenu trop court \(~(\d+) mots\)\.$/);
+      if (m) return `Too little content (~${m[1]} words).`;
+
+      m = s.match(/^Contenu dense \(~(\d+) mots\) — allégez\.$/);
+      if (m) return `Dense content (~${m[1]} words) — streamline it.`;
+
+      m = s.match(/^Vocabulaire professionnel riche \((\d+) mots-clés\)\.$/);
+      if (m) return `Rich professional vocabulary (${m[1]} keywords).`;
+
+      m = s.match(/^Densité de mots-clés moyenne \((\d+)\)\.$/);
+      if (m) return `Average keyword density (${m[1]}).`;
+
+      return s;
+    };
+
+    const translateScoreLabel = (lbl) => {
+      const map = {
+        Excellent: "Excellent",
+        Bon: "Good",
+        Moyen: "Average",
+        Faible: "Low",
+      };
+      return { ...lbl, text: map[lbl.text] || lbl.text };
+    };
+
+    label = translateScoreLabel(label);
+
+    diagnostics.forEach((d) => {
+      const months = d.body?.match(/environ (\d+) mois/)?.[1];
+      const gapRange = d.body?.match(/\((\d+)–(\d+)\)/);
+      const from = gapRange?.[1];
+      const to = gapRange?.[2];
+
+      const map = {
+        "Trou d'emploi non justifié": {
+          title: "Unexplained employment gap",
+          body: `An unexplained employment gap of about ${months || "—"} months will immediately catch recruiters' attention. Without context, they will assume the worst.`,
+          tip:
+            "→ Mention what you did during that period: training, project, volunteering, or starting a business.",
+        },
+        "Profil académique non traduit en langage business": {
+          title: "Academic profile not translated into business language",
+          body:
+            "Your academic profile does not speak naturally to recruiters in the private sector. Publications and your thesis should take a back seat.",
+          tip:
+            "→ Reframe your research in terms of impact, budget you managed, and results applicable to the industry.",
+        },
+        "Manque de résultats chiffrés": {
+          title: "Missing quantified results",
+          body:
+            "Without metrics (%, €, volumes, deadlines), your impact is hard for an ATS to score and for HR to evaluate.",
+          tip: "→ Add 3 to 5 concrete indicators per recent role.",
+        },
+        "Coordonnées incomplètes": {
+          title: "Incomplete contact details",
+          body:
+            "An ATS and recruiters must be able to reach you immediately. Email and phone are essential.",
+          tip:
+            "→ Place your email + phone at the top of the CV, in plain text (not inside an image).",
+        },
+        "CV trop long pour les filtres ATS": {
+          title: "CV too long for ATS filters",
+          body:
+            "Beyond 2 pages, the signal dilutes and some parsers truncate content.",
+          tip: "→ Condense older experiences and remove non-relevant details.",
+        },
+        "Formulations passives ou descriptives": {
+          title: "Passive or descriptive wording",
+          body:
+            "Task lists (“responsable de...”) score lower than action verbs.",
+          tip: "→ Prefer: led, developed, increased, reduced, launched…",
+        },
+        "Quelques ajustements possibles": {
+          title: "Some improvements possible",
+          body:
+            "Your CV is already well positioned. Fine-tune keywords for each targeted job posting.",
+          tip: "→ Adapt 5–8 terms from the job description into your experiences.",
+        },
+      };
+
+      const repl = map[d.title];
+      if (repl) {
+        d.title = repl.title;
+        d.body = repl.body;
+        d.tip = repl.tip;
+      }
+
+      void from;
+      void to;
+    });
+
+    const translateTags = (tagsList) => {
+      const tagMap = {
+        RH: "HR",
+        "Sans métriques": "Without metrics",
+        "Profil académique": "Academic profile",
+        "Sans LinkedIn": "No LinkedIn",
+        Tech: "Tech",
+        Finance: "Finance",
+        Marketing: "Marketing",
+      };
+      return tagsList.map((t) => tagMap[t] || t);
+    };
+
+    tags.splice(0, tags.length, ...translateTags(tags));
+
+    const translateAnnotation = (ann) => {
+      const out = { ...ann };
+
+      const mapTitleDetail = (title, detail) => {
+        out.title = title;
+        out.detail = detail;
+      };
+
+      if (ann.kind === "typo") {
+        mapTitleDetail("Fix spelling", "“"+ (ann.quote || "") +"” is a frequent typo. Correcting it sends a positive signal.");
+      } else if (ann.kind === "missing_email") {
+        if ((ann.title || "").toLowerCase().includes("linkedin")) {
+          mapTitleDetail(
+            "Add a LinkedIn profile",
+            "A LinkedIn link improves credibility and helps HR contact you."
+          );
+          out.section = "Contact details";
+          out.suggestion = "linkedin.com/in/first-last";
+        } else {
+          mapTitleDetail(
+            "Add an email address",
+            "No email address detected. ATS and recruiters must be able to contact you."
+          );
+          out.section = "Contact details";
+          out.suggestion = String(out.suggestion || "").replace(/prenom\.nom/i, "first.last");
+          out.applyMode = out.applyMode || "insert_header";
+        }
+      } else if (ann.kind === "missing_section") {
+        const title = ann.title || "";
+        if (title.includes("Expérience")) {
+          mapTitleDetail(
+            "Add a Professional Experience section",
+            "ATS needs clear job history with titles, companies and date ranges."
+          );
+          out.section = "Document";
+          out.suggestion = `\n\nPROFESSIONAL EXPERIENCE\nJob Title — Company (YYYY - YYYY)\n- Led … (+X% / Y clients)\n`;
+        } else if (title.includes("Formation")) {
+          mapTitleDetail(
+            "Add an Education section",
+            "Include degree, school, and date range in a simple ATS-friendly block."
+          );
+          out.section = "Document";
+          out.suggestion = `\n\nEDUCATION\nDegree — School (YYYY - YYYY)\n`;
+        } else {
+          mapTitleDetail(
+            "Add a Skills section",
+            "List job-relevant tools and competencies using a concise, keyword-friendly format."
+          );
+          out.section = "Document";
+          out.suggestion = `\n\nSKILLS\nProject management, Agile, Excel, reporting, communication, analysis\n`;
+        }
+      } else if (ann.kind === "passive_verb") {
+        mapTitleDetail(
+          "Replace passive wording",
+          "Passive phrasing sends a weaker ATS signal. Use an action verb + measurable impact."
+        );
+        out.title = "Replace passive wording";
+        out.section = out.section || "Experience";
+        out.suggestion = String(out.suggestion || "").replace(/^[Pp]iloté\s+/i, "Led ");
+      } else if (ann.kind === "missing_metric") {
+        mapTitleDetail(
+          "Add measurable results",
+          "Without metrics (%, €, volumes, deadlines), it’s hard to quantify impact."
+        );
+        out.section = out.section || "Experience";
+      } else if (ann.kind === "gap") {
+        mapTitleDetail(
+          "Justify the employment gap",
+          "An unexplained employment gap draws immediate attention. Add context so recruiters understand what you did."
+        );
+        out.section = "Experience";
+        // Try to keep year range from detail.
+        const m = (ann.detail || "").match(/\((\d+)–(\d+)\)/);
+        if (m) {
+          out.suggestion = `Training / personal project / volunteering (${m[1]}–${m[2]}) — develop your skills X`;
+        }
+      } else if (ann.kind === "keyword") {
+        mapTitleDetail(
+          "Strengthen job-relevant keywords",
+          "Your keyword density is low for targeted job postings. Add the most relevant terms."
+        );
+        out.section = "Skills";
+      } else if (ann.kind === "length") {
+        mapTitleDetail(
+          "Shorten your CV",
+          "A too-long CV may be truncated by ATS filters. Aim for 1–2 pages."
+        );
+        out.section = "Document";
+      }
+      return out;
+    };
+
+    for (let i = 0; i < annotations.length; i++) {
+      annotations[i] = translateAnnotation(annotations[i]);
+    }
+
+    strengths.forEach((s) => {
+      s.category = translateCategory(s.category);
+      s.label = translateCheckLabel(s.label);
+    });
+    blockers.forEach((b) => {
+      b.category = translateCategory(b.category);
+      b.label = translateCheckLabel(b.label);
+    });
+  }
+
   const passes = total >= 70 && readability.score >= 15;
 
   return {
     fileName: fileMeta.fileName || "CV",
-    lang,
+    lang: detectedLang,
     total,
     label,
     passes,
     tags,
     categories: {
       readability: {
-        name: "Lisibilité ATS",
+        name: uiLang === "en" ? "ATS readability" : "Lisibilité ATS",
         score: readability.score,
         max: 25,
-        desc: "Texte extractible, mise en page, encodage — est-ce que votre CV peut être lu par un robot ?",
+        desc:
+          uiLang === "en"
+            ? "Extractable text, layout and encoding — can your CV be read by an ATS?"
+            : "Texte extractible, mise en page, encodage — est-ce que votre CV peut être lu par un robot ?",
         bar: barClass(readability.score),
         color: scoreColor(readability.score),
       },
       structure: {
-        name: "Structure",
+        name: uiLang === "en" ? "Structure" : "Structure",
         score: structure.score,
         max: 25,
-        desc: "Sections clés, titre métier, coordonnées — votre CV est-il bien organisé ?",
+        desc:
+          uiLang === "en"
+            ? "Key sections, job title and contact details — is your CV well organized?"
+            : "Sections clés, titre métier, coordonnées — votre CV est-il bien organisé ?",
         bar: barClass(structure.score),
         color: scoreColor(structure.score),
       },
       content: {
-        name: "Qualité du contenu",
+        name: uiLang === "en" ? "Content quality" : "Qualité du contenu",
         score: content.score,
         max: 25,
-        desc: "Verbes d'action, résultats chiffrés, concision — votre CV est-il percutant ?",
+        desc:
+          uiLang === "en"
+            ? "Action verbs, quantified results and concision — is your CV impactful?"
+            : "Verbes d'action, résultats chiffrés, concision — votre CV est-il percutant ?",
         bar: barClass(content.score),
         color: scoreColor(content.score),
       },
       keywords: {
-        name: "Mots-clés",
+        name: uiLang === "en" ? "Keywords" : "Mots-clés",
         score: keywords.score,
         max: 25,
-        desc: "Densité et diversité du vocabulaire professionnel pour matcher les offres.",
+        desc:
+          uiLang === "en"
+            ? "Keyword density and diversity to match job postings."
+            : "Densité et diversité du vocabulaire professionnel pour matcher les offres.",
         bar: barClass(keywords.score),
         color: scoreColor(keywords.score),
         found: keywords.keywords,

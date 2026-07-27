@@ -4,6 +4,11 @@
 (async function () {
   const site = await (window.ATSSiteConfig?.load?.() || Promise.resolve(window.ATS_SITE));
 
+  // Hydrate dynamic year (footer credit).
+  document
+    .querySelectorAll("[data-year]")
+    .forEach((el) => (el.textContent = String(new Date().getFullYear())));
+
   if (window.ATSAnalytics) {
     window.ATSAnalytics.init({
       gaId: site?.gaId || "",

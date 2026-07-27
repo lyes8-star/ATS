@@ -13,8 +13,8 @@
   --amber-600: #d97706;
   --red-700: #991b1b;
   --orange-800: #9a3412;
-  --font: "DM Sans", "Segoe UI", sans-serif;
-  --font-display: "Fraunces", Georgia, serif;
+  --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-display: "Space Grotesk", "Segoe UI", sans-serif;
 }
 
 *,
@@ -123,6 +123,110 @@ img {
   font-size: 0.875rem;
   font-weight: 600;
   color: #fff;
+}
+
+/* Top contact bar (Crevia parity) */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  background: var(--warm-bg-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar__inner {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 0.35rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.topbar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--charcoal);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.topbar__item--muted {
+  color: var(--stone-400);
+}
+
+.address-map-trigger {
+  position: relative;
+  outline: none;
+  cursor: default;
+}
+
+.address-map-popup {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  width: min(36rem, 92vw);
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: 0 16px 40px rgba(44, 42, 40, 0.16);
+  border-radius: 0.75rem;
+  padding: 0.65rem;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.address-map-trigger:hover .address-map-popup,
+.address-map-trigger:focus-within .address-map-popup {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.address-map-embed {
+  display: block;
+}
+
+.address-map-consent {
+  margin-top: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--charcoal);
+  border-radius: 0.6rem;
+  background: transparent;
+  color: var(--charcoal);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.address-map-consent:hover {
+  background: var(--charcoal);
+  color: var(--gold);
+}
+
+.address-map-open {
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: var(--terra);
+  text-decoration: underline;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .topbar__inner {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+  }
+
+  #topbarAddress {
+    display: none;
+  }
 }
 
 /* Hero / Upload */

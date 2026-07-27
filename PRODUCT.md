@@ -57,6 +57,7 @@ Ton : professionnel, direct, sans jargon inutile. Émotions visées : contrôle,
 3. **Preuve par le score** — jauge + catégories, pas d’abstraction décorative.
 4. **Confidentialité visible** — rappel « analyse locale » près de l’upload et dans le footer.
 5. **Normes FR / UE** — CMP Consent Mode v2, pages LCEN/RGPD/cookies/a11y, PWA.
+6. **Parité Crevia** — barre contact + popup Google Maps **chargée après consentement**, FR/EN i18n (pas de /en routes), typographie Space Grotesk / IBM Plex Sans, footer « Fait par Crevia ».
 
 ## Accessibility & Inclusion
 

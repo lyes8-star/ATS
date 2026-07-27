@@ -105,6 +105,7 @@ window.ATSConsent = (function () {
   function showCustomize() {
     if (document.getElementById("cookieModal")) return;
     const base = legalBase();
+    const t = window.ATSi18n?.t || ((k) => k);
     const modal = document.createElement("div");
     modal.id = "cookieModal";
     modal.className = "cookie-modal";
@@ -113,15 +114,29 @@ window.ATSConsent = (function () {
     modal.setAttribute("aria-labelledby", "cookieModalTitle");
     modal.innerHTML = `
       <div class="cookie-modal__panel">
-        <h2 id="cookieModalTitle">Personnaliser les cookies</h2>
-        <p class="cookie-modal__intro">Les cookies nécessaires au fonctionnement du site sont toujours actifs. Vous pouvez accepter ou refuser les catégories facultatives.</p>
-        <label class="cookie-opt"><input type="checkbox" checked disabled> Nécessaires <span>(toujours actifs)</span></label>
-        <label class="cookie-opt"><input type="checkbox" id="cAnalytics" ${state.analytics ? "checked" : ""}> Mesure d’audience (Google Analytics)</label>
-        <label class="cookie-opt"><input type="checkbox" id="cAds" ${state.ads ? "checked" : ""}> Publicité / Google Ads</label>
-        <p class="cookie-modal__links"><a href="${base}cookies/">Politique cookies</a> · <a href="${base}confidentialite/">Confidentialité</a></p>
+        <h2 id="cookieModalTitle">${t("consent.modal.title")}</h2>
+        <p class="cookie-modal__intro">${t("consent.modal.intro")}</p>
+        <label class="cookie-opt"><input type="checkbox" checked disabled> ${t(
+          "consent.modal.labels.necessary"
+        )} <span>${t("consent.modal.labels.necessarySuffix")}</span></label>
+        <label class="cookie-opt"><input type="checkbox" id="cAnalytics" ${
+          state.analytics ? "checked" : ""
+        }> ${t("consent.modal.labels.analytics")}</label>
+        <label class="cookie-opt"><input type="checkbox" id="cAds" ${
+          state.ads ? "checked" : ""
+        }> ${t("consent.modal.labels.ads")}</label>
+        <p class="cookie-modal__links"><a href="${base}cookies/">${t(
+          "consent.modal.links.cookies"
+        )}</a> · <a href="${base}confidentialite/">${t(
+          "consent.modal.links.privacy"
+        )}</a></p>
         <div class="cookie-modal__actions">
-          <button type="button" class="cookie-btn cookie-btn--outline" id="cookieSavePrefs">Enregistrer</button>
-          <button type="button" class="cookie-btn cookie-btn--primary" id="cookieAcceptAllModal">Tout accepter</button>
+          <button type="button" class="cookie-btn cookie-btn--outline" id="cookieSavePrefs">${t(
+            "consent.modal.actions.save"
+          )}</button>
+          <button type="button" class="cookie-btn cookie-btn--primary" id="cookieAcceptAllModal">${t(
+            "consent.modal.actions.acceptAll"
+          )}</button>
         </div>
       </div>
     `;
@@ -153,22 +168,28 @@ window.ATSConsent = (function () {
   function showBanner() {
     if (document.getElementById("cookieBanner") || state.ts) return;
     const base = legalBase();
+    const t = window.ATSi18n?.t || ((k) => k);
     const el = document.createElement("div");
     el.id = "cookieBanner";
     el.className = "cookie-banner";
     el.setAttribute("role", "dialog");
-    el.setAttribute("aria-label", "Consentement cookies");
+    el.setAttribute("aria-label", t("consent.banner.aria"));
     el.innerHTML = `
       <div class="cookie-banner__inner">
         <p class="cookie-banner__text">
-          Nous utilisons des cookies essentiels au site et, avec votre accord, des outils de mesure d’audience et de publicité (Google).
-          L’analyse de votre CV reste locale dans votre navigateur.
-          <a href="${base}cookies/">En savoir plus</a>
+          ${t("consent.banner.text")}
+          <a href="${base}cookies/">${t("consent.banner.learnMore")}</a>
         </p>
         <div class="cookie-banner__actions">
-          <button type="button" class="cookie-btn cookie-btn--outline" id="cookieRefuse">Refuser</button>
-          <button type="button" class="cookie-btn cookie-btn--outline" id="cookieCustomize">Personnaliser</button>
-          <button type="button" class="cookie-btn cookie-btn--primary" id="cookieAccept">Accepter</button>
+          <button type="button" class="cookie-btn cookie-btn--outline" id="cookieRefuse">${t(
+            "consent.banner.refuse"
+          )}</button>
+          <button type="button" class="cookie-btn cookie-btn--outline" id="cookieCustomize">${t(
+            "consent.banner.customize"
+          )}</button>
+          <button type="button" class="cookie-btn cookie-btn--primary" id="cookieAccept">${t(
+            "consent.banner.accept"
+          )}</button>
         </div>
       </div>
     `;
@@ -210,6 +231,21 @@ window.ATSConsent = (function () {
       if (btn) {
         e.preventDefault();
         openManager();
+      }
+    });
+
+    // Re-render CMP UI when the user switches FR/EN.
+    document.addEventListener("ats:lang-changed", () => {
+      const modal = document.getElementById("cookieModal");
+      if (modal) {
+        modal.remove();
+        showCustomize();
+        return;
+      }
+      const banner = document.getElementById("cookieBanner");
+      if (banner) {
+        banner.remove();
+        showBanner();
       }
     });
   }

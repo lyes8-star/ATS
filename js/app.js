@@ -51,13 +51,18 @@ function setLoading(on, step = 0) {
     if (n === step) li.classList.add("active");
   });
   if (els.loadingStep) {
-    const labels = [
-      "Lecture du fichier…",
-      "Extraction du texte…",
-      "Analyse ATS en cours…",
-      "Ouverture de l'atelier…",
-    ];
-    els.loadingStep.textContent = labels[step] || labels[0];
+    const t = window.ATSi18n?.t;
+    if (t) {
+      els.loadingStep.textContent = t(`loading.step.${step}`) || t("loading.step.0");
+    } else {
+      const labels = [
+        "Lecture du fichier…",
+        "Extraction du texte…",
+        "Analyse ATS en cours…",
+        "Ouverture de l'atelier…",
+      ];
+      els.loadingStep.textContent = labels[step] || labels[0];
+    }
   }
 }
 
@@ -74,11 +79,11 @@ function acceptFile(file) {
     file.type.includes("wordprocessingml") ||
     file.type.startsWith("text/");
   if (!ok) {
-    showError("Formats acceptés : PDF ou DOCX (max 10 Mo).");
+    showError(window.ATSi18n?.t?.("errors.formatsAccepted") || "Formats acceptés : PDF ou DOCX (max 10 Mo).");
     return;
   }
   if (file.size > 10 * 1024 * 1024) {
-    showError("Fichier trop volumineux (max 10 Mo).");
+    showError(window.ATSi18n?.t?.("errors.fileTooLarge") || "Fichier trop volumineux (max 10 Mo).");
     return;
   }
   selectedFile = file;
@@ -117,6 +122,7 @@ function renderResults(report) {
   const offset = ARC - (ARC * report.total) / 100;
   const visibleStrengths = report.strengths.slice(0, 7);
   const moreStrengths = Math.max(0, report.strengths.length - visibleStrengths.length);
+  const t = window.ATSi18n?.t || ((k) => k);
 
   const cats = Object.values(report.categories)
     .map((c, i) => {
@@ -171,11 +177,12 @@ function renderResults(report) {
 
   let spellHtml = "";
   if (report.spelling.length > 0) {
+    const n = report.spelling.length;
     spellHtml = `
       <div id="spell-check" class="spell-box">
         <div class="spell-head">
-          <h2>🚨 ${report.spelling.length} faute${report.spelling.length > 1 ? "s" : ""} détectée${report.spelling.length > 1 ? "s" : ""} dans votre CV</h2>
-          <p>Votre CV contient ${report.spelling.length} faute${report.spelling.length > 1 ? "s" : ""} d'orthographe. Un CV avec des fautes envoie un signal négatif aux recruteurs — avant même que l'ATS ne le lise.</p>
+          <h2>${t("results.spell.head", { n })}</h2>
+          <p>${t("results.spell.body", { n })}</p>
         </div>
         <div class="spell-list">
           ${report.spelling
@@ -192,33 +199,31 @@ function renderResults(report) {
         </div>
       </div>`;
   } else {
-    spellHtml = `<div class="ok-spell">${icon("check")} Aucune faute fréquente détectée dans votre CV.</div>`;
+    spellHtml = `<div class="ok-spell">${icon("check")} ${t("results.spell.ok")}</div>`;
   }
 
   const passClass = report.passes ? "" : report.total >= 50 ? "warn" : "fail";
   const passTitle = report.passes
-    ? "Votre CV passe les filtres ATS ✓"
+    ? t("results.pass.ok.title")
     : report.total >= 50
-      ? "Votre CV risque d'être filtré"
-      : "Votre CV est mal optimisé pour les ATS";
-  const passBody = report.passes
-    ? "Un bon score ATS ne suffit pas pour décrocher un entretien. Affinez encore vos points faibles et adaptez les mots-clés à chaque offre."
-    : "Corrigez d'abord les points bloquants ci-dessous pour maximiser vos chances de passer les robots de recrutement.";
+      ? t("results.pass.risk.title")
+      : t("results.pass.fail.title");
+  const passBody = report.passes ? t("results.pass.ok.body") : t("results.pass.risk.body");
 
   const scoreDesc =
     report.total >= 85
-      ? "Votre CV est bien optimisé pour les ATS. Quelques ajustements peuvent encore l'améliorer."
+      ? t("results.scoreDesc.high")
       : report.total >= 70
-        ? "Bon niveau de compatibilité. Traitez les points bloquants pour viser l'excellence."
+        ? t("results.scoreDesc.good")
         : report.total >= 50
-          ? "Compatibilité moyenne — plusieurs correctifs sont nécessaires avant envoi."
-          : "Score faible : le CV risque d'être rejeté automatiquement par de nombreux ATS.";
+          ? t("results.scoreDesc.mid")
+          : t("results.scoreDesc.low");
 
   const annCount = report.annotations?.length || 0;
 
   els.resultsRoot.innerHTML = `
     <div class="card score-card">
-      <p class="score-label">Votre score de compatibilité ATS</p>
+      <p class="score-label">${t("results.score.label")}</p>
       <div class="gauge" aria-label="Score ${report.total} sur 100">
         <svg width="200" height="200">
           <circle cx="100" cy="100" r="90" fill="none" stroke="#EDE0CF" stroke-width="14" stroke-linecap="round"
@@ -236,11 +241,11 @@ function renderResults(report) {
       <p class="score-desc">${scoreDesc}</p>
       ${
         report.spelling.length
-          ? `<a href="#spell-check"><div class="spell-pill">⚠️ ${report.spelling.length} faute${report.spelling.length > 1 ? "s" : ""} d'orthographe — voir le détail ↓</div></a>`
+          ? `<a href="#spell-check"><div class="spell-pill">${t("results.spell.pill", { n: report.spelling.length })}</div></a>`
           : ""
       }
       <button type="button" class="analyze-btn studio-cta" id="btn-open-studio">
-        Ouvrir l'atelier annoté (${annCount} suggestion${annCount > 1 ? "s" : ""})
+        ${t("results.open.studio.withCount", { n: annCount })}
       </button>
     </div>
 
@@ -254,30 +259,36 @@ function renderResults(report) {
 
     <div class="diag">
       <div class="diag-head">
-        <p>🔍 Diagnostic de votre CV</p>
+        <p>🔍 ${t("results.diagnostics.heading")}</p>
         <div class="diag-tags">${tags}</div>
       </div>
       ${diagItems}
     </div>
 
     <div>
-      <h2 class="section-title">Détail par catégorie</h2>
+      <h2 class="section-title">${t("results.categories.heading")}</h2>
       <div class="cat-grid">${cats}</div>
     </div>
 
     <div>
-      <h2 class="section-title" style="color:var(--terra)">${icon("alert")} Points bloquants (${report.blockers.length})</h2>
+      <h2 class="section-title" style="color:var(--terra)">${icon("alert")} ${t("results.blockers.heading")} (${report.blockers.length})</h2>
       <div class="blockers-list">
-        ${report.blockers.length ? `<ul>${blockers}</ul>` : "<p style='margin:0;font-size:0.875rem;color:#57534e'>Aucun point bloquant majeur détecté.</p>"}
+        ${
+          report.blockers.length
+            ? `<ul>${blockers}</ul>`
+            : `<p style='margin:0;font-size:0.875rem;color:#57534e'>${t("results.blockers.none")}</p>`
+        }
       </div>
     </div>
 
     <div>
-      <h2 class="section-title">${icon("check")} Ce qui fonctionne bien</h2>
-      <div class="strengths-grid">${strengths || "<p>Peu de points forts détectés — travaillez la structure et le contenu.</p>"}</div>
+      <h2 class="section-title">${icon("check")} ${t("results.strengths.heading")}</h2>
+      <div class="strengths-grid">${strengths || `<p>${t("results.strengths.empty")}</p>`}</div>
       ${
         moreStrengths
-          ? `<div class="blockers-list"><ul><li>+ ${moreStrengths} autres points forts</li></ul></div>`
+          ? `<div class="blockers-list"><ul><li>+ ${t("results.strengths.more", {
+              n: moreStrengths,
+            })}</li></ul></div>`
           : ""
       }
     </div>
@@ -285,7 +296,7 @@ function renderResults(report) {
     ${spellHtml}
 
     <div class="text-center">
-      <button type="button" class="link-back" id="btn-another">← Tester un autre CV</button>
+      <button type="button" class="link-back" id="btn-another">${t("results.back.button")}</button>
     </div>
   `;
 
@@ -302,7 +313,7 @@ function showResults() {
   els.viewUpload.classList.add("hidden");
   els.viewStudio?.classList.add("hidden");
   els.viewResults.classList.remove("hidden");
-  els.subnavTitle.textContent = "Résultat de votre analyse ATS";
+  els.subnavTitle.textContent = window.ATSi18n?.t?.("results.subnav") || "Résultat de votre analyse ATS";
   els.btnNewTest.classList.remove("hidden");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -312,7 +323,7 @@ async function openStudio() {
   els.viewResults.classList.add("hidden");
   els.viewUpload.classList.add("hidden");
   els.viewStudio.classList.remove("hidden");
-  els.subnavTitle.textContent = "Atelier CV annoté";
+  els.subnavTitle.textContent = window.ATSi18n?.t?.("studio.title") || "Atelier CV annoté";
   await mountStudio(els.studioRoot, session, {
     onRetest: (report) => {
       // Optionally refresh summary — keep session
@@ -335,7 +346,7 @@ function resetToUpload() {
   els.viewStudio?.classList.add("hidden");
   els.viewUpload.classList.remove("hidden");
   if (els.studioRoot) els.studioRoot.innerHTML = "";
-  els.subnavTitle.textContent = "Vérificateur ATS gratuit";
+  els.subnavTitle.textContent = window.ATSi18n?.t?.("results.subnav.reset") || "Vérificateur ATS gratuit";
   els.btnNewTest.classList.add("hidden");
   clearError();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -351,7 +362,8 @@ async function runAnalysis() {
     const extracted = await extractDocument(selectedFile);
     if (extracted.approximate && extracted.format === "pdf" && extracted.text.replace(/\s/g, "").length < 40) {
       throw new Error(
-        "Texte non extractible — le PDF semble être un scan image. Exportez un PDF texte ou un DOCX."
+        window.ATSi18n?.t?.("errors.unextractable") ||
+          "Texte non extractible — le PDF semble être un scan image. Exportez un PDF texte ou un DOCX."
       );
     }
     await wait(250);
@@ -361,6 +373,7 @@ async function runAnalysis() {
       fileName: selectedFile.name,
       pages: extracted.pages,
       fileType: selectedFile.type,
+      lang: window.ATSi18n?.getLang?.() || "fr",
     });
     const annotations = attachGeometry(
       report.annotations || [],
@@ -393,7 +406,11 @@ async function runAnalysis() {
   } catch (err) {
     setLoading(false);
     console.error(err);
-    showError(err.message || "Une erreur est survenue pendant l'analyse.");
+    showError(
+      err.message ||
+        window.ATSi18n?.t?.("errors.unexpected") ||
+        "Une erreur est survenue pendant l'analyse."
+    );
   }
 }
 

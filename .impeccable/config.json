@@ -22,17 +22,17 @@
       },
       {
         "rule": "overused-font",
-        "value": "Fraunces",
-        "reason": "Intentional display serif for ATS Check (DESIGN.md)"
+        "value": "Space Grotesk",
+        "reason": "Intentional display font for ATS Check (DESIGN.md)"
       },
       {
         "rule": "overused-font",
-        "value": "DM Sans",
+        "value": "IBM Plex Sans",
         "reason": "Intentional UI sans for ATS Check (DESIGN.md)"
       },
       {
         "rule": "overused-font",
-        "value": "dm sans",
+        "value": "ibm plex sans",
         "reason": "Intentional UI sans for ATS Check (DESIGN.md)"
       },
       {
