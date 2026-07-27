@@ -9,7 +9,9 @@
       "design-system-color",
       "design-system-radius",
       "design-system-spacing",
-      "cream-palette"
+      "cream-palette",
+      "overused-font",
+      "layout-transition"
     ],
     "ignoreFiles": [],
     "ignoreValues": [
