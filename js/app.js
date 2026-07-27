@@ -1,11 +1,15 @@
-import { analyzeCv } from "./analyzer.js";
+import { analyzeCv, attachGeometry } from "./analyzer.js";
+import { extractDocument } from "./extract.js";
+import * as extractApi from "./extract.js";
+import { mountStudio } from "./studio.js";
 
 const CIRCUMFERENCE = 2 * Math.PI * 90;
-const ARC = CIRCUMFERENCE * 0.75; // 270°
+const ARC = CIRCUMFERENCE * 0.75;
 
 const els = {
   viewUpload: document.getElementById("view-upload"),
   viewResults: document.getElementById("view-results"),
+  viewStudio: document.getElementById("view-studio"),
   dropzone: document.getElementById("dropzone"),
   fileInput: document.getElementById("file-input"),
   fileChip: document.getElementById("file-chip"),
@@ -16,11 +20,14 @@ const els = {
   loading: document.getElementById("loading"),
   loadingStep: document.getElementById("loading-step"),
   resultsRoot: document.getElementById("results-root"),
+  studioRoot: document.getElementById("studio-root"),
   btnNewTest: document.getElementById("btn-new-test"),
   subnavTitle: document.getElementById("subnav-title"),
 };
 
 let selectedFile = null;
+/** @type {import('./studio.js').StudioSession|null} */
+let session = null;
 
 function showError(msg) {
   els.errorBanner.textContent = msg;
@@ -48,7 +55,7 @@ function setLoading(on, step = 0) {
       "Lecture du fichier…",
       "Extraction du texte…",
       "Analyse ATS en cours…",
-      "Génération du rapport…",
+      "Ouverture de l'atelier…",
     ];
     els.loadingStep.textContent = labels[step] || labels[0];
   }
@@ -56,49 +63,6 @@ function setLoading(on, step = 0) {
 
 function wait(ms) {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-async function extractTextFromPdf(file) {
-  const pdfjs = window.pdfjsLib;
-  if (!pdfjs) throw new Error("Bibliothèque PDF non chargée.");
-  pdfjs.GlobalWorkerOptions.workerSrc =
-    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs";
-
-  const data = new Uint8Array(await file.arrayBuffer());
-  const doc = await pdfjs.getDocument({ data }).promise;
-  let text = "";
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    const line = content.items.map((it) => it.str).join(" ");
-    text += line + "\n";
-  }
-  return { text, pages: doc.numPages };
-}
-
-async function extractTextFromDocx(file) {
-  if (!window.mammoth) throw new Error("Bibliothèque DOCX non chargée.");
-  const arrayBuffer = await file.arrayBuffer();
-  const result = await window.mammoth.extractRawText({ arrayBuffer });
-  return { text: result.value || "", pages: null };
-}
-
-async function extractText(file) {
-  const name = file.name.toLowerCase();
-  if (name.endsWith(".pdf") || file.type === "application/pdf") {
-    return extractTextFromPdf(file);
-  }
-  if (
-    name.endsWith(".docx") ||
-    file.type ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  ) {
-    return extractTextFromDocx(file);
-  }
-  if (name.endsWith(".txt") || file.type.startsWith("text/")) {
-    return { text: await file.text(), pages: null };
-  }
-  throw new Error("Format non supporté. Utilisez un PDF ou un DOCX.");
 }
 
 function acceptFile(file) {
@@ -139,6 +103,14 @@ function severityEmoji(s) {
   if (s === "critical") return "🔴";
   if (s === "warning") return "🟠";
   return "🟡";
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function renderResults(report) {
@@ -242,6 +214,8 @@ function renderResults(report) {
           ? "Compatibilité moyenne — plusieurs correctifs sont nécessaires avant envoi."
           : "Score faible : le CV risque d'être rejeté automatiquement par de nombreux ATS.";
 
+  const annCount = report.annotations?.length || 0;
+
   els.resultsRoot.innerHTML = `
     <div class="card score-card">
       <p class="score-label">Votre score de compatibilité ATS</p>
@@ -265,6 +239,9 @@ function renderResults(report) {
           ? `<a href="#spell-check"><div class="spell-pill">⚠️ ${report.spelling.length} faute${report.spelling.length > 1 ? "s" : ""} d'orthographe — voir le détail ↓</div></a>`
           : ""
       }
+      <button type="button" class="analyze-btn studio-cta" id="btn-open-studio">
+        Ouvrir l'atelier annoté (${annCount} suggestion${annCount > 1 ? "s" : ""})
+      </button>
     </div>
 
     <div class="pass-banner ${passClass}">
@@ -318,31 +295,46 @@ function renderResults(report) {
   });
 
   document.getElementById("btn-another")?.addEventListener("click", resetToUpload);
-}
-
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  document.getElementById("btn-open-studio")?.addEventListener("click", openStudio);
 }
 
 function showResults() {
   els.viewUpload.classList.add("hidden");
+  els.viewStudio?.classList.add("hidden");
   els.viewResults.classList.remove("hidden");
   els.subnavTitle.textContent = "Résultat de votre analyse ATS";
   els.btnNewTest.classList.remove("hidden");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+async function openStudio() {
+  if (!session || !els.studioRoot) return;
+  els.viewResults.classList.add("hidden");
+  els.viewUpload.classList.add("hidden");
+  els.viewStudio.classList.remove("hidden");
+  els.subnavTitle.textContent = "Atelier CV annoté";
+  await mountStudio(els.studioRoot, session, {
+    onRetest: (report) => {
+      // Optionally refresh summary — keep session
+      void report;
+    },
+  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  window.ATSAnalytics?.track?.("ats_studio_open", {
+    annotations: session.annotations.length,
+  });
+}
+
 function resetToUpload() {
   selectedFile = null;
+  session = null;
   els.fileInput.value = "";
   els.fileChip.classList.add("hidden");
   els.analyzeBtn.disabled = true;
   els.viewResults.classList.add("hidden");
+  els.viewStudio?.classList.add("hidden");
   els.viewUpload.classList.remove("hidden");
+  if (els.studioRoot) els.studioRoot.innerHTML = "";
   els.subnavTitle.textContent = "Vérificateur ATS gratuit";
   els.btnNewTest.classList.add("hidden");
   clearError();
@@ -356,7 +348,12 @@ async function runAnalysis() {
     setLoading(true, 0);
     await wait(300);
     setLoading(true, 1);
-    const extracted = await extractText(selectedFile);
+    const extracted = await extractDocument(selectedFile);
+    if (extracted.approximate && extracted.format === "pdf" && extracted.text.replace(/\s/g, "").length < 40) {
+      throw new Error(
+        "Texte non extractible — le PDF semble être un scan image. Exportez un PDF texte ou un DOCX."
+      );
+    }
     await wait(250);
     setLoading(true, 2);
     await wait(400);
@@ -365,9 +362,28 @@ async function runAnalysis() {
       pages: extracted.pages,
       fileType: selectedFile.type,
     });
+    const annotations = attachGeometry(
+      report.annotations || [],
+      extracted.pagesGeo,
+      extractApi
+    );
+    report.annotations = annotations;
+
+    session = {
+      originalFile: selectedFile,
+      extracted,
+      report,
+      annotations,
+      selectedId: annotations[0]?.id || null,
+      optimizedText: null,
+      retestReport: null,
+      scoreBefore: report.total,
+    };
+
     window.ATSAnalytics?.track?.("ats_analysis_complete", {
       score: report.total,
       passes: report.passes,
+      annotations: annotations.length,
     });
     setLoading(true, 3);
     await wait(350);
