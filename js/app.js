@@ -75,7 +75,7 @@ function setLoading(on, step = 0) {
         "Lecture du fichier…",
         "Extraction du texte…",
         "Analyse ATS en cours…",
-        "Ouverture de l'atelier…",
+        "Ouverture du rapport…",
       ];
       els.loadingStep.textContent = labels[step] || labels[0];
     }
