@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vérificateur ATS gratuit — Analysez la compatibilité de votre CV</title>
+  <meta name="description" content="85% des CV sont éliminés avant d'atteindre un recruteur. Testez gratuitement votre CV et obtenez votre score ATS en quelques secondes.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="logo" aria-label="ATS Check — accueil">
+        <span class="logo-mark">ATS</span>
+        <span>ATS Check</span>
+      </a>
+      <button type="button" id="btn-new-test" class="btn-ghost hidden" aria-label="Nouveau test">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        Nouveau test
+      </button>
+    </div>
+    <nav class="subnav" aria-label="Fil d'Ariane">
+      <div class="subnav-inner">
+        <span class="subnav-title" id="subnav-title">Vérificateur ATS gratuit</span>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Upload view -->
+  <main id="view-upload">
+    <section id="top" class="hero">
+      <div class="hero-inner">
+        <div class="badge">
+          <span class="badge-dot" aria-hidden="true"></span>
+          Analyse gratuite — Résultat immédiat
+        </div>
+        <h1>Votre CV passe-t-il<br><span>les filtres ATS&nbsp;?</span></h1>
+        <p class="hero-lead">
+          85&nbsp;% des CV sont éliminés avant d'atteindre un recruteur.
+          Obtenez votre score ATS en quelques secondes et découvrez comment corriger vos points faibles.
+        </p>
+
+        <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Déposer ou choisir un CV">
+          <input id="file-input" class="hidden" type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+          <div class="dropzone-icon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+          </div>
+          <p class="dropzone-title">Déposez votre CV ou cliquez pour choisir</p>
+          <p class="dropzone-hint">PDF ou DOCX — max 10&nbsp;Mo</p>
+          <span class="dropzone-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+            Choisir mon CV
+          </span>
+          <div id="file-chip" class="file-chip hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+            <span id="file-name"></span>
+          </div>
+        </div>
+
+        <div class="email-row">
+          <label for="email-input">E-mail (optionnel)</label>
+          <input id="email-input" type="email" placeholder="vous@exemple.com" autocomplete="email">
+        </div>
+
+        <button type="button" id="analyze-btn" class="analyze-btn" disabled>
+          Analyser mon CV
+        </button>
+        <div id="error-banner" class="error-banner hidden" role="alert"></div>
+
+        <div class="features">
+          <div class="feature">
+            <div class="feature-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>
+            </div>
+            <strong>Résultat en 10 secondes</strong>
+            <span>Analyse instantanée de votre CV</span>
+          </div>
+          <div class="feature">
+            <div class="feature-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+            </div>
+            <strong>Score ATS sur 100</strong>
+            <span>4 dimensions évaluées en détail</span>
+          </div>
+          <div class="feature">
+            <div class="feature-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+            </div>
+            <strong>100&nbsp;% gratuit</strong>
+            <span>Sans inscription obligatoire</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-inner">
+        <div class="section-head">
+          <h2>25+ critères analysés instantanément</h2>
+          <p>Notre moteur évalue votre CV selon les mêmes critères que les logiciels ATS utilisés par les recruteurs.</p>
+        </div>
+        <div class="criteria-grid">
+          <div class="criterion">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>Texte lisible par les robots ATS</span>
+          </div>
+          <div class="criterion">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>Mise en page compatible (colonnes, tableaux)</span>
+          </div>
+          <div class="criterion">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>Sections clés présentes (Expérience, Formation…)</span>
+          </div>
+          <div class="criterion">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>Titre de poste identifiable</span>
+          </div>
+          <div class="criterion">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>Coordonnées détectées</span>
+          </div>
+          <div class="criterion">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>Verbes d'action et résultats chiffrés</span>
+          </div>
+          <div class="criterion">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>Richesse et pertinence des mots-clés</span>
+          </div>
+          <div class="criterion">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <span>Concision et clarté du contenu</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <p>Prêt à savoir si votre CV est ATS-compatible&nbsp;?</p>
+      <p>Gratuit, sans compte, résultat en 10 secondes.</p>
+      <a href="#top" class="btn-ghost" data-scroll-top>Tester mon CV maintenant</a>
+    </section>
+  </main>
+
+  <!-- Results view -->
+  <main id="view-results" class="hidden">
+    <div class="results-wrap" id="results-root"></div>
+  </main>
+
+  <footer class="site-footer">
+    <p>© 2026 ATS Check · Analyse locale dans votre navigateur — aucun CV n'est envoyé sur un serveur.</p>
+  </footer>
+
+  <!-- Loading overlay -->
+  <div id="loading" class="loading hidden" role="status" aria-live="polite">
+    <div class="loading-card">
+      <div class="spinner" aria-hidden="true"></div>
+      <h3 id="loading-step">Analyse en cours…</h3>
+      <p>Votre fichier reste sur votre appareil.</p>
+      <ol class="progress-steps">
+        <li data-step="0">Lecture du fichier</li>
+        <li data-step="1">Extraction du texte</li>
+        <li data-step="2">Évaluation ATS</li>
+        <li data-step="3">Rapport</li>
+      </ol>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs" type="module"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+  <script type="module">
+    import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs";
+    window.pdfjsLib = pdfjsLib;
+  </script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
