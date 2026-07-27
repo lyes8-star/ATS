@@ -1087,12 +1087,43 @@ function scoreReadability(text, fileMeta) {
     });
   }
 
+  // Exigeant: pas de lisibilité « parfaite » si headings ATS non parsables
+  const parsed = fileMeta.parsed;
+  const hasExp = hasParsedSection(parsed, "experience");
+  const hasEdu = hasParsedSection(parsed, "education");
+  const hasSkills = hasParsedSection(parsed, "skills");
+  const standardHeadings = hasExp && hasEdu && hasSkills;
+  if (!standardHeadings) {
+    score = Math.max(0, score - 7);
+    score = Math.min(score, 18);
+    const missing = [
+      !hasExp ? "Expérience" : null,
+      !hasEdu ? "Formation" : null,
+      !hasSkills ? "Compétences" : null,
+    ]
+      .filter(Boolean)
+      .join("/");
+    checks.push({
+      id: "standard_headings",
+      ok: false,
+      label: `Titres de sections non lisibles par un ATS (${missing}).`,
+    });
+  } else {
+    checks.push({
+      id: "standard_headings",
+      ok: true,
+      label: "Titres de sections standards détectés.",
+    });
+  }
+
   // Apply labels from ats-layout-rules.json when available
   const rules = fileMeta.layoutRules?.rules;
   if (Array.isArray(rules)) {
     for (const rule of rules) {
       const existing = checks.find((c) => c.id === rule.id);
       if (existing && !existing.ok && rule.label_fr) {
+        // Keep more specific missing-list label for standard_headings
+        if (rule.id === "standard_headings" && !standardHeadings) continue;
         existing.label = rule.label_fr;
       }
     }
@@ -1106,6 +1137,7 @@ function scoreReadability(text, fileMeta) {
     hasTables,
     headerSparse,
     readingOrderOk,
+    standardHeadings,
   };
 }
 
@@ -1206,6 +1238,7 @@ function scoreStructure(text, fileMeta = {}) {
       label: "Section Expérience clairement identifiée.",
     });
   } else {
+    score = Math.max(0, score - 3);
     checks.push({ id: "section_experience", ok: false, label: "Section Expérience non détectée." });
   }
 
@@ -1214,6 +1247,7 @@ function scoreStructure(text, fileMeta = {}) {
     score += 2;
     checks.push({ id: "section_education", ok: true, label: "Section Formation présente." });
   } else {
+    score = Math.max(0, score - 2);
     checks.push({
       id: "section_education",
       ok: false,
@@ -1226,6 +1260,7 @@ function scoreStructure(text, fileMeta = {}) {
     score += 2;
     checks.push({ id: "section_skills", ok: true, label: "Section Compétences présente." });
   } else {
+    score = Math.max(0, score - 2);
     checks.push({ id: "section_skills", ok: false, label: "Section Compétences manquante." });
   }
 
@@ -1235,7 +1270,7 @@ function scoreStructure(text, fileMeta = {}) {
     ok: standardHeadings,
     label: standardHeadings
       ? "Titres de sections standards détectés."
-      : "Titres de sections standards recommandés.",
+      : "Titres de sections non lisibles par un ATS (Expérience/Formation/Compétences).",
   });
 
   return {
@@ -1243,6 +1278,8 @@ function scoreStructure(text, fileMeta = {}) {
     checks,
     roleCount: parsed?.roles?.length || 0,
     employmentGaps: parsed?.employmentGaps || [],
+    standardHeadings,
+    hasExp,
   };
 }
 
@@ -1722,6 +1759,20 @@ export function analyzeCv(rawText, fileMeta = {}) {
           "No complete role (title + company + dates) parseable.",
         "Titres de sections standards détectés.": "Standard section headings detected.",
         "Titres de sections standards recommandés.": "Standard section headings recommended.",
+        "Titres de sections non lisibles par un ATS (Expérience/Formation/Compétences).":
+          "Section headings not ATS-readable (Experience/Education/Skills).",
+        "Titres de sections non lisibles par un ATS (Expérience).":
+          "Section headings not ATS-readable (Experience).",
+        "Titres de sections non lisibles par un ATS (Formation).":
+          "Section headings not ATS-readable (Education).",
+        "Titres de sections non lisibles par un ATS (Compétences).":
+          "Section headings not ATS-readable (Skills).",
+        "Titres de sections non lisibles par un ATS (Expérience/Formation).":
+          "Section headings not ATS-readable (Experience/Education).",
+        "Titres de sections non lisibles par un ATS (Expérience/Compétences).":
+          "Section headings not ATS-readable (Experience/Skills).",
+        "Titres de sections non lisibles par un ATS (Formation/Compétences).":
+          "Section headings not ATS-readable (Education/Skills).",
         "Longueur idéale (1 page).": "Ideal length (1 page).",
         "CV un peu long (3 pages) — visez 1 à 2 pages.":
           "A bit long (3 pages) — aim for 1 to 2 pages.",
@@ -1938,7 +1989,7 @@ export function analyzeCv(rawText, fileMeta = {}) {
     });
   }
 
-  const passes = total >= 70 && readability.score >= 15;
+  const passes = total >= 70 && readability.score >= 15 && !!structure.hasExp;
 
   return {
     fileName: fileMeta.fileName || "CV",
