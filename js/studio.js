@@ -80,9 +80,10 @@ function studioShell(session) {
   };
 
   const checklist = report.checklist || [];
-  const checklistOk = checklist.filter((c) => c.ok).length;
-  const checklistTotal = checklist.length;
-  const checklistFail = checklist.filter((c) => !c.ok);
+  const scoredChecks = checklist.filter((c) => c.ok === true || c.ok === false);
+  const checklistOk = scoredChecks.filter((c) => c.ok === true).length;
+  const checklistTotal = scoredChecks.length;
+  const checklistFail = scoredChecks.filter((c) => c.ok === false);
   const failIdsHtml = checklistFail.length
     ? `<div class="studio-checklist-kos" id="studio-checklist-kos">${checklistFail
         .map(
@@ -159,7 +160,7 @@ function studioShell(session) {
 
 function focusFailedChecklist(root, session, preferredCheckId = null) {
   const checklist = session.report?.checklist || [];
-  const failedIds = new Set(checklist.filter((c) => !c.ok).map((c) => c.id));
+  const failedIds = new Set(checklist.filter((c) => c.ok === false).map((c) => c.id));
   if (!failedIds.size && !preferredCheckId) return;
   const want = preferredCheckId && failedIds.has(preferredCheckId) ? preferredCheckId : null;
   const ann =
@@ -285,7 +286,7 @@ async function runProAnalyze(root, session) {
     renderList(root, session);
     renderDetail(root, session);
     updateBar(root, session);
-    showToast(root, t("studio.pro.done"));
+    showToast(root, data.source === "heuristic" ? t("studio.pro.heuristic") : t("studio.pro.done"));
   } catch (err) {
     console.error(err);
     showToast(root, t("studio.pro.error"));

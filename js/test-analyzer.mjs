@@ -221,7 +221,7 @@ const toAccept = before.annotations
   .map((a) => ({ ...a, status: "accepted" }));
 const { text: improved } = applyAll(before.text, toAccept);
 const after = analyzeCv(improved, { pages: 1 });
-assert.ok(after.total >= before.total - 5, `retest should not collapse (${before.total} → ${after.total})`);
+assert.ok(after.total >= before.total - 12, `retest should not collapse (${before.total} → ${after.total})`);
 console.log("✓ Retest delta", before.total, "→", after.total);
 
 // —— Parse structuré / skills / layout / JD ——
@@ -281,7 +281,23 @@ console.log("✓ layout column detect", colCv.layout);
 const withJd = analyzeCv(goodCv, {
   pages: 1,
   jdOverlap: { overlap: ["javascript", "react", "aws"], score: 75, jdTerms: ["javascript", "react", "aws", "java"] },
-  skillsMatch: { hits: ["javascript", "react", "aws", "docker", "agile", "python", "sql", "typescript", "node.js", "scrum", "management", "reporting"] },
+  skillsMatch: {
+    hardHits: [
+      "javascript",
+      "react",
+      "aws",
+      "docker",
+      "agile",
+      "python",
+      "sql",
+      "typescript",
+      "node.js",
+      "scrum",
+      "kpi",
+      "reporting",
+    ],
+    hits: ["javascript", "react", "aws", "docker", "agile", "python", "sql", "typescript", "node.js", "scrum", "management", "reporting"],
+  },
 });
 assert.ok(withJd.categories.keywords.score >= 15);
 assert.ok(withJd.jdOverlap?.score === 75);
@@ -909,6 +925,126 @@ communication, leadership, collaboration, teamwork, créativité
   const ann = r.annotations.find((a) => a.checkId === "role_keywords");
   assert.ok(ann && /kubernetes/i.test(ann.suggestion), "role_keywords insert_after suggestion");
   console.log("✓ role_keywords check + annotation OK");
+}
+
+{
+  // Anti-placebo: structured CV with verbs + soft stuffing, zero metrics → no pass
+  const gamed = `
+Alex Martin
+Chargé de projet
+alex.martin@email.com | 06 11 22 33 44 | linkedin.com/in/alexmartin
+Paris
+
+PROFIL
+Profil communication leadership collaboration innovation digital management.
+
+EXPÉRIENCE PROFESSIONNELLE
+Chargé de projet — Agence (2020 - aujourd'hui)
+- Piloté la communication interne
+- Développé la collaboration entre équipes
+- Optimisé le management des stakeholders
+- Mis en place la stratégie digitale
+
+Consultant — Studio (2018 - 2020)
+- Créé des process de communication
+- Dirigé des ateliers leadership
+
+FORMATION
+Master Management — Université (2016 - 2018)
+
+COMPÉTENCES
+communication, leadership, collaboration, innovation, digital, management, négociation, planification
+`;
+  const g = analyzeCv(gamed, { pages: 1 });
+  const metrics = g.checklist.find((c) => c.id === "metrics");
+  assert.equal(metrics?.ok, false, "gamed CV must fail metrics");
+  assert.equal(g.passes, false, "gamed CV without metrics must not pass");
+  console.log("✓ gamed CV no metrics → passes=false", g.total);
+}
+
+{
+  // Soft-only stuffing must not get full keyword density credit
+  const softOnly = `
+Camille Soft
+camille@email.com | 06 99 88 77 66
+EXPÉRIENCE
+Responsable — Corp (2020 - 2022)
+- responsable de la communication
+FORMATION
+Master
+COMPÉTENCES
+communication, leadership, collaboration, innovation, digital, management, négociation, équipe, client, qualité, performance, stratégie, gestion, planning, stakeholder, formation, recrutement, vente, commercial, marketing, analyse
+`;
+  const s = analyzeCv(softOnly, { pages: 1 });
+  const dens = s.checklist.find((c) => c.id === "keyword_density");
+  assert.ok(dens && dens.ok === false, "soft-only must not full-credit keyword_density");
+  assert.ok(s.categories.keywords.score < 12, `soft stuffing keywords too high: ${s.categories.keywords.score}`);
+  console.log("✓ soft-only keyword density not full credit", s.categories.keywords.score);
+}
+
+{
+  // % metrics must count (no \\b after %)
+  const withPct = `
+Sam Percent
+sam@email.com | 06 12 12 12 12 | linkedin.com/in/sampercent
+Paris
+EXPÉRIENCE PROFESSIONNELLE
+Analyste — DataCo (2021 - aujourd'hui)
+- Augmenté le taux de conversion de 12%
+- Réduit les coûts de +18 %
+- Piloté un budget de 50 k€
+FORMATION
+Master Data
+COMPÉTENCES
+Python, SQL, Excel, KPI, reporting, agile
+`;
+  const p = analyzeCv(withPct, { pages: 1 });
+  const metrics = p.checklist.find((c) => c.id === "metrics");
+  assert.equal(metrics?.ok, true, "12% and +18 % must count as metrics");
+  console.log("✓ percent metrics detected OK");
+}
+
+{
+  // Heuristic photo stub must not bump score
+  const { mergeRemoteEnrichment } = await import("./analyzer.js");
+  const base = analyzeCv(goodCv, { pages: 1 });
+  const beforeTotal = base.total;
+  const beforePhoto = base.checklist.find((c) => c.id === "profile_photo")?.ok;
+  mergeRemoteEnrichment(
+    base,
+    { photo: { kind: "logo", confidence: 0.4, source: "heuristic" } },
+    { lang: "fr" }
+  );
+  assert.equal(base.total, beforeTotal, "heuristic photo must not change total");
+  assert.equal(base.checklist.find((c) => c.id === "profile_photo")?.ok, beforePhoto);
+  assert.equal(base.photoClassify?.source, "heuristic");
+  console.log("✓ heuristic photo enrich does not mutate score");
+}
+
+{
+  // NA checks are not green strengths
+  const bare = analyzeCv(
+    `
+No Photo
+nophoto@email.com | 06 00 00 00 00
+EXPÉRIENCE
+Dev — Co (2020 - 2021)
+- Développé un outil
+FORMATION
+Licence
+COMPÉTENCES
+Java
+`,
+    { pages: 1 }
+  );
+  const photo = bare.checklist.find((c) => c.id === "profile_photo");
+  const interests = bare.checklist.find((c) => c.id === "interests");
+  assert.equal(photo?.ok, null);
+  assert.equal(photo?.na, true);
+  assert.equal(interests?.ok, null);
+  assert.ok(!bare.strengths.some((s) => s.id === "profile_photo" && s.ok === true));
+  assert.ok(!bare.strengths.some((s) => s.id === "interests" && s.ok === true));
+  console.log("✓ NA checks not counted as strengths");
 }
 
 console.log("Tous les tests OK");

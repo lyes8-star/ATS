@@ -100,10 +100,10 @@ async function handleAnalyze(body, env) {
   const lang = body.lang === "en" ? "en" : "fr";
   if (text.length < 40) throw new Error("Texte CV trop court");
 
-  const annotations = await llmAnnotations(text, jd, lang, env);
+  const { annotations, source } = await llmAnnotations(text, jd, lang, env);
   return {
     annotations,
-    source: "llm",
+    source,
     retainedSeconds: 0,
   };
 }
@@ -118,14 +118,14 @@ async function llmAnnotations(text, jd, lang, env) {
 
   if (env.OPENAI_API_KEY) {
     const raw = await callOpenAI(env.OPENAI_API_KEY, system, user);
-    return validateAnnotations(raw, text);
+    return { annotations: validateAnnotations(raw, text), source: "llm" };
   }
   if (env.ANTHROPIC_API_KEY) {
     const raw = await callAnthropic(env.ANTHROPIC_API_KEY, system, user);
-    return validateAnnotations(raw, text);
+    return { annotations: validateAnnotations(raw, text), source: "llm" };
   }
   // Offline stub when no keys — heuristic suggestions
-  return heuristicAnnotations(text, lang);
+  return { annotations: heuristicAnnotations(text, lang), source: "heuristic" };
 }
 
 function validateAnnotations(raw, text) {

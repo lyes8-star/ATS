@@ -39,6 +39,49 @@ const PROFESSIONAL_KEYWORDS = [
   "product", "ux", "ui", "devops", "cloud", "aws", "azure", "api", "saas",
 ];
 
+/** Soft skills — never count as hard keyword density (fallback path). */
+const SOFT_KEYWORD_BLOCKLIST = new Set(
+  [
+    "communication",
+    "leadership",
+    "collaboration",
+    "négociation",
+    "negociation",
+    "innovation",
+    "digital",
+    "management",
+    "équipe",
+    "equipe",
+    "client",
+    "qualité",
+    "qualite",
+    "performance",
+    "stratégie",
+    "strategie",
+    "gestion",
+    "planning",
+    "stakeholder",
+    "formation",
+    "recrutement",
+    "vente",
+    "commercial",
+    "marketing",
+    "analyse",
+    "données",
+    "donnees",
+    "processus",
+    "projet",
+    "équipe",
+  ].map((s) => s.toLowerCase())
+);
+
+function isSoftKeyword(term) {
+  return SOFT_KEYWORD_BLOCKLIST.has(String(term || "").toLowerCase().trim());
+}
+
+/** Hard-only fallback lexicon when skillsMatch is unavailable. */
+const HARD_FALLBACK_KEYWORDS = PROFESSIONAL_KEYWORDS.filter((k) => !isSoftKeyword(k));
+
 const ACADEMIC_MARKERS = [
   "thèse", "these", "doctorat", "phd", "publication", "publications", "article scientifique",
   "colloque", "symposium", "laboratoire", "chercheur", "chercheuse", "mémoire", "memoire",
@@ -186,7 +229,8 @@ const PHONE_LIKE_RE = /(\+?\d[\d\t .,\-]{7,}\d)|(\b0[1-9](?:[.\-\t ]?\d{2}){4}\b
 function countResultMetrics(text) {
   if (!text) return 0;
   const patterns = [
-    /\b\d+([.,]\d+)?\s*(%|€|\$|k€|m€|M€)\b/gi,
+    /\b\d+([.,]\d+)?\s*%/gi,
+    /\b\d+([.,]\d+)?\s*(€|\$|k€|m€|M€)\b/gi,
     /\b\d+([.,]\d+)?\s*k\b/gi,
     /\b\d{1,3}(?:[\s.,]\d{3})+\s*(?:clients?|users?|utilisateurs?|membres?|personnes?|collaborateurs?|développeurs?|équipes?|jours?|semaines?|mois|projets?|tickets?|commandes?|ventes?|leads?)?\b/gi,
     /\b\d+([.,]\d+)?\s*(?:clients?|users?|utilisateurs?|membres?|personnes?|collaborateurs?|développeurs?|équipes?|jours?|semaines?|mois|projets?|tickets?|commandes?|ventes?|leads?)\b/gi,
@@ -1363,8 +1407,9 @@ function scoreReadability(text, fileMeta) {
   } else {
     checks.push({
       id: "profile_photo",
-      ok: true,
-      label: "Pas de photo de profil détectée en en-tête.",
+      ok: null,
+      na: true,
+      label: "Photo de profil : non applicable (aucune détectée).",
     });
   }
 
@@ -1555,7 +1600,8 @@ function scoreStructure(text, fileMeta = {}) {
   if (roles.length === 0) {
     checks.push({
       id: "role_dates",
-      ok: true,
+      ok: null,
+      na: true,
       label: "Dates de postes : non applicable (aucun rôle détecté).",
     });
   } else if (datedRoles.length >= 1) {
@@ -1577,8 +1623,9 @@ function scoreStructure(text, fileMeta = {}) {
   if (!interests || interests.status === "absent") {
     checks.push({
       id: "interests",
-      ok: true,
-      label: "Centres d'intérêt absents (optionnel).",
+      ok: null,
+      na: true,
+      label: "Centres d'intérêt : non applicable (section absente).",
     });
   } else if (interests.status === "empty") {
     checks.push({
@@ -1676,7 +1723,6 @@ function scoreContent(text, fileMeta = {}) {
       label: `Peu de verbes d'action (${verbHits}) — renforcez l'impact.`,
     });
   } else {
-    score += 1;
     checks.push({
       id: "action_verbs",
       ok: false,
@@ -1789,10 +1835,8 @@ function scoreContent(text, fileMeta = {}) {
     score += 7;
     checks.push({ id: "concision", ok: true, label: `Concision correcte (~${wordCount} mots).` });
   } else if (wordCount < 250) {
-    score += 3;
     checks.push({ id: "concision", ok: false, label: `Contenu trop court (~${wordCount} mots).` });
   } else {
-    score += 3;
     checks.push({
       id: "concision",
       ok: false,
@@ -1854,12 +1898,15 @@ function scoreKeywords(text, fileMeta = {}) {
   // Hard skills only for density (soft skills excluded from scoring)
   let hardFound = [];
   if (skillsMatch?.hardHits?.length) {
-    hardFound = skillsMatch.hardHits.filter((k) => String(k).length >= 3);
+    hardFound = skillsMatch.hardHits.filter((k) => String(k).length >= 3 && !isSoftKeyword(k));
+  } else if (skillsMatch && Array.isArray(skillsMatch.hardHits)) {
+    // Lexicon loaded but no hard hits — do not fall back to soft hits
+    hardFound = [];
   } else if (skillsMatch?.hits?.length) {
-    hardFound = skillsMatch.hits.filter((k) => String(k).length >= 3);
+    hardFound = skillsMatch.hits.filter((k) => String(k).length >= 3 && !isSoftKeyword(k));
   } else {
     const lower = text.toLowerCase();
-    hardFound = PROFESSIONAL_KEYWORDS.filter((k) => {
+    hardFound = HARD_FALLBACK_KEYWORDS.filter((k) => {
       if (k.length < 3) return false;
       const re = new RegExp(`\\b${escapeReg(k)}\\b`, "i");
       return re.test(lower);
@@ -1882,7 +1929,6 @@ function scoreKeywords(text, fileMeta = {}) {
       label: `Densité hard moyenne (${unique.size}) — ajoutez outils/méthodes concrets.`,
     });
   } else {
-    score += 2;
     checks.push({
       id: "keyword_density",
       ok: false,
@@ -1891,15 +1937,14 @@ function scoreKeywords(text, fileMeta = {}) {
   }
 
   const diversity = unique.size;
+  // Informative only — same signal as density; no extra points
   if (diversity >= 8) {
-    score += 6;
     checks.push({
       id: "keyword_diversity",
       ok: true,
       label: "Bonne diversité d'outils et méthodes.",
     });
   } else {
-    score += 2;
     checks.push({
       id: "keyword_diversity",
       ok: false,
@@ -1972,7 +2017,13 @@ function buildChecklist(readability, structure, content, keywords) {
       const id = c.id || `${axis}_${out.length}`;
       if (seen.has(id)) continue;
       seen.add(id);
-      out.push({ id, axis, ok: !!c.ok, label: c.label });
+      out.push({
+        id,
+        axis,
+        ok: c.ok === null || c.na ? null : !!c.ok,
+        ...(c.ok === null || c.na ? { na: true } : {}),
+        label: c.label,
+      });
     }
   }
   return out;
@@ -2057,7 +2108,7 @@ function buildDiagnostics(text, scores) {
 
   for (const crit of CRITICAL) {
     const check = byId[crit.id];
-    if (check && !check.ok) {
+    if (check && check.ok === false) {
       diagnostics.push({
         severity: crit.severity,
         title: crit.title,
@@ -2214,17 +2265,17 @@ export function analyzeCv(rawText, fileMeta = {}) {
   );
 
   const strengths = [
-    ...readability.checks.filter((c) => c.ok).map((c) => ({ category: "Lisibilité ATS", ...c })),
-    ...structure.checks.filter((c) => c.ok).map((c) => ({ category: "Structure", ...c })),
-    ...content.checks.filter((c) => c.ok).map((c) => ({ category: "Qualité du contenu", ...c })),
-    ...keywords.checks.filter((c) => c.ok).map((c) => ({ category: "Mots-clés", ...c })),
+    ...readability.checks.filter((c) => c.ok === true).map((c) => ({ category: "Lisibilité ATS", ...c })),
+    ...structure.checks.filter((c) => c.ok === true).map((c) => ({ category: "Structure", ...c })),
+    ...content.checks.filter((c) => c.ok === true).map((c) => ({ category: "Qualité du contenu", ...c })),
+    ...keywords.checks.filter((c) => c.ok === true).map((c) => ({ category: "Mots-clés", ...c })),
   ];
 
   const blockers = [
-    ...readability.checks.filter((c) => !c.ok).map((c) => ({ category: "Lisibilité ATS", ...c })),
-    ...structure.checks.filter((c) => !c.ok).map((c) => ({ category: "Structure", ...c })),
-    ...content.checks.filter((c) => !c.ok).map((c) => ({ category: "Qualité du contenu", ...c })),
-    ...keywords.checks.filter((c) => !c.ok).map((c) => ({ category: "Mots-clés", ...c })),
+    ...readability.checks.filter((c) => c.ok === false).map((c) => ({ category: "Lisibilité ATS", ...c })),
+    ...structure.checks.filter((c) => c.ok === false).map((c) => ({ category: "Structure", ...c })),
+    ...content.checks.filter((c) => c.ok === false).map((c) => ({ category: "Qualité du contenu", ...c })),
+    ...keywords.checks.filter((c) => c.ok === false).map((c) => ({ category: "Mots-clés", ...c })),
   ];
 
   if (uiLang === "en") {
@@ -2281,6 +2332,12 @@ export function analyzeCv(rawText, fileMeta = {}) {
         "Pas d'intitulé clair sous le nom — ajoutez un titre de poste ciblé.":
           "No clear headline under the name — add a target job title.",
         "Centres d'intérêt absents (optionnel).": "Interests section absent (optional).",
+        "Centres d'intérêt : non applicable (section absente).":
+          "Interests: not applicable (section absent).",
+        "Photo de profil : non applicable (aucune détectée).":
+          "Profile photo: not applicable (none detected).",
+        "Dates de postes : non applicable (aucun rôle détecté).":
+          "Role dates: not applicable (no roles detected).",
         "Section Centres d'intérêt vide — complétez ou retirez le titre.":
           "Interests section empty — fill it or remove the heading.",
         "Centres d'intérêt trop génériques — cibler 3–5 intérêts parlants.":
@@ -2570,17 +2627,25 @@ export function analyzeCv(rawText, fileMeta = {}) {
     });
   }
 
-  const emailOk = structure.checks.some((c) => c.id === "email" && c.ok);
-  const phoneOk = structure.checks.some((c) => c.id === "phone" && c.ok);
-  const completeRoleOk = structure.checks.some((c) => c.id === "complete_role" && c.ok);
-  const roleDatesOk = structure.checks.some((c) => c.id === "role_dates" && c.ok);
+  const emailOk = structure.checks.some((c) => c.id === "email" && c.ok === true);
+  const phoneOk = structure.checks.some((c) => c.id === "phone" && c.ok === true);
+  const completeRoleOk = structure.checks.some((c) => c.id === "complete_role" && c.ok === true);
+  const roleDatesOk = structure.checks.some((c) => c.id === "role_dates" && c.ok === true);
+  const metricsOk = content.checks.some((c) => c.id === "metrics" && c.ok === true);
+  const actionVerbsOk = content.checks.some((c) => c.id === "action_verbs" && c.ok === true);
+  const eduOk = structure.checks.some((c) => c.id === "section_education" && c.ok === true);
+  const skillsOk = structure.checks.some((c) => c.id === "section_skills" && c.ok === true);
   const passes =
     total >= 70 &&
     readability.score >= 15 &&
     !!structure.hasExp &&
     emailOk &&
     phoneOk &&
-    (completeRoleOk || roleDatesOk);
+    (completeRoleOk || roleDatesOk) &&
+    metricsOk &&
+    actionVerbsOk &&
+    eduOk &&
+    skillsOk;
 
   return {
     fileName: fileMeta.fileName || "CV",
@@ -2872,7 +2937,11 @@ export function mergeRemoteEnrichment(report, enrich = {}, opts = {}) {
     report.parsed.layout = report.parsed.layout || {};
     report.parsed.layout.photoKind = enrich.photo.kind;
     report.photoClassify = enrich.photo;
-    if (enrich.photo.kind === "logo" || enrich.photo.kind === "other") {
+    const photoIsHeuristic = enrich.photo.source === "heuristic";
+    // Heuristic stubs must not mutate score or checklist (anti-placebo)
+    if (photoIsHeuristic) {
+      // keep classify metadata only
+    } else if (enrich.photo.kind === "logo" || enrich.photo.kind === "other") {
       upsertCheck(
         report,
         "profile_photo",
