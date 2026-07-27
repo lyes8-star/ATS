@@ -75,7 +75,7 @@ function setLoading(on, step = 0) {
         "Lecture du fichier…",
         "Extraction du texte…",
         "Analyse ATS en cours…",
-        "Ouverture du rapport…",
+        "Ouverture de l'analyse…",
       ];
       els.loadingStep.textContent = labels[step] || labels[0];
     }
@@ -349,26 +349,30 @@ function renderResults(report) {
 }
 
 function showResults() {
-  els.viewUpload.classList.add("hidden");
-  els.viewStudio?.classList.add("hidden");
-  els.viewResults.classList.remove("hidden");
-  els.subnavTitle.textContent = window.ATSi18n?.t?.("results.subnav") || "Résultat du contrôle";
-  els.btnNewTest.classList.remove("hidden");
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  // Legacy — parcours principal = vue unifiée uniquement
+  void openUnifiedView();
 }
 
-async function openStudio() {
+async function openUnifiedView() {
   if (!session || !els.studioRoot) return;
-  els.viewResults.classList.add("hidden");
+  els.viewResults?.classList.add("hidden");
   els.viewUpload.classList.add("hidden");
   els.viewStudio.classList.remove("hidden");
-  els.subnavTitle.textContent = window.ATSi18n?.t?.("studio.title") || "Corrections proposées";
+  if (els.subnavTitle) {
+    els.subnavTitle.textContent =
+      window.ATSi18n?.t?.("studio.title") || "Corrections proposées";
+  }
   els.btnNewTest.classList.remove("hidden");
-  await mountStudio(els.studioRoot, session, {});
+  await mountStudio(els.studioRoot, session, { onReset: resetToUpload });
   window.scrollTo({ top: 0, behavior: "smooth" });
   window.ATSAnalytics?.track?.("ats_studio_open", {
     annotations: session.annotations.length,
   });
+}
+
+/** @deprecated use openUnifiedView */
+async function openStudio() {
+  return openUnifiedView();
 }
 
 function resetToUpload() {
@@ -378,11 +382,14 @@ function resetToUpload() {
   els.fileInput.value = "";
   els.fileChip.classList.add("hidden");
   els.analyzeBtn.disabled = true;
-  els.viewResults.classList.add("hidden");
+  els.viewResults?.classList.add("hidden");
   els.viewStudio?.classList.add("hidden");
   els.viewUpload.classList.remove("hidden");
   if (els.studioRoot) els.studioRoot.innerHTML = "";
-  els.subnavTitle.textContent = window.ATSi18n?.t?.("results.subnav.reset") || "Contrôle de CV";
+  if (els.subnavTitle) {
+    els.subnavTitle.textContent =
+      window.ATSi18n?.t?.("results.subnav.reset") || "Contrôle de CV";
+  }
   els.btnNewTest.classList.add("hidden");
   clearError();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -523,10 +530,9 @@ async function runAnalysis() {
     });
     setLoading(true, 3);
     await wait(350);
-    // Rapport détaillé = surface principale ; atelier = suggestions optionnelles
+    // Vue unique : score + CV annoté (plus de bascule rapport / studio)
     setLoading(false);
-    renderResults(report);
-    showResults();
+    await openUnifiedView();
   } catch (err) {
     setLoading(false);
     console.error(err);
