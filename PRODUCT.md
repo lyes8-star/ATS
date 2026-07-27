@@ -18,24 +18,25 @@ Contexte typique : mobile ou desktop, première visite, besoin d’un score clai
 
 ## Product Purpose
 
-Outil gratuit **ATS Check** : analyser un CV (PDF/DOCX) **localement dans le navigateur**, produire un score de compatibilité ATS /100 et un diagnostic actionnable.
+Outil gratuit **ATS Check** : analyser un CV (PDF/DOCX) **localement dans le navigateur**, produire un score de compatibilité ATS /100, un **atelier annoté** (surcouches précises + acceptation clic par clic), générer un **CV ATS 1 colonne**, puis **retester** automatiquement.
 
-Succès = le visiteur dépose un CV, comprend son score, corrige les points bloquants, et fait confiance à la confidentialité (pas d’upload serveur).
+Succès = le visiteur dépose un CV, comprend son score, corrige les zones exactes dans l’atelier, télécharge un CV optimisé, et fait confiance à la confidentialité (pas d’upload serveur).
 
 ## Positioning
 
-Vérificateur ATS gratuit, immédiat, respectueux de la vie privée — analyse 100 % navigateur.
+Vérificateur ATS gratuit, immédiat, respectueux de la vie privée — analyse 100 % navigateur + atelier de correction guidée.
 
 ## Conversion & proof
 
 - **Primary CTA:** déposer / analyser mon CV.
-- **Secondary CTAs:** assistant FAQ ; e-mail contact ; pages légales / accessibilité.
-- **Line a visitor remembers after 10 seconds:** Votre CV passe-t-il les filtres ATS ? Score en quelques secondes, sans envoyer le fichier.
+- **Secondary CTAs:** ouvrir l’atelier annoté ; générer le CV ATS ; retester ; assistant FAQ ; pages légales / accessibilité.
+- **Line a visitor remembers after 10 seconds:** Votre CV passe-t-il les filtres ATS ? Score en quelques secondes, corrections sur les zones exactes, sans envoyer le fichier.
 - **Belief ladder:**
   1. L’outil est gratuit et immédiat.
   2. Mon CV ne quitte pas mon appareil.
-  3. Le diagnostic m’indique quoi corriger (structure, mots-clés, orthographe…).
-- **Proof on hand:** score jauge, détail 4 catégories, points forts / bloquants — compléter `.impeccable/assets/proof/` si témoignages.
+  3. Le diagnostic m’indique quoi corriger — et **où** sur le CV.
+  4. Je peux accepter les suggestions et retester mon score avant / après.
+- **Proof on hand:** score jauge, atelier split-view, delta de score, export HTML/PDF — compléter `.impeccable/assets/proof/` si témoignages.
 
 ## Brand Personality
 

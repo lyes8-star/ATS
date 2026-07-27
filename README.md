@@ -17,6 +17,9 @@ Ouvrir http://localhost:8080/
 - Upload PDF / DOCX — analyse **100 % navigateur** (aucun CV envoyé au serveur)
 - Score /100 + 4 axes /25 (lisibilité, structure, qualité, mots-clés)
 - Diagnostic, points bloquants / forts, fautes d’orthographe courantes
+- **Atelier annoté** : prévisualisation CV (PDF canvas / DOCX HTML) + surcouches localisées
+- Acceptation / ignore / édition des suggestions, puis **génération d’un CV ATS 1 colonne**
+- **Retest automatique** avec delta de score avant / après
 
 ## Normes production (modèle Test / Test2)
 
@@ -48,10 +51,15 @@ Compléter SIRET, forme juridique, adresse et hébergeur dans `data/site.json` �
 ## Structure
 
 ```
-index.html              # Accueil + analyseur
+index.html              # Accueil + analyseur + atelier
 data/site.json          # Config marque / IDs SEA / légal
-js/analyzer.js          # Moteur de score
-js/app.js               # UI analyse
+js/analyzer.js          # Moteur de score + annotations localisées
+js/extract.js           # Extraction PDF (géométrie) / DOCX (HTML)
+js/annotate.js          # Overlays preview
+js/studio.js            # UI atelier split + accept/ignore
+js/optimize.js          # Application des suggestions
+js/export-cv.js         # Export CV ATS HTML / impression
+js/app.js               # Orchestration upload → studio → retest
 js/consent.js           # CMP + Consent Mode v2
 js/analytics.js         # gtag gated
 js/a11y.js / chat.js    # FABs accessibilité & assistant

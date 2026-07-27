@@ -188,12 +188,354 @@ function findSpellingIssues(text, lang) {
       if (start > 0) ctx = "…" + ctx;
       if (end < text.length) ctx = ctx + "…";
       const right = m[0].replace(tip.wrong, tip.right);
+      const matchIndex = m.index;
+      const matchLen = m[0].length;
       tip.wrong.lastIndex = 0;
-      issues.push({ wrong: m[0], right, context: ctx });
+      issues.push({
+        wrong: m[0],
+        right,
+        context: ctx,
+        textStart: matchIndex,
+        textEnd: matchIndex + matchLen,
+      });
       if (issues.length >= 12) return issues;
     }
   }
   return issues;
+}
+
+/**
+ * Localise un extrait dans le texte plat.
+ * @returns {{ textStart: number, textEnd: number, quote: string }|null}
+ */
+function locateQuote(text, quote, fromIndex = 0) {
+  if (!quote) return null;
+  const idx = text.indexOf(quote, fromIndex);
+  if (idx === -1) {
+    const soft = text.toLowerCase().indexOf(quote.toLowerCase(), fromIndex);
+    if (soft === -1) return null;
+    return { textStart: soft, textEnd: soft + quote.length, quote: text.slice(soft, soft + quote.length) };
+  }
+  return { textStart: idx, textEnd: idx + quote.length, quote };
+}
+
+function sectionAnchor(text, kind) {
+  const re = SECTION_PATTERNS[kind];
+  if (!re) return null;
+  re.lastIndex = 0;
+  const m = re.exec(text);
+  if (!m) return null;
+  return { textStart: m.index, textEnd: m.index + m[0].length, quote: m[0] };
+}
+
+/**
+ * Construit des annotations localisées (offsets + quote) à partir du rapport.
+ * Les rects PDF sont enrichis plus tard via attachGeometry().
+ */
+function buildAnnotations(text, scores, spelling, lang) {
+  const annotations = [];
+  let seq = 0;
+  const nextId = () => `ann-${++seq}`;
+
+  const push = (partial) => {
+    annotations.push({
+      id: nextId(),
+      page: 1,
+      rects: [],
+      approximate: true,
+      status: "pending",
+      section: partial.section || guessSection(text, partial.textStart || 0),
+      ...partial,
+    });
+  };
+
+  // Typos
+  for (const s of spelling) {
+    push({
+      kind: "typo",
+      severity: "critical",
+      textStart: s.textStart,
+      textEnd: s.textEnd,
+      quote: s.wrong,
+      title: "Corriger la faute d'orthographe",
+      detail: `« ${s.wrong} » est une faute fréquente. Un CV avec des fautes envoie un signal négatif.`,
+      suggestion: s.right,
+      applyMode: "replace",
+      approximate: false,
+    });
+  }
+
+  // Passive / téléphone
+  if (!detectEmail(text)) {
+    push({
+      kind: "missing_email",
+      severity: "critical",
+      textStart: 0,
+      textEnd: Math.min(40, text.length),
+      quote: text.slice(0, Math.min(40, text.length)).trim() || "(début du CV)",
+      title: "Ajouter une adresse e-mail",
+      detail: "Aucune adresse e-mail détectée. Les ATS et recruteurs doivent pouvoir vous contacter.",
+      suggestion: "prenom.nom@email.com",
+      applyMode: "insert_header",
+      section: "Coordonnées",
+      approximate: true,
+    });
+  }
+  if (!detectPhone(text)) {
+    push({
+      kind: "missing_email",
+      severity: "critical",
+      textStart: 0,
+      textEnd: Math.min(40, text.length),
+      quote: text.slice(0, Math.min(40, text.length)).trim() || "(début du CV)",
+      title: "Ajouter un numéro de téléphone",
+      detail: "Téléphone manquant ou non reconnu. Placez-le en tête, en texte clair.",
+      suggestion: "06 12 34 56 78",
+      applyMode: "insert_header",
+      section: "Coordonnées",
+      approximate: true,
+    });
+  }
+
+  // Sections manquantes
+  const missingSections = [
+    { key: "experience", kind: "missing_section", title: "Ajouter une section Expérience", block: "\n\nEXPÉRIENCE PROFESSIONNELLE\nIntitulé — Entreprise (AAAA - AAAA)\n- Piloté … (+X % / Y clients)\n" },
+    { key: "education", kind: "missing_section", title: "Ajouter une section Formation", block: "\n\nFORMATION\nDiplôme — Établissement (AAAA - AAAA)\n" },
+    { key: "skills", kind: "missing_section", title: "Ajouter une section Compétences", block: "\n\nCOMPÉTENCES\nGestion de projet, Agile, Excel, reporting, communication, analyse\n" },
+  ];
+  for (const ms of missingSections) {
+    if (!SECTION_PATTERNS[ms.key].test(text)) {
+      const end = text.length;
+      push({
+        kind: ms.kind,
+        severity: ms.key === "experience" ? "critical" : "warning",
+        textStart: Math.max(0, end - 1),
+        textEnd: end,
+        quote: "(fin du document)",
+        title: ms.title,
+        detail: `Section ${ms.key === "experience" ? "Expérience" : ms.key === "education" ? "Formation" : "Compétences"} absente ou mal intitulée.`,
+        suggestion: ms.block.trim(),
+        applyMode: "insert_after",
+        section: "Document",
+        approximate: true,
+      });
+    }
+  }
+
+  // Formulations passives « responsable de… »
+  const passiveRe = /\bresponsable\s+de\s+[^.!\n]{8,120}/gi;
+  let pm;
+  let passiveCount = 0;
+  while ((pm = passiveRe.exec(text)) !== null && passiveCount < 6) {
+    const quote = pm[0].trim();
+    const hasMetric = /\d/.test(quote);
+    const suggestion = hasMetric
+      ? quote.replace(/^responsable\s+de\s+/i, "Piloté ").replace(/^./, (c) => c.toUpperCase())
+      : quote.replace(/^responsable\s+de\s+/i, "Piloté ") + " (+X % / N clients)";
+    push({
+      kind: "passive_verb",
+      severity: "warning",
+      textStart: pm.index,
+      textEnd: pm.index + pm[0].length,
+      quote,
+      title: "Remplacer la formulation passive",
+      detail: "Formulation passive, faible signal ATS. Préférez un verbe d'action + résultat.",
+      suggestion: suggestion.charAt(0).toUpperCase() + suggestion.slice(1),
+      applyMode: "replace",
+      approximate: false,
+    });
+    passiveCount += 1;
+  }
+
+  // Puces sans métrique dans l'expérience
+  if (!scores.content.hasMetrics) {
+    const bulletRe = /^[\s•\-\*]+(.{20,160})$/gm;
+    let bm;
+    let metricAnns = 0;
+    while ((bm = bulletRe.exec(text)) !== null && metricAnns < 4) {
+      const line = bm[1].trim();
+      if (/\d/.test(line)) continue;
+      if (!/[a-záàâäéèêëíìîïóòôöúùûüç]/i.test(line)) continue;
+      push({
+        kind: "missing_metric",
+        severity: "warning",
+        textStart: bm.index,
+        textEnd: bm.index + bm[0].length,
+        quote: line.slice(0, 80),
+        title: "Ajouter un résultat chiffré",
+        detail: "Sans métrique (%, €, volumes), l'impact est difficile à scorer.",
+        suggestion: `${line.replace(/\.$/, "")} (+18 % / 40 clients)`,
+        applyMode: "replace",
+        approximate: false,
+      });
+      metricAnns += 1;
+    }
+    if (metricAnns === 0) {
+      const exp = sectionAnchor(text, "experience") || { textStart: 0, textEnd: Math.min(60, text.length), quote: text.slice(0, 40) };
+      push({
+        kind: "missing_metric",
+        severity: "warning",
+        ...exp,
+        title: "Enrichir les expériences avec des chiffres",
+        detail: "Ajoutez 3 à 5 indicateurs concrets sur vos postes récents.",
+        suggestion: "Piloté un portefeuille de 40 clients (+18 % CA)",
+        applyMode: "insert_after",
+        approximate: true,
+      });
+    }
+  }
+
+  // Gap emploi
+  const years = detectDates(text);
+  const gap = findEmploymentGap(years);
+  if (gap) {
+    const yearQuote = String(gap.from);
+    const loc = locateQuote(text, yearQuote) || { textStart: 0, textEnd: 4, quote: yearQuote };
+    push({
+      kind: "gap",
+      severity: "critical",
+      textStart: loc.textStart,
+      textEnd: loc.textEnd,
+      quote: loc.quote,
+      title: "Justifier le trou d'emploi",
+      detail: `Un gap d'environ ${gap.months} mois (${gap.from}–${gap.to}) attire l'attention des recruteurs.`,
+      suggestion: `Formation / projet personnel / bénévolat (${gap.from}–${gap.to}) — développer les compétences X`,
+      applyMode: "insert_after",
+      approximate: true,
+    });
+  }
+
+  // Mots-clés faibles
+  if (scores.keywords.keywords.length < 8) {
+    const skills = sectionAnchor(text, "skills");
+    const suggested = PROFESSIONAL_KEYWORDS.filter((k) => !text.toLowerCase().includes(k)).slice(0, 8);
+    const anchor = skills || { textStart: Math.max(0, text.length - 1), textEnd: text.length, quote: "(compétences)" };
+    push({
+      kind: "keyword",
+      severity: "info",
+      textStart: anchor.textStart,
+      textEnd: anchor.textEnd,
+      quote: anchor.quote,
+      title: "Renforcer les mots-clés métier",
+      detail: "Densité lexicale faible pour matcher les offres. Ajoutez des termes ciblés.",
+      suggestion: suggested.join(", "),
+      applyMode: skills ? "insert_after" : "insert_after",
+      section: "Compétences",
+      approximate: !skills,
+    });
+  }
+
+  // Longueur
+  if (scores.readability.pages > 2) {
+    push({
+      kind: "length",
+      severity: "warning",
+      textStart: Math.max(0, text.length - 80),
+      textEnd: text.length,
+      quote: text.slice(Math.max(0, text.length - 80)).trim() || "(fin du CV)",
+      title: "Raccourcir le CV",
+      detail: `CV trop long (${scores.readability.pages} pages). Visez 1 à 2 pages.`,
+      suggestion: "Condenser les expériences anciennes ; retirer les détails non pertinents.",
+      applyMode: "replace",
+      approximate: true,
+    });
+  }
+
+  // LinkedIn
+  if (!detectLinkedIn(text) && annotations.filter((a) => a.kind === "missing_email").length < 3) {
+    push({
+      kind: "missing_email",
+      severity: "info",
+      textStart: 0,
+      textEnd: Math.min(50, text.length),
+      quote: text.slice(0, Math.min(50, text.length)).trim(),
+      title: "Ajouter un profil LinkedIn",
+      detail: "Un lien LinkedIn renforce la crédibilité et facilite le contact RH.",
+      suggestion: "linkedin.com/in/prenom-nom",
+      applyMode: "insert_header",
+      section: "Coordonnées",
+      approximate: true,
+    });
+  }
+
+  void lang;
+  return annotations;
+}
+
+function guessSection(text, offset) {
+  const head = text.slice(0, offset + 1);
+  const markers = [
+    { re: SECTION_PATTERNS.experience, label: "Expérience" },
+    { re: SECTION_PATTERNS.education, label: "Formation" },
+    { re: SECTION_PATTERNS.skills, label: "Compétences" },
+    { re: SECTION_PATTERNS.languages, label: "Langues" },
+    { re: SECTION_PATTERNS.summary, label: "Profil" },
+  ];
+  let best = "Document";
+  let bestIdx = -1;
+  for (const m of markers) {
+    m.re.lastIndex = 0;
+    let match;
+    const copy = new RegExp(m.re.source, "gi");
+    while ((match = copy.exec(head)) !== null) {
+      if (match.index >= bestIdx) {
+        bestIdx = match.index;
+        best = m.label;
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * Enrichit les annotations avec rects PDF depuis pagesGeo.
+ * @param {object[]} annotations
+ * @param {import('./extract.js').PageGeo[]|undefined} pagesGeo
+ * @param {typeof import('./extract.js')} extractApi
+ */
+export function attachGeometry(annotations, pagesGeo, extractApi) {
+  if (!annotations?.length) return annotations || [];
+  const {
+    rectsForRange,
+    headerBannerRects,
+    footerAnchorRects,
+  } = extractApi || {};
+
+  return annotations.map((ann) => {
+    let page = ann.page || 1;
+    let rects = [];
+    let approximate = ann.approximate !== false;
+
+    if (pagesGeo?.length && rectsForRange && ann.textStart != null && ann.textEnd != null) {
+      const hit = rectsForRange(pagesGeo, ann.textStart, ann.textEnd);
+      if (hit.rects.length) {
+        page = hit.page;
+        rects = hit.rects;
+        approximate = false;
+      }
+    }
+
+    if (!rects.length) {
+      if (ann.applyMode === "insert_header" && headerBannerRects) {
+        rects = headerBannerRects();
+        page = 1;
+      } else if ((ann.applyMode === "insert_after" || ann.kind === "missing_section") && footerAnchorRects) {
+        rects = footerAnchorRects();
+        page = pagesGeo?.length || 1;
+      } else {
+        // bandeau approximatif autour de l'offset relatif
+        const ratio = ann.textStart != null && ann.textEnd != null
+          ? ann.textStart / Math.max(1, (ann.textEnd || 1))
+          : 0.3;
+        // Better: use text position ratio in full doc if we know length
+        rects = [{ x: 0.06, y: Math.min(0.85, 0.08 + (ann.textStart || 0) * 0.00015), w: 0.88, h: 0.045 }];
+        void ratio;
+      }
+      approximate = true;
+    }
+
+    return { ...ann, page, rects, approximate };
+  });
 }
 
 function scoreReadability(text, fileMeta) {
@@ -509,6 +851,12 @@ export function analyzeCv(rawText, fileMeta = {}) {
   const tags = buildTags(text, content, structure);
   const diagnostics = buildDiagnostics(text, { readability, structure, content, keywords });
   const spelling = findSpellingIssues(text, lang);
+  const annotations = buildAnnotations(
+    text,
+    { readability, structure, content, keywords },
+    spelling,
+    lang
+  );
 
   const strengths = [
     ...readability.checks.filter((c) => c.ok).map((c) => ({ category: "Lisibilité ATS", ...c })),
@@ -572,9 +920,11 @@ export function analyzeCv(rawText, fileMeta = {}) {
     strengths,
     blockers,
     spelling,
+    annotations,
+    text,
     wordCount: text.split(/\s+/).filter(Boolean).length,
     pages: readability.pages,
   };
 }
 
-export { labelForScore };
+export { labelForScore, buildAnnotations };
