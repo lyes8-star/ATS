@@ -55,12 +55,12 @@ Ton : professionnel, direct, sans jargon inutile. Émotions visées : contrôle,
 
 ## Design Principles
 
-1. **Marque d’abord** — Test Mon CV lisible dès le premier viewport.
-2. **Une idée par section** — hero = upload + promesse ; pas de clutter.
+1. **Marque d’abord** — Test Mon CV géant sur hero sombre dès le premier viewport.
+2. **Une idée par section** — hero = marque + promesse ; outil = upload ; pas de clutter.
 3. **Preuve par le score** — jauge + catégories, pas d’abstraction décorative.
 4. **Confidentialité visible** — rappel « analyse locale » près de l’upload et dans le footer.
 5. **Normes FR / UE** — CMP Consent Mode v2, pages LCEN/RGPD/cookies/a11y, PWA.
-6. **Identité propre** — encre / papier / teal, Syne + Figtree, FR/EN i18n (pas de /en routes), footer discret « Édité par Crevia ».
+6. **Identité visuelle Test** — ink / paper / signal orange / beam cyan, Space Grotesk + IBM Plex Sans, FR/EN i18n (pas de /en routes), footer discret « Édité par Crevia ».
 
 ## Accessibility & Inclusion
 

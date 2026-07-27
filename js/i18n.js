@@ -11,10 +11,16 @@
   const dict = {
     fr: {
       "hero.badge": "Analyse locale — sans compte",
+      "hero.brand": "Test Mon CV",
       "hero.title.line1": "Votre CV est-il lisible",
       "hero.title.line2": "par un logiciel de recrutement ?",
       "hero.lead":
-        "Déposez votre fichier : score sur 100, points bloquants et atelier de corrections — le fichier reste sur votre appareil.",
+        "Votre CV est-il lisible par un logiciel de recrutement ? Score sur 100, points bloquants et correctifs — le fichier reste sur votre appareil.",
+      "hero.cta.upload": "Déposer mon CV",
+      "hero.cta.how": "Comment ça marche",
+      "tool.kicker": "Contrôle",
+      "tool.title": "Déposez votre fichier",
+      "tool.lead": "PDF ou DOCX. Analyse locale dans le navigateur — sans compte.",
       "home.feature.speed.title": "Résultat rapide",
       "home.feature.speed.body": "Lecture du fichier et score en quelques secondes",
       "home.feature.score.title": "Score sur 100",
@@ -199,10 +205,16 @@
     },
     en: {
       "hero.badge": "Local analysis — no account",
+      "hero.brand": "Test Mon CV",
       "hero.title.line1": "Is your CV readable",
       "hero.title.line2": "by recruiting software?",
       "hero.lead":
-        "Upload your file: score out of 100, blockers, and a correction studio — the file stays on your device.",
+        "Is your CV readable by recruiting software? Score out of 100, blockers, and fixes — the file stays on your device.",
+      "hero.cta.upload": "Upload my CV",
+      "hero.cta.how": "How it works",
+      "tool.kicker": "Check",
+      "tool.title": "Upload your file",
+      "tool.lead": "PDF or DOCX. Local analysis in the browser — no account.",
       "home.feature.speed.title": "Fast result",
       "home.feature.speed.body": "File reading and score in seconds",
       "home.feature.score.title": "Score out of 100",
