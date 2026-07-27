@@ -121,6 +121,16 @@ export async function loadTechWhitelist() {
   return techWhitelist;
 }
 
+/** @type {null | { rules: object[], version?: number }} */
+let layoutRules = null;
+
+export async function loadAtsLayoutRules() {
+  if (!layoutRules) {
+    layoutRules = await fetchJson("data/analysis/ats-layout-rules.json");
+  }
+  return layoutRules;
+}
+
 /**
  * @param {string} text
  * @returns {Promise<{ hits: string[], count: number, density: number }>}
@@ -128,7 +138,8 @@ export async function loadTechWhitelist() {
 export async function matchSkills(text) {
   const { automaton, skills } = await loadSkillsLexicon();
   const found = ahoFind(automaton, text || "");
-  const hits = [...found.keys()].sort();
+  // Tokens < 3 chars excluded (false hits on short patterns)
+  const hits = [...found.keys()].filter((h) => String(h).length >= 3).sort();
   const words = (text || "").split(/\s+/).filter(Boolean).length || 1;
   return {
     hits,
@@ -215,5 +226,6 @@ export async function preloadAnalysisData() {
     loadVerbs("en").catch(() => null),
     loadRoleKeywords().catch(() => null),
     loadTechWhitelist().catch(() => null),
+    loadAtsLayoutRules().catch(() => null),
   ]);
 }

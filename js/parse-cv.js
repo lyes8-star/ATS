@@ -53,9 +53,10 @@ const LINKEDIN_RE = /linkedin\.com\/in\/[\w\-]+/i;
  *   sectionOrder: string[],
  *   roles: CvRole[],
  *   skills: string[],
- *   contact: { email: string|null, phone: string|null, linkedin: string|null, name: string|null },
- *   layout: { columnSmell: boolean, xBimodality: number, tableHint: boolean },
- *   employmentGaps: { from: number, to: number, months: number }[]
+ *   contact: { email: string|null, phone: string|null, linkedin: string|null, name: string|null, location?: string|null },
+ *   layout: { columnSmell: boolean, xBimodality: number, tableHint: boolean, tableCount?: number, headerSparse?: boolean, readingOrderOk?: boolean },
+ *   employmentGaps: { from: number, to: number, months: number }[],
+ *   graphicSkills?: boolean
  * }} ParsedCv
  */
 
@@ -186,10 +187,13 @@ function detectColumnSmell(lines) {
   return { columnSmell, xBimodality };
 }
 
+const LOCATION_RE =
+  /\b(?:\d{5}\s+)?(?:Paris|Lyon|Marseille|Lille|Toulouse|Bordeaux|Nantes|Nice|Strasbourg|Montpellier|Rennes|Grenoble|Remote|France|Belgium|Belgique|Suisse|Canada|London|Berlin|Madrid|Bruxelles|Geneva|Genève)(?:\s*,\s*(?:France|Belgique|Suisse|Canada|UK|USA))?\b|\b\d{5}\s+[A-ZÀ-Ü][a-zà-ü' -]{2,40}\b/i;
+
 /**
  * Parse un CV depuis texte + géométrie optionnelle.
  * @param {string} text
- * @param {{ pagesGeo?: import('./extract.js').PageGeo[], tableCount?: number }} [opts]
+ * @param {{ pagesGeo?: import('./extract.js').PageGeo[], tableCount?: number, tableHint?: boolean, headerSparse?: boolean, readingOrderOk?: boolean }} [opts]
  * @returns {ParsedCv}
  */
 export function parseCv(text, opts = {}) {
@@ -225,15 +229,25 @@ export function parseCv(text, opts = {}) {
   const phone = head.match(PHONE_RE)?.[0] || null;
   const linkedin = head.match(LINKEDIN_RE)?.[0] || null;
   const name =
-    (sections.header || []).find((l) => l.length > 2 && l.length < 60 && !EMAIL_RE.test(l) && !PHONE_RE.test(l)) ||
-    null;
+    (sections.header || []).find(
+      (l) =>
+        l.length > 2 &&
+        l.length < 60 &&
+        !EMAIL_RE.test(l) &&
+        !PHONE_RE.test(l) &&
+        !LINKEDIN_RE.test(l) &&
+        !LOCATION_RE.test(l)
+    ) || null;
+  const location = head.match(LOCATION_RE)?.[0] || null;
 
   const roles = parseRoles(sections.experience || []);
   const eduRoles = parseRoles(sections.education || [], "education");
   const skills = extractSkillsList(sections.skills || []);
+  const graphicSkills = detectGraphicSkills(sections.skills || []);
 
   const layoutDetect = detectColumnSmell(lines);
   const employmentGaps = findEmploymentGaps(roles);
+  const tableHint = !!(opts.tableHint || (opts.tableCount || 0) > 0);
 
   return {
     lines,
@@ -242,52 +256,125 @@ export function parseCv(text, opts = {}) {
     roles,
     educationRoles: eduRoles,
     skills,
-    contact: { email, phone, linkedin, name },
+    graphicSkills,
+    contact: { email, phone, linkedin, name, location },
     layout: {
       columnSmell: layoutDetect.columnSmell,
       xBimodality: layoutDetect.xBimodality,
-      tableHint: (opts.tableCount || 0) > 0,
+      tableHint,
       tableCount: opts.tableCount || 0,
+      headerSparse: !!opts.headerSparse,
+      readingOrderOk: opts.readingOrderOk !== false,
     },
     employmentGaps,
   };
 }
 
+/**
+ * Compétences représentées en barres / étoiles (illisibles ATS).
+ * @param {string[]} lines
+ */
+export function detectGraphicSkills(lines) {
+  const joined = (lines || []).join("\n");
+  if (!joined.trim()) return false;
+  const starBars = (joined.match(/[★☆●○◆◇▪▫]|[█▓▒░■□▢▣▤▥]{2,}/g) || []).length;
+  const levelSlash = (joined.match(/\b([1-5]\s*\/\s*[1-5]|10\s*\/\s*10)\b/g) || []).length;
+  const words = (joined.match(/[A-Za-zÀ-ü]{3,}/g) || []).length;
+  // Graphic gauges with little plain skill vocabulary
+  if (starBars >= 2) return true;
+  if (levelSlash >= 2 && words < 6) return true;
+  if (/niveau\s*[:：]/i.test(joined) && starBars + levelSlash >= 1 && words < 8) return true;
+  return false;
+}
+
+function splitTitleCompany(cleaned) {
+  const parts = cleaned
+    .replace(/\s*[|•]\s*/g, " — ")
+    .split(/\s+[—–\-]\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  let title = parts[0] || cleaned;
+  let company = parts[1] || "";
+  if (
+    parts.length >= 2 &&
+    /inc|ltd|sas|sarl|sa\b|corp|company|université|university|école|school/i.test(parts[0])
+  ) {
+    company = parts[0];
+    title = parts[1];
+  }
+  return { title, company };
+}
+
+function isDateOnlyLine(line) {
+  const cleaned = String(line || "")
+    .replace(DATE_RANGE_RE, "")
+    .replace(/[()[\]]/g, "")
+    .trim();
+  return cleaned.length <= 4;
+}
+
 function parseRoles(sectionLines, section = "experience") {
   const roles = [];
   let current = null;
+  /** Pending title/company lines waiting for a date on the next line(s). */
+  let pendingMeta = [];
   const flush = () => {
     if (current) roles.push(current);
     current = null;
+    pendingMeta = [];
+  };
+
+  const startRole = (title, company, dates, raw) => {
+    flush();
+    current = {
+      title: title || "",
+      company: company || "",
+      startYear: dates?.startYear ?? null,
+      endYear: dates?.endYear ?? null,
+      ongoing: !!dates?.ongoing,
+      bullets: [],
+      raw: raw || "",
+      section,
+    };
+  };
+
+  const applyPendingToDates = (dates, raw) => {
+    const joined = pendingMeta.join(" — ");
+    const { title, company } = splitTitleCompany(joined || raw || "");
+    startRole(title, company, dates, [joined, raw].filter(Boolean).join(" | "));
+    pendingMeta = [];
   };
 
   for (const line of sectionLines) {
     const dates = parseDateRange(line);
     const isBullet = /^[-•●▪–—*]\s+/.test(line) || /^\d+[.)]\s+/.test(line);
+
     if (dates && !isBullet) {
-      flush();
-      // Title — Company  or Company — Title
-      const cleaned = line.replace(DATE_RANGE_RE, "").replace(/\s*[|•]\s*/g, " — ").trim();
-      const parts = cleaned.split(/\s+[—–\-]\s+/).map((p) => p.trim()).filter(Boolean);
-      let title = parts[0] || cleaned;
-      let company = parts[1] || "";
-      if (parts.length >= 2 && /inc|ltd|sas|sarl|sa\b|corp|company|université|university|école|school/i.test(parts[0])) {
-        company = parts[0];
-        title = parts[1];
+      const cleaned = line.replace(DATE_RANGE_RE, "").replace(/\s+/g, " ").trim();
+      if (cleaned.length > 2 && !isDateOnlyLine(line)) {
+        // Title/company + dates on the same line
+        const { title, company } = splitTitleCompany(cleaned);
+        startRole(title, company, dates, line);
+      } else if (pendingMeta.length) {
+        // Date on the line following title/company (common FR layout)
+        applyPendingToDates(dates, line);
+      } else if (current && !current.startYear) {
+        current.startYear = dates.startYear;
+        current.endYear = dates.endYear;
+        current.ongoing = dates.ongoing;
+        current.raw = `${current.raw} ${line}`.trim();
+      } else {
+        startRole("", "", dates, line);
       }
-      current = {
-        title,
-        company,
-        startYear: dates.startYear,
-        endYear: dates.endYear,
-        ongoing: dates.ongoing,
-        bullets: [],
-        raw: line,
-        section,
-      };
       continue;
     }
+
     if (isBullet) {
+      if (pendingMeta.length && !current) {
+        const { title, company } = splitTitleCompany(pendingMeta.join(" — "));
+        startRole(title, company, null, pendingMeta.join(" | "));
+        pendingMeta = [];
+      }
       if (!current) {
         current = {
           title: "",
@@ -300,19 +387,55 @@ function parseRoles(sectionLines, section = "experience") {
           section,
         };
       }
-      current.bullets.push(line.replace(/^[-•●▪–—*]\s+/, "").replace(/^\d+[.)]\s+/, "").trim());
+      current.bullets.push(
+        line.replace(/^[-•●▪–—*]\s+/, "").replace(/^\d+[.)]\s+/, "").trim()
+      );
       continue;
     }
-    if (current && line.length < 80 && !dates) {
-      // Possible continuation title/company
-      if (!current.company && /—|–|-/.test(line)) {
-        const parts = line.split(/\s+[—–\-]\s+/);
-        current.company = parts[1] || current.company;
-        if (parts[0] && !current.title) current.title = parts[0];
-      } else if (!current.title) {
+
+    // Non-bullet, no dates on this line
+    if (line.length < 100) {
+      if (current && current.startYear && !current.company && pendingMeta.length === 0) {
+        // Company on the line after a dated title
+        if (/—|–|-/.test(line) || line.length < 60) {
+          const { title, company } = splitTitleCompany(line);
+          if (!current.title && title) current.title = title;
+          if (company) current.company = company;
+          else if (!current.company) current.company = line;
+          continue;
+        }
+      }
+      if (current && !current.startYear && !current.company && current.title) {
+        // Adjacent company line before dates arrive
+        current.company = line;
+        continue;
+      }
+      // Buffer as potential role header until a date line appears
+      if (!current || (current.startYear && current.bullets.length > 0)) {
+        if (current?.startYear && current.bullets.length > 0) {
+          // New role likely starting
+          pendingMeta = [line];
+          flush();
+          pendingMeta = [line];
+          current = null;
+        } else {
+          pendingMeta.push(line);
+          if (pendingMeta.length > 3) pendingMeta = pendingMeta.slice(-2);
+        }
+      } else if (current && !current.title) {
         current.title = line;
+      } else if (current && !current.company) {
+        current.company = line;
+      } else {
+        pendingMeta.push(line);
+        if (pendingMeta.length > 3) pendingMeta = pendingMeta.slice(-2);
       }
     }
+  }
+
+  if (pendingMeta.length && !current) {
+    const { title, company } = splitTitleCompany(pendingMeta.join(" — "));
+    startRole(title, company, null, pendingMeta.join(" | "));
   }
   flush();
   return roles;

@@ -387,6 +387,9 @@ async function runAnalysis() {
         lang: window.ATSi18n?.getLang?.() || "fr",
         pagesGeo: extracted.pagesGeo,
         tableCount: extracted.tableCount || 0,
+        tableHint: extracted.tableHint,
+        headerSparse: extracted.headerSparse,
+        readingOrderOk: extracted.readingOrderOk,
       },
       { jobDescription: els.jdInput?.value || "" }
     );
