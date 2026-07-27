@@ -324,9 +324,15 @@ async function openStudio() {
   els.viewUpload.classList.add("hidden");
   els.viewStudio.classList.remove("hidden");
   els.subnavTitle.textContent = window.ATSi18n?.t?.("studio.title") || "Atelier CV annoté";
+  els.btnNewTest.classList.remove("hidden");
   await mountStudio(els.studioRoot, session, {
+    onShowReport: () => {
+      renderResults(session.report);
+      showResults();
+      // From report, CTA returns to studio
+      document.getElementById("btn-open-studio")?.addEventListener("click", openStudio);
+    },
     onRetest: (report) => {
-      // Optionally refresh summary — keep session
       void report;
     },
   });
@@ -375,6 +381,8 @@ async function runAnalysis() {
       fileType: selectedFile.type,
       lang: window.ATSi18n?.getLang?.() || "fr",
     });
+    // Même string pour annotations, géométrie et applyAll
+    extracted.text = report.text;
     const annotations = attachGeometry(
       report.annotations || [],
       extracted.pagesGeo,
@@ -400,9 +408,10 @@ async function runAnalysis() {
     });
     setLoading(true, 3);
     await wait(350);
+    // Prépare le rapport (lien secondaire depuis l'atelier) mais ouvre l'atelier en premier.
     renderResults(report);
     setLoading(false);
-    showResults();
+    await openStudio();
   } catch (err) {
     setLoading(false);
     console.error(err);
