@@ -885,7 +885,7 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       detail: isEn
         ? "Location helps ATS location filters. Prefer City or ZIP + City (street optional)."
         : "La localisation aide les filtres ATS. Indiquez Ville ou CP + Ville (rue optionnelle).",
-      suggestion: isEn ? "[City, Country]" : "[75001 Paris]",
+      suggestion: isEn ? "City, Country" : "75001 Paris",
       applyMode: "insert_header",
       section: "Coordonnées",
       approximate: true,

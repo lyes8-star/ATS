@@ -554,13 +554,27 @@ function isDateOnlyLine(line) {
   return cleaned.length <= 4;
 }
 
+function cleanAfterDateStrip(raw) {
+  return String(raw || "")
+    .replace(/\(\s*\)/g, "")
+    .replace(/\[\s*\]/g, "")
+    .replace(/\s+[—–\-]\s*$/g, "")
+    .replace(/^[—–\-]\s+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function parseRoles(sectionLines, section = "experience") {
   const roles = [];
   let current = null;
   /** Pending title/company lines waiting for a date on the next line(s). */
   let pendingMeta = [];
   const flush = () => {
-    if (current) roles.push(current);
+    if (current) {
+      current.title = cleanAfterDateStrip(current.title);
+      current.company = cleanAfterDateStrip(current.company);
+      roles.push(current);
+    }
     current = null;
     pendingMeta = [];
   };
@@ -568,8 +582,8 @@ function parseRoles(sectionLines, section = "experience") {
   const startRole = (title, company, dates, raw) => {
     flush();
     current = {
-      title: title || "",
-      company: company || "",
+      title: cleanAfterDateStrip(title) || "",
+      company: cleanAfterDateStrip(company) || "",
       startYear: dates?.startYear ?? null,
       endYear: dates?.endYear ?? null,
       ongoing: !!dates?.ongoing,
@@ -581,7 +595,7 @@ function parseRoles(sectionLines, section = "experience") {
 
   const applyPendingToDates = (dates, raw) => {
     const joined = pendingMeta.join(" — ");
-    const { title, company } = splitTitleCompany(joined || raw || "");
+    const { title, company } = splitTitleCompany(cleanAfterDateStrip(joined || raw || ""));
     startRole(title, company, dates, [joined, raw].filter(Boolean).join(" | "));
     pendingMeta = [];
   };
@@ -591,7 +605,8 @@ function parseRoles(sectionLines, section = "experience") {
     const isBullet = /^[-•●▪–—*]\s+/.test(line) || /^\d+[.)]\s+/.test(line);
 
     if (dates && !isBullet) {
-      const cleaned = line.replace(DATE_RANGE_RE, "").replace(/\s+/g, " ").trim();
+      let cleaned = line.replace(DATE_RANGE_RE, "").replace(/\s+/g, " ").trim();
+      cleaned = cleanAfterDateStrip(cleaned);
       if (cleaned.length > 2 && !isDateOnlyLine(line)) {
         // Title/company + dates on the same line
         const { title, company } = splitTitleCompany(cleaned);
@@ -650,6 +665,26 @@ function parseRoles(sectionLines, section = "experience") {
         // Adjacent company line before dates arrive
         current.company = line;
         continue;
+      }
+      // Soft bullets: short prose under a dated role (no marker) → bullet if role already has title
+      if (
+        current &&
+        current.startYear &&
+        current.title &&
+        line.length >= 20 &&
+        line.length < 160 &&
+        !isSectionHeader({ text: line }) &&
+        !/^[A-ZÀ-Ü][a-zà-ü]+(\s+[A-ZÀ-Ü][a-zà-ü'-]+){1,3}$/.test(line)
+      ) {
+        // Likely achievement / duty line without bullet marker
+        if (current.bullets.length < 6 && !/—|–/.test(line.split(/\s+/).slice(0, 4).join(" "))) {
+          const looksLikeNewRole =
+            JOB_TITLE_REJECT.test(line) && line.length < 70 && !/[.!?]$/.test(line);
+          if (!looksLikeNewRole) {
+            current.bullets.push(line.replace(/^[-•●▪–—*]\s+/, "").trim());
+            continue;
+          }
+        }
       }
       // Buffer as potential role header until a date line appears
       if (!current || (current.startYear && current.bullets.length > 0)) {
@@ -730,4 +765,4 @@ export function detectColumnsFromGeo(pagesGeo) {
   return detectColumnSmell(lines);
 }
 
-export { DATE_RANGE_RE, SECTION_HEADERS, isSectionHeader };
+export { DATE_RANGE_RE, SECTION_HEADERS, isSectionHeader, LOCATION_RE, ADDRESS_RE };

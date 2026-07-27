@@ -11,6 +11,7 @@ import { applyAll, updateAnnotation } from "./optimize.js";
 import { downloadAtsHtml } from "./export-cv.js";
 import { downloadLayoutFaithful, openFaithfulPrintable } from "./export-reconstruct.js";
 import { analyzeCvAsync, attachGeometry } from "./analyzer.js";
+import { parseCv } from "./parse-cv.js";
 import {
   hasProConsent,
   isProConfigured,
@@ -21,6 +22,24 @@ import {
   downloadBlob,
 } from "./pro-client.js";
 import * as extractApi from "./extract.js";
+
+function freshParsed(session) {
+  const text = session.optimizedText || session.extracted?.text || "";
+  try {
+    return parseCv(text);
+  } catch {
+    return session.report?.parsed || null;
+  }
+}
+
+function exportMeta(session, extra = {}) {
+  return {
+    fileName: session.originalFile?.name,
+    lang: window.ATSi18n?.getLang?.() || "fr",
+    parsed: freshParsed(session),
+    ...extra,
+  };
+}
 
 /**
  * @typedef {object} StudioSession
@@ -239,6 +258,13 @@ function bindStudio(root, session, hooks) {
   root.querySelector("#btn-generate")?.addEventListener("click", () => {
     const { text } = applyAll(session.extracted.text, session.annotations);
     session.optimizedText = text;
+    // Reparse after apply so export sees new bullets / header fields
+    try {
+      session.report = session.report || {};
+      session.report.parsed = parseCv(text);
+    } catch (e) {
+      console.warn("reparse after generate failed", e);
+    }
     root.querySelector("#btn-download")?.classList.remove("hidden");
     root.querySelector("#btn-download-ats")?.classList.remove("hidden");
     root.querySelector("#btn-print")?.classList.remove("hidden");
@@ -270,11 +296,7 @@ function bindStudio(root, session, hooks) {
 
   root.querySelector("#btn-download-ats")?.addEventListener("click", () => {
     if (!session.optimizedText) return;
-    downloadAtsHtml(session.optimizedText, {
-      fileName: session.originalFile?.name,
-      lang: window.ATSi18n?.getLang?.() || "fr",
-      parsed: session.report?.parsed,
-    });
+    downloadAtsHtml(session.optimizedText, exportMeta(session));
   });
 
   root.querySelector("#btn-print")?.addEventListener("click", () => {
@@ -286,6 +308,12 @@ function bindStudio(root, session, hooks) {
     if (!session.optimizedText) {
       const { text } = applyAll(session.extracted.text, session.annotations);
       session.optimizedText = text;
+      try {
+        session.report = session.report || {};
+        session.report.parsed = parseCv(text);
+      } catch {
+        /* ignore */
+      }
     }
     runRetest(root, session, hooks);
   });
@@ -294,11 +322,7 @@ function bindStudio(root, session, hooks) {
 }
 
 function downloadPrimary(session) {
-  const meta = {
-    fileName: session.originalFile?.name,
-    lang: window.ATSi18n?.getLang?.() || "fr",
-    parsed: session.report?.parsed,
-  };
+  const meta = exportMeta(session);
   downloadLayoutFaithful(session, meta).catch((err) => {
     console.error(err);
     downloadAtsHtml(session.optimizedText, meta);
@@ -306,13 +330,10 @@ function downloadPrimary(session) {
 }
 
 function printPrimary(session) {
-  const meta = {
-    fileName: session.originalFile?.name,
-    lang: window.ATSi18n?.getLang?.() || "fr",
+  const meta = exportMeta(session, {
     layoutHostile: session.report?.layoutHostile,
-    parsed: session.report?.parsed,
-  };
-  openFaithfulPrintable(session.optimizedText, session.report?.parsed, meta);
+  });
+  openFaithfulPrintable(session.optimizedText, meta.parsed, meta);
 }
 
 function showJdOverlap(root, session) {
@@ -470,11 +491,7 @@ async function runRetest(root, session, hooks) {
         downloadPrimary(session);
       });
       banner.querySelector("#btn-retest-ats")?.addEventListener("click", () => {
-        downloadAtsHtml(session.optimizedText, {
-          fileName: session.originalFile?.name,
-          lang: window.ATSi18n?.getLang?.() || "fr",
-          parsed: session.report?.parsed || report.parsed,
-        });
+        downloadAtsHtml(session.optimizedText, exportMeta(session));
       });
       banner.querySelector("#btn-retest-print")?.addEventListener("click", () => {
         printPrimary(session);

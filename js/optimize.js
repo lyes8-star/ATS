@@ -27,21 +27,29 @@ export function applyAll(text, annotations) {
     applied.push({ id: ann.id, mode: "replace" });
   }
 
-  // Insertions header (coordonnées) — en tête, dédoublonnées
+  // Insertions header (coordonnées) — lignes séparées, nom avant localisation
   const headers = accepted.filter((a) => a.applyMode === "insert_header");
   if (headers.length) {
-    const lines = headers.map((a) => a.suggestion).filter(Boolean);
+    const rank = (ann) => {
+      const s = String(ann.suggestion || "");
+      if (/prénom|prenom|nom|name|first.?last/i.test(s) || ann.checkId === "identity_name") return 0;
+      if (/email|@/i.test(s) || ann.kind === "missing_email") return 1;
+      if (/téléphone|telephone|phone|06 |07 /i.test(s) || ann.kind === "missing_phone") return 2;
+      if (/paris|ville|city|adresse|location|\d{5}/i.test(s) || ann.checkId === "identity_address")
+        return 4;
+      return 3;
+    };
+    const sorted = [...headers].sort((a, b) => rank(a) - rank(b));
+    const lines = sorted.map((a) => String(a.suggestion || "").trim()).filter(Boolean);
     const unique = [...new Set(lines)];
-    const block = unique.join(" | ");
-    // Évite double insertion si déjà présent
     const missing = unique.filter((l) => !out.toLowerCase().includes(String(l).toLowerCase()));
     if (missing.length) {
-      out = `${missing.join(" | ")}\n${out}`;
+      // Separate lines — never join with " | " (that made address steal the name slot)
+      out = `${missing.join("\n")}\n${out}`;
       headers.forEach((a) => applied.push({ id: a.id, mode: "insert_header" }));
     } else {
       headers.forEach((a) => applied.push({ id: a.id, mode: "insert_header", skipped: true }));
     }
-    void block;
   }
 
   // Insert after — append near end or after quote
