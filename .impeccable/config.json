@@ -15,13 +15,13 @@
     "ignoreValues": [
       {
         "rule": "overused-font",
-        "value": "Space Grotesk",
-        "reason": "Intentional display font for Test Mon CV (DESIGN.md)"
+        "value": "Quattrocento",
+        "reason": "Intentional display serif for Test Mon CV premium craft (DESIGN.md)"
       },
       {
         "rule": "overused-font",
-        "value": "IBM Plex Sans",
-        "reason": "Intentional UI sans for Test Mon CV (DESIGN.md)"
+        "value": "Josefin Sans",
+        "reason": "Intentional UI sans for Test Mon CV premium craft (DESIGN.md)"
       },
       {
         "rule": "layout-transition",

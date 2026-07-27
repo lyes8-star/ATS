@@ -60,7 +60,7 @@ Ton : professionnel, direct, sans jargon inutile. Émotions visées : contrôle,
 3. **Preuve par le score** — jauge + catégories, pas d’abstraction décorative.
 4. **Confidentialité visible** — rappel « analyse locale » près de l’upload et dans le footer.
 5. **Normes FR / UE** — CMP Consent Mode v2, pages LCEN/RGPD/cookies/a11y, PWA.
-6. **Identité visuelle Test** — ink / paper / signal orange / beam cyan, Space Grotesk + IBM Plex Sans, FR/EN i18n (pas de /en routes), footer discret « Édité par Crevia ».
+6. **Identité visuelle Test2** — forêt / papier crème / or, Quattrocento + Josefin Sans, FR/EN i18n (pas de /en routes), footer discret « Édité par Crevia ».
 
 ## Accessibility & Inclusion
 
