@@ -14,17 +14,13 @@ Ouvrir http://localhost:8080/
 
 ## Fonctionnalités produit
 
-- Upload PDF / DOCX — analyse **100 % navigateur** (aucun CV envoyé au serveur)
-- **Atelier annoté = expérience principale** après analyse : prévisualisation CV + surcouches localisées + accept / ignore
-- Score /100 + 4 axes /25 (lisibilité, structure, qualité, mots-clés) — rapport détaillé en lien secondaire
-- Analyse approfondie : parse structuré, lexiques ESCO/ROME (statique), verbes, overlap offre optionnelle
-- Diagnostic, points bloquants / forts, orthographe (typos + whitelist tech, nspell optionnel)
-- Acceptation / ignore / édition, puis export **layout-fidèle** (DOCX in-place ou reconstruction) + **version ATS linéaire** secondaire
-- **Retest automatique** avec delta de score avant / après
-- **Parité Crevia** : barre contact avec adresse + popup Google Maps **chargée après consentement** (CMP)
-- **Bascule FR/EN** (i18n) de l’interface, du studio et des contenus UI
-- **Typographie** : Space Grotesk (display) + IBM Plex Sans (body)
-- **Footer crédit** : « Fait par Crevia » avec lien vers crevia.fr
+- Upload PDF / DOCX — analyse **locale par défaut** (aucun CV envoyé sans Mode Pro)
+- **Atelier annoté = expérience principale** après analyse
+- Score /100 + 4 axes ; parse structuré, lexiques, overlap offre
+- **Export CV 1 page propre** (ATS Clean) — HTML/DOCX, **sans** mention générateur
+- **Mode Pro** opt-in : Worker Cloudflare (LLM annotations, ESCO, PDF reflow)
+- **Retest automatique** avec delta de score
+- Parité Crevia, i18n FR/EN, PWA / RGPD / a11y
 
 ## Normes production (modèle Test / Test2)
 
@@ -66,9 +62,11 @@ js/extract.js           # Extraction PDF (géométrie) / DOCX (HTML + tables)
 js/annotate.js          # Overlays preview
 js/studio.js            # UI atelier split + accept/ignore + exports
 js/optimize.js          # Application des suggestions
+js/export-cv.js         # Export CV ATS Clean 1 page (HTML)
+js/export-reconstruct.js# DOCX reconstruit + download layout
 js/export-docx.js       # DOCX in-place (PizZip)
-js/export-reconstruct.js# Reconstruction HTML/DOCX fidèle structure
-js/export-cv.js         # Export ATS linéaire (secondaire)
+js/pro-client.js        # Client Mode Pro (consent + Worker)
+workers/ats-pro/        # Cloudflare Worker LLM / ESCO / PDF
 js/app.js               # Orchestration upload → studio → retest
 js/consent.js           # CMP + Consent Mode v2
 js/i18n.js              # dictionnaire FR/EN + switcher (pas de /en routes)

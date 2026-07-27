@@ -10,7 +10,16 @@ import {
 import { applyAll, updateAnnotation } from "./optimize.js";
 import { downloadAtsHtml } from "./export-cv.js";
 import { downloadLayoutFaithful, openFaithfulPrintable } from "./export-reconstruct.js";
-import { analyzeCvAsync } from "./analyzer.js";
+import { analyzeCvAsync, attachGeometry } from "./analyzer.js";
+import {
+  hasProConsent,
+  isProConfigured,
+  proAnalyze,
+  proPdfPatch,
+  arrayBufferToBase64,
+  downloadBlob,
+} from "./pro-client.js";
+import * as extractApi from "./extract.js";
 
 /**
  * @typedef {object} StudioSession
@@ -86,6 +95,8 @@ function studioShell(session) {
         <button type="button" class="analyze-btn hidden" id="btn-download">${escapeHtml(t("studio.actions.download"))}</button>
         <button type="button" class="btn-secondary hidden" id="btn-download-ats">${escapeHtml(t("studio.actions.downloadAts"))}</button>
         <button type="button" class="btn-secondary hidden" id="btn-print">${escapeHtml(t("studio.actions.print"))}</button>
+        <button type="button" class="btn-secondary hidden" id="btn-pro-analyze">${escapeHtml(t("studio.actions.proAnalyze"))}</button>
+        <button type="button" class="btn-secondary hidden" id="btn-pro-pdf">${escapeHtml(t("studio.actions.proPdf"))}</button>
         <button type="button" class="analyze-btn hidden" id="btn-retest">${escapeHtml(t("studio.actions.retest"))}</button>
       </div>
     </div>
@@ -127,10 +138,24 @@ function bindStudio(root, session, hooks) {
     root.querySelector("#btn-download-ats")?.classList.remove("hidden");
     root.querySelector("#btn-print")?.classList.remove("hidden");
     root.querySelector("#btn-retest")?.classList.remove("hidden");
+    if (session.proEnabled || (hasProConsent() && isProConfigured())) {
+      root.querySelector("#btn-pro-analyze")?.classList.remove("hidden");
+      if (session.extracted?.format === "pdf" || session.extracted?.originalBuffer) {
+        root.querySelector("#btn-pro-pdf")?.classList.remove("hidden");
+      }
+    }
     window.ATSAnalytics?.track?.("ats_cv_generated", {
       accepted: session.annotations.filter((a) => a.status === "accepted").length,
     });
     runRetest(root, session, hooks);
+  });
+
+  root.querySelector("#btn-pro-analyze")?.addEventListener("click", () => {
+    runProAnalyze(root, session);
+  });
+
+  root.querySelector("#btn-pro-pdf")?.addEventListener("click", () => {
+    runProPdf(session);
   });
 
   root.querySelector("#btn-download")?.addEventListener("click", () => {
@@ -142,8 +167,8 @@ function bindStudio(root, session, hooks) {
     if (!session.optimizedText) return;
     downloadAtsHtml(session.optimizedText, {
       fileName: session.originalFile?.name,
-      scoreBefore: session.scoreBefore,
-      scoreAfter: session.retestReport?.total,
+      lang: window.ATSi18n?.getLang?.() || "fr",
+      parsed: session.report?.parsed,
     });
   });
 
@@ -166,8 +191,8 @@ function bindStudio(root, session, hooks) {
 function downloadPrimary(session) {
   const meta = {
     fileName: session.originalFile?.name,
-    scoreBefore: session.scoreBefore,
-    scoreAfter: session.retestReport?.total,
+    lang: window.ATSi18n?.getLang?.() || "fr",
+    parsed: session.report?.parsed,
   };
   downloadLayoutFaithful(session, meta).catch((err) => {
     console.error(err);
@@ -178,16 +203,11 @@ function downloadPrimary(session) {
 function printPrimary(session) {
   const meta = {
     fileName: session.originalFile?.name,
-    scoreBefore: session.scoreBefore,
-    scoreAfter: session.retestReport?.total,
+    lang: window.ATSi18n?.getLang?.() || "fr",
     layoutHostile: session.report?.layoutHostile,
+    parsed: session.report?.parsed,
   };
-  if (session.extracted?.format === "docx") {
-    // In-place DOCX can't print in-browser — open faithful HTML preview
-    openFaithfulPrintable(session.optimizedText, session.report?.parsed, meta);
-  } else {
-    openFaithfulPrintable(session.optimizedText, session.report?.parsed, meta);
-  }
+  openFaithfulPrintable(session.optimizedText, session.report?.parsed, meta);
 }
 
 function showJdOverlap(root, session) {
@@ -198,6 +218,69 @@ function showJdOverlap(root, session) {
     el.classList.remove("hidden");
     const t = window.ATSi18n?.t || ((k) => k);
     el.textContent = `${t("studio.jd.overlap")}: ${jd.score}% (${(jd.overlap || []).length})`;
+  }
+}
+
+async function runProAnalyze(root, session) {
+  const t = window.ATSi18n?.t || ((k) => k);
+  if (!hasProConsent() || !isProConfigured()) {
+    alert(t("studio.pro.needConsent"));
+    return;
+  }
+  const banner = root.querySelector("#retest-banner");
+  try {
+    if (banner) {
+      banner.classList.remove("hidden");
+      banner.innerHTML = `<p>${escapeHtml(t("studio.pro.running"))}</p>`;
+    }
+    const text = session.optimizedText || session.extracted?.text || "";
+    const data = await proAnalyze({
+      text,
+      jobDescription: session.jobDescription || "",
+      lang: window.ATSi18n?.getLang?.() || "fr",
+    });
+    const anns = (data.annotations || []).map((a) => ({
+      ...a,
+      status: a.status || "pending",
+    }));
+    const geo = attachGeometry(anns, session.extracted?.pagesGeo || [], extractApi);
+    session.annotations = [...(session.annotations || []), ...geo];
+    session.selectedId = session.annotations.find((a) => a.status === "pending")?.id || session.selectedId;
+    renderList(root, session);
+    renderDetail(root, session);
+    updateBar(root, session);
+    if (banner) {
+      banner.innerHTML = `<p role="status">${escapeHtml(t("studio.pro.done"))}</p>`;
+    }
+  } catch (err) {
+    console.error(err);
+    if (banner) {
+      banner.classList.remove("hidden");
+      banner.innerHTML = `<p role="alert">${escapeHtml(t("studio.pro.error"))}</p>`;
+    }
+  }
+}
+
+async function runProPdf(session) {
+  const t = window.ATSi18n?.t || ((k) => k);
+  if (!hasProConsent() || !isProConfigured()) {
+    alert(t("studio.pro.needConsent"));
+    return;
+  }
+  try {
+    const buf = session.extracted?.originalBuffer;
+    const optimizedText = session.optimizedText || session.extracted?.text || "";
+    const blob = await proPdfPatch({
+      pdfBase64: buf ? arrayBufferToBase64(buf) : "",
+      optimizedText,
+      lang: window.ATSi18n?.getLang?.() || "fr",
+      fileName: session.originalFile?.name || "cv.pdf",
+    });
+    const base = String(session.originalFile?.name || "cv").replace(/\.[^.]+$/, "");
+    downloadBlob(blob, `${base}.pdf`);
+  } catch (err) {
+    console.error(err);
+    alert(t("studio.pro.error"));
   }
 }
 
@@ -274,8 +357,8 @@ async function runRetest(root, session, hooks) {
       banner.querySelector("#btn-retest-ats")?.addEventListener("click", () => {
         downloadAtsHtml(session.optimizedText, {
           fileName: session.originalFile?.name,
-          scoreBefore: before,
-          scoreAfter: after,
+          lang: window.ATSi18n?.getLang?.() || "fr",
+          parsed: session.report?.parsed || report.parsed,
         });
       });
       banner.querySelector("#btn-retest-print")?.addEventListener("click", () => {

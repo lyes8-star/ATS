@@ -18,9 +18,9 @@ Contexte typique : mobile ou desktop, première visite, besoin d’un score clai
 
 ## Product Purpose
 
-Outil gratuit **ATS Check** : analyser un CV (PDF/DOCX) **localement dans le navigateur**, produire un score de compatibilité ATS /100 (analyse approfondie : géométrie, chronologie emploi, lexiques compétences, alignement offre), un **atelier annoté** (surcouches précises + acceptation clic par clic), générer un **CV optimisé fidèle à la mise en page** (DOCX in-place ou reconstruction structurée), avec une **version ATS linéaire** en option, puis **retester** automatiquement.
+Outil gratuit **ATS Check** : analyser un CV (PDF/DOCX) **localement dans le navigateur** (par défaut), produire un score ATS /100, un **atelier annoté**, télécharger un **CV 1 page propre** (thème ATS Clean, sans branding outil), avec **Mode Pro** opt-in (Worker : LLM, ESCO, PDF).
 
-Succès = le visiteur dépose un CV, **atterrit directement dans l’atelier annoté**, accepte des corrections, télécharge un fichier **layout-fidèle**, reteste le score, et fait confiance à la confidentialité (pas d’upload serveur).
+Succès = le visiteur dépose un CV, atterrit dans l’atelier, accepte des corrections, télécharge un CV **lisible et professionnel**, reteste le score, et choisit s’il active le Mode Pro.
 
 ## Positioning
 

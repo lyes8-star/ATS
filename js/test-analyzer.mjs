@@ -6,6 +6,7 @@ import { applyAll } from "./optimize.js";
 import { rectsForRange } from "./extract.js";
 import { parseCv, parseDateRange, findEmploymentGaps } from "./parse-cv.js";
 import { buildAho, ahoFind } from "./skills-match.js";
+import { buildCleanHtml, buildCvModel } from "./export-cv.js";
 import { buildFaithfulHtml } from "./export-reconstruct.js";
 import { mergeAdjacentWt, replaceInDocumentXml } from "./export-docx.js";
 import assert from "node:assert/strict";
@@ -275,13 +276,23 @@ assert.ok(withJd.jdOverlap?.score === 75);
 console.log("✓ JD overlap scoring OK", withJd.categories.keywords.score);
 
 const htmlFaithful = buildFaithfulHtml(goodCv, sampleParsed, { fileName: "marie.pdf" });
-assert.ok(htmlFaithful.includes("Expérience") || htmlFaithful.includes("expérience") || htmlFaithful.includes("Work"));
-assert.ok(htmlFaithful.indexOf("Expérience") < htmlFaithful.indexOf("Formation") || htmlFaithful.includes("Formation"));
-console.log("✓ faithful reconstruct order OK");
+assert.ok(htmlFaithful.includes("Expérience") || htmlFaithful.includes("expérience") || htmlFaithful.includes("Experience"));
+assert.ok(htmlFaithful.includes("<h1>"), "name as h1");
+assert.ok(!/Généré par|ATS Check|score \d/i.test(htmlFaithful), "no tool branding in export");
+assert.ok(htmlFaithful.includes("cv-role") || htmlFaithful.includes("<ul>"), "structured roles/bullets");
+console.log("✓ clean reconstruct order + no branding OK");
+
+const model = buildCvModel(goodCv, sampleParsed);
+assert.ok(model.name.toLowerCase().includes("marie"));
+assert.ok(model.roles.length >= 1);
+assert.ok(model.skills.length >= 3);
+const clean = buildCleanHtml(goodCv, sampleParsed, { lang: "fr" });
+assert.equal(clean.includes("Généré par"), false);
+console.log("✓ buildCvModel / ATS Clean OK");
 
 const xml = `<w:document><w:body><w:p><w:r><w:t>Hello</w:t></w:r><w:r><w:t> World</w:t></w:r></w:p><w:p><w:r><w:t>acceuil client</w:t></w:r></w:p></w:body></w:document>`;
 const merged = mergeAdjacentWt(xml);
-assert.ok(merged.includes("Hello World") || merged.includes("Hello") && merged.includes("World"));
+assert.ok(merged.includes("Hello World") || (merged.includes("Hello") && merged.includes("World")));
 const { xml: fixed, ok } = replaceInDocumentXml(merged, "acceuil", "accueil");
 assert.ok(ok);
 assert.ok(fixed.includes("accueil"));

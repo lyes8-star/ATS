@@ -21,6 +21,9 @@
       "upload.email.label": "E-mail (optionnel)",
       "upload.jd.label": "Offre d'emploi (optionnel)",
       "upload.jd.placeholder": "Collez l'annonce pour mesurer l'alignement mots-clés CV ↔ offre",
+      "upload.pro.consent":
+        "Mode Pro (optionnel) — j’accepte l’envoi temporaire de mon CV au serveur pour suggestions LLM, ESCO et PDF avancé. Aucune conservation longue.",
+      "upload.pro.hint": "Sans Mode Pro, l’analyse reste 100 % locale dans votre navigateur.",
       "upload.analyze.button": "Analyser mon CV",
 
       "header.newTest": "Nouveau test",
@@ -101,6 +104,12 @@
       "studio.actions.downloadAts": "Version ATS linéaire",
       "studio.actions.print": "Imprimer / PDF",
       "studio.actions.retest": "Retester",
+      "studio.actions.proAnalyze": "Suggestions Mode Pro",
+      "studio.actions.proPdf": "Télécharger PDF Pro",
+      "studio.pro.running": "Mode Pro en cours…",
+      "studio.pro.done": "Suggestions Pro ajoutées à la liste.",
+      "studio.pro.error": "Mode Pro indisponible — continuez en local.",
+      "studio.pro.needConsent": "Cochez le Mode Pro sur l’écran d’upload pour activer cette action.",
       "studio.jd.overlap": "Alignement offre ↔ CV",
 
       "chat.title": "Assistant ATS",
@@ -170,6 +179,9 @@
       "upload.email.label": "Email (optional)",
       "upload.jd.label": "Job description (optional)",
       "upload.jd.placeholder": "Paste the job posting to measure CV ↔ JD keyword alignment",
+      "upload.pro.consent":
+        "Pro mode (optional) — I agree to temporarily send my CV to the server for LLM suggestions, ESCO matching, and advanced PDF. No long-term retention.",
+      "upload.pro.hint": "Without Pro mode, analysis stays 100% local in your browser.",
       "upload.analyze.button": "Analyze my CV",
 
       "header.newTest": "New test",
@@ -240,6 +252,12 @@
       "studio.actions.downloadAts": "Linear ATS version",
       "studio.actions.print": "Print / PDF",
       "studio.actions.retest": "Retest",
+      "studio.actions.proAnalyze": "Pro mode suggestions",
+      "studio.actions.proPdf": "Download Pro PDF",
+      "studio.pro.running": "Pro mode running…",
+      "studio.pro.done": "Pro suggestions added to the list.",
+      "studio.pro.error": "Pro mode unavailable — continue locally.",
+      "studio.pro.needConsent": "Enable Pro mode on the upload screen to use this action.",
       "studio.jd.overlap": "Job ↔ CV alignment",
 
       "chat.title": "ATS Assistant",
