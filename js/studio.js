@@ -39,7 +39,7 @@ import * as extractApi from "./extract.js";
  * Monte le studio dans un conteneur.
  * @param {HTMLElement} root
  * @param {StudioSession} session
- * @param {{ onReset?: () => void, onRetest?: (report: object, optimized: string) => void, onShowReport?: () => void }} hooks
+ * @param {{ onReset?: () => void, onRetest?: (report: object, optimized: string) => void }} hooks
  */
 export async function mountStudio(root, session, hooks = {}) {
   session.annotations = (session.annotations || []).map((a) => ({
@@ -60,19 +60,52 @@ export async function mountStudio(root, session, hooks = {}) {
 
 function studioShell(session) {
   const t = window.ATSi18n?.t || ((k) => k);
-  const total = session.report?.total ?? "—";
-  const label = session.report?.label?.text ?? "";
+  const report = session.report || {};
+  const total = report.total ?? "—";
+  const label = report.label?.text ?? "";
+  const pass = report.passes;
+  const cats = report.categories || {};
+  const pending = (session.annotations || []).filter((a) => a.status === "pending").length;
+  const spellN = report.spelling?.length || 0;
+  void pending;
+  void spellN;
+  const passLabel = pass
+    ? t("studio.pass.ok")
+    : total >= 50
+      ? t("studio.pass.risk")
+      : t("studio.pass.fail");
+
+  const axisBar = (key) => {
+    const c = cats[key];
+    if (!c) return "";
+    const pct = Math.round(((c.score || 0) / (c.max || 25)) * 100);
+    return `<div class="studio-axis" title="${escapeHtml(c.name)}: ${c.score}/${c.max}">
+      <span class="studio-axis-name">${escapeHtml(c.name)}</span>
+      <span class="studio-axis-track"><span class="studio-axis-fill ${escapeHtml(c.bar || "bg-amber")}" style="width:${pct}%"></span></span>
+      <span class="studio-axis-score">${c.score}/${c.max}</span>
+    </div>`;
+  };
+
   return `
   <div class="studio" id="studio">
-    <div class="studio-score-strip">
+    <div class="studio-score-strip studio-report-strip">
       <div class="studio-score-main">
         <p class="studio-kicker">${escapeHtml(t("studio.kicker"))}</p>
-        <p class="studio-score-line">${escapeHtml(t("studio.score.initial"))} <strong id="studio-score-before">${total}</strong>/100 <span class="studio-label">${escapeHtml(label)}</span></p>
+        <p class="studio-score-line">
+          <strong id="studio-score-before">${total}</strong>/100
+          <span class="studio-label">${escapeHtml(label)}</span>
+          <span class="studio-pass-pill ${pass ? "is-ok" : "is-risk"}">${escapeHtml(passLabel)}</span>
+        </p>
         <p id="studio-count" class="studio-count-inline"></p>
+      </div>
+      <div class="studio-axes" aria-label="${escapeHtml(t("studio.axes.label"))}">
+        ${axisBar("readability")}
+        ${axisBar("structure")}
+        ${axisBar("content")}
+        ${axisBar("keywords")}
       </div>
       <div class="studio-score-actions">
         <p class="studio-hint">${escapeHtml(t("studio.hint"))}</p>
-        <button type="button" class="studio-report-link" id="btn-show-report">${escapeHtml(t("studio.link.report"))}</button>
       </div>
     </div>
     <div class="studio-split">
@@ -106,10 +139,6 @@ function studioShell(session) {
 }
 
 function bindStudio(root, session, hooks) {
-  root.querySelector("#btn-show-report")?.addEventListener("click", () => {
-    hooks.onShowReport?.();
-  });
-
   root.querySelector("#btn-accept-all")?.addEventListener("click", () => {
     // Remplacements sûrs uniquement (typos / passifs / métriques replace)
     const safeKinds = new Set(["typo", "passive_verb", "missing_metric"]);
@@ -478,32 +507,73 @@ function renderList(root, session) {
   const t = window.ATSi18n?.t || ((k) => k);
   const pending = session.annotations.filter((a) => a.status === "pending").length;
   const accepted = session.annotations.filter((a) => a.status === "accepted").length;
+  const spellN = session.report?.spelling?.length || 0;
   const countText = t("studio.side.count", {
     total: session.annotations.length,
     accepted,
     pending,
   });
-  if (count) count.textContent = countText;
+  const stripExtra =
+    spellN > 0
+      ? ` · ${t("studio.spell.count", { n: spellN, plural: spellN > 1 ? "s" : "" })}`
+      : "";
+  if (count) count.textContent = countText + stripExtra;
   if (barCount) barCount.textContent = countText;
 
-  list.innerHTML = session.annotations
-    .map((a, i) => {
-      const num = a.id.replace("ann-", "") || String(i + 1);
-      return `
+  const axisOrder = ["readability", "structure", "content", "keywords"];
+  const axisLabel = {
+    readability: t("studio.axis.readability"),
+    structure: t("studio.axis.structure"),
+    content: t("studio.axis.content"),
+    keywords: t("studio.axis.keywords"),
+  };
+  const byAxis = new Map();
+  for (const a of session.annotations) {
+    const key = a.axis || "content";
+    if (!byAxis.has(key)) byAxis.set(key, []);
+    byAxis.get(key).push(a);
+  }
+
+  const blocks = [];
+  for (const axis of axisOrder) {
+    const items = byAxis.get(axis);
+    if (!items?.length) continue;
+    blocks.push(`<p class="ann-axis-head">${escapeHtml(axisLabel[axis] || axis)}</p>`);
+    for (const a of items) {
+      const num = a.id.replace("ann-", "");
+      const short = a.shortLabel || "";
+      blocks.push(`
       <button type="button" class="ann-item severity-${a.severity} status-${a.status}${
         a.id === session.selectedId ? " is-selected" : ""
       }" data-id="${a.id}" role="option" aria-selected="${a.id === session.selectedId}">
-        <span class="ann-num">${escapeHtml(num)}</span>
+        <span class="ann-num" title="${escapeHtml(short)}">${escapeHtml(num)}</span>
         <span class="ann-item-body">
           <strong>${escapeHtml(a.title)}</strong>
-          <span class="ann-meta">${escapeHtml(a.section || "")}${placementMeta(a, t)}${
-            a.page ? ` · p.${a.page}` : ""
-          }</span>
+          <span class="ann-meta">${escapeHtml(short)}${short ? " · " : ""}${escapeHtml(
+            a.section || ""
+          )}${placementMeta(a, t)}${a.page ? ` · p.${a.page}` : ""}</span>
         </span>
         <span class="ann-status-pill">${statusLabel(a.status)}</span>
-      </button>`;
-    })
-    .join("");
+      </button>`);
+    }
+  }
+  // Orphans
+  for (const [axis, items] of byAxis) {
+    if (axisOrder.includes(axis)) continue;
+    for (const a of items) {
+      const num = a.id.replace("ann-", "");
+      blocks.push(`
+      <button type="button" class="ann-item severity-${a.severity} status-${a.status}${
+        a.id === session.selectedId ? " is-selected" : ""
+      }" data-id="${a.id}" role="option">
+        <span class="ann-num">${escapeHtml(num)}</span>
+        <span class="ann-item-body"><strong>${escapeHtml(a.title)}</strong></span>
+        <span class="ann-status-pill">${statusLabel(a.status)}</span>
+      </button>`);
+    }
+  }
+
+  list.innerHTML = blocks.join("");
 
   list.querySelectorAll(".ann-item").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -549,10 +619,13 @@ function renderDetail(root, session) {
     <div class="ann-detail-card severity-${ann.severity}">
       <p class="ann-where"><span>${escapeHtml(t("studio.detail.where"))}</span> ${
         ann.page ? `Page ${ann.page}` : "Document"
-      }${ann.section ? ` · ${escapeHtml(ann.section)}` : ""}</p>
+      }${ann.section ? ` · ${escapeHtml(ann.section)}` : ""}${
+        ann.shortLabel ? ` · ${escapeHtml(ann.shortLabel)}` : ""
+      }</p>
       ${placementNote}
       <p class="ann-quote">« ${escapeHtml(ann.quote || "")} »</p>
       <h3>${escapeHtml(ann.title)}</h3>
+      <p class="ann-why-label">${escapeHtml(t("studio.detail.why"))}</p>
       <p class="ann-problem">${escapeHtml(ann.detail || "")}</p>
       <label class="ann-suggest-label" for="ann-suggest-input">${escapeHtml(t("studio.detail.correction"))}</label>
       <textarea id="ann-suggest-input" class="ann-suggest" rows="3">${escapeHtml(ann.suggestion || "")}</textarea>

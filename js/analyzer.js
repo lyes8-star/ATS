@@ -265,12 +265,14 @@ function sectionAnchor(text, kind) {
 
 /**
  * Construit des annotations localisées (offsets + quote) à partir du rapport.
+ * Titres / details / suggestions concrets — pas de faux chiffres ni phrases bateau.
  * Les rects PDF sont enrichis plus tard via attachGeometry().
  */
 function buildAnnotations(text, scores, spelling, lang) {
   const annotations = [];
   let seq = 0;
   const nextId = () => `ann-${++seq}`;
+  const isEn = lang === "en";
 
   const push = (partial) => {
     annotations.push({
@@ -280,37 +282,48 @@ function buildAnnotations(text, scores, spelling, lang) {
       approximate: true,
       status: "pending",
       section: partial.section || guessSection(text, partial.textStart || 0),
+      axis: partial.axis || "content",
+      shortLabel: partial.shortLabel || shortLabelFor(partial.kind),
       ...partial,
     });
   };
 
-  // Typos
   for (const s of spelling) {
+    const ctx = (s.context || "").replace(/\s+/g, " ").trim();
     push({
       kind: "typo",
+      axis: "content",
+      shortLabel: isEn ? "Spelling" : "Orthographe",
       severity: "critical",
       textStart: s.textStart,
       textEnd: s.textEnd,
       quote: s.wrong,
-      title: "Corriger la faute d'orthographe",
-      detail: `« ${s.wrong} » est une faute fréquente. Un CV avec des fautes envoie un signal négatif.`,
+      title: isEn
+        ? `Fix « ${s.wrong} » → « ${s.right} »`
+        : `Corriger « ${s.wrong} » → « ${s.right} »`,
+      detail: ctx
+        ? (isEn ? `Found here: ${ctx}` : `Repéré ici : ${ctx}`)
+        : (isEn ? "Replace this misspelling on your CV." : "Remplacez cette faute telle qu'elle apparaît sur votre CV."),
       suggestion: s.right,
       applyMode: "replace",
       approximate: false,
     });
   }
 
-  // Passive / téléphone
   if (!detectEmail(text)) {
     push({
       kind: "missing_email",
+      axis: "structure",
+      shortLabel: "Email",
       severity: "critical",
       textStart: 0,
       textEnd: Math.min(40, text.length),
       quote: text.slice(0, Math.min(40, text.length)).trim() || "(début du CV)",
-      title: "Ajouter une adresse e-mail",
-      detail: "Aucune adresse e-mail détectée. Les ATS et recruteurs doivent pouvoir vous contacter.",
-      suggestion: "prenom.nom@email.com",
+      title: isEn ? "Add your email at the top" : "Ajouter votre e-mail en tête",
+      detail: isEn
+        ? "No email found in plain text. Edit the field below with your real address, then accept."
+        : "Aucun e-mail détecté en texte clair. Remplacez le champ ci-dessous par votre vraie adresse, puis acceptez.",
+      suggestion: "[votre.email@domaine.fr]",
       applyMode: "insert_header",
       section: "Coordonnées",
       approximate: true,
@@ -318,37 +331,75 @@ function buildAnnotations(text, scores, spelling, lang) {
   }
   if (!detectPhone(text)) {
     push({
-      kind: "missing_email",
+      kind: "missing_phone",
+      axis: "structure",
+      shortLabel: isEn ? "Phone" : "Téléphone",
       severity: "critical",
       textStart: 0,
       textEnd: Math.min(40, text.length),
       quote: text.slice(0, Math.min(40, text.length)).trim() || "(début du CV)",
-      title: "Ajouter un numéro de téléphone",
-      detail: "Téléphone manquant ou non reconnu. Placez-le en tête, en texte clair.",
-      suggestion: "06 12 34 56 78",
+      title: isEn ? "Add your phone number" : "Ajouter votre numéro de téléphone",
+      detail: isEn
+        ? "No phone recognized. Put your real number in plain text in the header (not in an image)."
+        : "Aucun téléphone reconnu. Indiquez votre vrai numéro en texte en tête de CV (pas dans une image).",
+      suggestion: "[06 XX XX XX XX]",
       applyMode: "insert_header",
       section: "Coordonnées",
       approximate: true,
     });
   }
 
-  // Sections manquantes
   const missingSections = [
-    { key: "experience", kind: "missing_section", title: "Ajouter une section Expérience", block: "\n\nEXPÉRIENCE PROFESSIONNELLE\nIntitulé — Entreprise (AAAA - AAAA)\n- Piloté … (+X % / Y clients)\n" },
-    { key: "education", kind: "missing_section", title: "Ajouter une section Formation", block: "\n\nFORMATION\nDiplôme — Établissement (AAAA - AAAA)\n" },
-    { key: "skills", kind: "missing_section", title: "Ajouter une section Compétences", block: "\n\nCOMPÉTENCES\nGestion de projet, Agile, Excel, reporting, communication, analyse\n" },
+    {
+      key: "experience",
+      kind: "missing_section",
+      shortLabel: isEn ? "Experience" : "Expérience",
+      title: isEn ? "Add an Experience section" : "Ajouter une section Expérience",
+      block: isEn
+        ? "EXPERIENCE\nJob title — Company (YYYY – YYYY)\n- Led …\n- Delivered … [metric: % or volume]"
+        : "EXPÉRIENCE PROFESSIONNELLE\nIntitulé — Entreprise (AAAA – AAAA)\n- Piloté …\n- Réalisé … [chiffre : % ou volume]",
+      detail: isEn
+        ? "No Experience heading detected. Add a real job title, company, dates, and 2 bullets with your results."
+        : "Aucun titre Expérience détecté. Ajoutez un intitulé réel, l'entreprise, les dates, et 2 puces avec vos résultats.",
+    },
+    {
+      key: "education",
+      kind: "missing_section",
+      shortLabel: isEn ? "Education" : "Formation",
+      title: isEn ? "Add an Education section" : "Ajouter une section Formation",
+      block: isEn
+        ? "EDUCATION\nDegree — School (YYYY – YYYY)"
+        : "FORMATION\nDiplôme — Établissement (AAAA – AAAA)",
+      detail: isEn
+        ? "No Education heading found. Use your real degree and school names."
+        : "Aucun titre Formation trouvé. Utilisez vos vrais diplôme et établissement.",
+    },
+    {
+      key: "skills",
+      kind: "missing_section",
+      shortLabel: isEn ? "Skills" : "Compétences",
+      title: isEn ? "Add a Skills section" : "Ajouter une section Compétences",
+      block: isEn
+        ? "SKILLS\n[tool], [method], [domain] — list skills you actually use"
+        : "COMPÉTENCES\n[outil], [méthode], [domaine] — listez les compétences que vous maîtrisez vraiment",
+      detail: isEn
+        ? "No Skills heading found. List tools and methods from your recent roles."
+        : "Aucun titre Compétences trouvé. Listez outils et méthodes de vos postes récents.",
+    },
   ];
   for (const ms of missingSections) {
     if (!SECTION_PATTERNS[ms.key].test(text)) {
       const end = text.length;
       push({
         kind: ms.kind,
+        axis: "structure",
+        shortLabel: ms.shortLabel,
         severity: ms.key === "experience" ? "critical" : "warning",
         textStart: Math.max(0, end - 1),
         textEnd: end,
         quote: "(fin du document)",
         title: ms.title,
-        detail: `Section ${ms.key === "experience" ? "Expérience" : ms.key === "education" ? "Formation" : "Compétences"} absente ou mal intitulée.`,
+        detail: ms.detail,
         suggestion: ms.block.trim(),
         applyMode: "insert_after",
         section: "Document",
@@ -357,32 +408,35 @@ function buildAnnotations(text, scores, spelling, lang) {
     }
   }
 
-  // Formulations passives « responsable de… »
   const passiveRe = /\bresponsable\s+de\s+[^.!\n]{8,120}/gi;
   let pm;
   let passiveCount = 0;
   while ((pm = passiveRe.exec(text)) !== null && passiveCount < 6) {
     const quote = pm[0].trim();
-    const hasMetric = /\d/.test(quote);
-    const suggestion = hasMetric
-      ? quote.replace(/^responsable\s+de\s+/i, "Piloté ").replace(/^./, (c) => c.toUpperCase())
-      : quote.replace(/^responsable\s+de\s+/i, "Piloté ") + " (+X % / N clients)";
+    const suggestion = quote
+      .replace(/^responsable\s+de\s+/i, isEn ? "Led " : "Piloté ")
+      .replace(/^./, (c) => c.toUpperCase());
     push({
       kind: "passive_verb",
+      axis: "content",
+      shortLabel: isEn ? "Verb" : "Verbe",
       severity: "warning",
       textStart: pm.index,
       textEnd: pm.index + pm[0].length,
       quote,
-      title: "Remplacer la formulation passive",
-      detail: "Formulation passive, faible signal ATS. Préférez un verbe d'action + résultat.",
-      suggestion: suggestion.charAt(0).toUpperCase() + suggestion.slice(1),
+      title: isEn
+        ? `Replace « ${quote.slice(0, 42)}${quote.length > 42 ? "…" : ""} »`
+        : `Remplacer « ${quote.slice(0, 42)}${quote.length > 42 ? "…" : ""} »`,
+      detail: isEn
+        ? "This line describes a duty, not an action. Swap to a strong verb on the same task."
+        : "Cette ligne décrit une tâche, pas une action. Remplacez par un verbe d'action sur la même mission.",
+      suggestion,
       applyMode: "replace",
       approximate: false,
     });
     passiveCount += 1;
   }
 
-  // Puces sans métrique dans l'expérience
   if (!scores.content.hasMetrics) {
     const bulletRe = /^[\s•\-\*]+(.{20,160})$/gm;
     let bm;
@@ -391,110 +445,216 @@ function buildAnnotations(text, scores, spelling, lang) {
       const line = bm[1].trim();
       if (/\d/.test(line)) continue;
       if (!/[a-záàâäéèêëíìîïóòôöúùûüç]/i.test(line)) continue;
+      const suggestion = `${line.replace(/\.$/, "")} [${
+        isEn ? "metric: % or volume you owned" : "chiffre : % ou volume dont vous êtes responsable"
+      }]`;
       push({
         kind: "missing_metric",
+        axis: "content",
+        shortLabel: isEn ? "Metric" : "Chiffre",
         severity: "warning",
         textStart: bm.index,
         textEnd: bm.index + bm[0].length,
-        quote: line.slice(0, 80),
-        title: "Ajouter un résultat chiffré",
-        detail: "Sans métrique (%, €, volumes), l'impact est difficile à scorer.",
-        suggestion: `${line.replace(/\.$/, "")} (+18 % / 40 clients)`,
+        quote: line.slice(0, 100),
+        title: isEn ? "Add a metric to this bullet" : "Ajouter un chiffre à cette puce",
+        detail: isEn
+          ? "This bullet has no number. Replace the bracket with a real KPI from that role (%, €, headcount, delay)."
+          : "Cette puce n'a aucun chiffre. Remplacez le crochet par un vrai KPI de ce poste (%, €, effectif, délai).",
+        suggestion,
         applyMode: "replace",
         approximate: false,
       });
       metricAnns += 1;
     }
     if (metricAnns === 0) {
-      const exp = sectionAnchor(text, "experience") || { textStart: 0, textEnd: Math.min(60, text.length), quote: text.slice(0, 40) };
+      const exp =
+        sectionAnchor(text, "experience") || {
+          textStart: 0,
+          textEnd: Math.min(60, text.length),
+          quote: text.slice(0, 40),
+        };
       push({
         kind: "missing_metric",
+        axis: "content",
+        shortLabel: isEn ? "Metric" : "Chiffre",
         severity: "warning",
         ...exp,
-        title: "Enrichir les expériences avec des chiffres",
-        detail: "Ajoutez 3 à 5 indicateurs concrets sur vos postes récents.",
-        suggestion: "Piloté un portefeuille de 40 clients (+18 % CA)",
+        title: isEn ? "Add quantified results to recent roles" : "Chiffrer les expériences récentes",
+        detail: isEn
+          ? "No metrics detected on the CV. Pick 2–3 recent bullets and add a real KPI you can defend in interview."
+          : "Aucun chiffre détecté sur le CV. Choisissez 2–3 puces récentes et ajoutez un KPI réel que vous pouvez défendre en entretien.",
+        suggestion: isEn
+          ? "- [Action] … ([metric: % / volume / €])"
+          : "- [Action] … ([chiffre : % / volume / €])",
         applyMode: "insert_after",
         approximate: true,
       });
     }
   }
 
-  // Gap emploi
-  const years = detectDates(text);
-  const gap = findEmploymentGap(years);
+  const empGaps = scores.structure?.employmentGaps || [];
+  const gap =
+    empGaps[0] ||
+    (() => {
+      const years = detectDates(text);
+      return findEmploymentGap(years);
+    })();
   if (gap) {
     const yearQuote = String(gap.from);
     const loc = locateQuote(text, yearQuote) || { textStart: 0, textEnd: 4, quote: yearQuote };
     push({
       kind: "gap",
-      severity: "critical",
+      axis: "structure",
+      shortLabel: "Gap",
+      severity: gap.months >= 24 ? "warning" : "info",
       textStart: loc.textStart,
       textEnd: loc.textEnd,
       quote: loc.quote,
-      title: "Justifier le trou d'emploi",
-      detail: `Un gap d'environ ${gap.months} mois (${gap.from}–${gap.to}) attire l'attention des recruteurs.`,
-      suggestion: `Formation / projet personnel / bénévolat (${gap.from}–${gap.to}) — développer les compétences X`,
+      title: isEn
+        ? `Explain the ${gap.from}–${gap.to} gap (~${gap.months} mo.)`
+        : `Expliquer le trou ${gap.from}–${gap.to} (~${gap.months} mois)`,
+      detail: isEn
+        ? "Insert one line between those roles stating what you did (training, project, volunteering, business)."
+        : "Insérez une ligne entre ces postes précisant l'activité (formation, projet, bénévolat, création).",
+      suggestion: isEn
+        ? `${gap.from}–${gap.to} — [training / project / volunteering]: [what you built or learned]`
+        : `${gap.from}–${gap.to} — [formation / projet / bénévolat] : [ce que vous avez réalisé ou appris]`,
       applyMode: "insert_after",
       approximate: true,
     });
   }
 
-  // Mots-clés faibles
-  if (scores.keywords.keywords.length < 8) {
+  if (
+    scores.keywords.keywords.length < 8 ||
+    (scores.keywords.jdOverlap && scores.keywords.jdOverlap.score < 50)
+  ) {
     const skills = sectionAnchor(text, "skills");
-    const suggested = PROFESSIONAL_KEYWORDS.filter((k) => !text.toLowerCase().includes(k)).slice(0, 8);
-    const anchor = skills || { textStart: Math.max(0, text.length - 1), textEnd: text.length, quote: "(compétences)" };
-    push({
-      kind: "keyword",
-      severity: "info",
-      textStart: anchor.textStart,
-      textEnd: anchor.textEnd,
-      quote: anchor.quote,
-      title: "Renforcer les mots-clés métier",
-      detail: "Densité lexicale faible pour matcher les offres. Ajoutez des termes ciblés.",
-      suggestion: suggested.join(", "),
-      applyMode: skills ? "insert_after" : "insert_after",
-      section: "Compétences",
-      approximate: !skills,
-    });
+    const jd = scores.keywords.jdOverlap;
+    let terms = [];
+    if (jd?.jdTerms?.length) {
+      terms = jd.jdTerms
+        .filter((t) => !text.toLowerCase().includes(String(t).toLowerCase()))
+        .slice(0, 5);
+    }
+    if (!terms.length) {
+      terms = PROFESSIONAL_KEYWORDS.filter((k) => !text.toLowerCase().includes(k)).slice(0, 5);
+    }
+    if (terms.length) {
+      const anchor =
+        skills || {
+          textStart: Math.max(0, text.length - 1),
+          textEnd: text.length,
+          quote: "(compétences)",
+        };
+      const line = terms.join(" · ");
+      push({
+        kind: "keyword",
+        axis: "keywords",
+        shortLabel: isEn ? "Keywords" : "Mots-clés",
+        severity: "info",
+        textStart: anchor.textStart,
+        textEnd: anchor.textEnd,
+        quote: anchor.quote,
+        title: isEn
+          ? `Add missing skills: ${terms.slice(0, 3).join(", ")}`
+          : `Ajouter les compétences manquantes : ${terms.slice(0, 3).join(", ")}`,
+        detail:
+          jd?.score != null
+            ? isEn
+              ? `Job↔CV overlap is ${jd.score}%. Only keep terms you actually master.`
+              : `Alignement offre↔CV à ${jd.score} %. Ne gardez que les termes que vous maîtrisez vraiment.`
+            : isEn
+              ? "These terms are weak or missing vs. typical target roles. Append only those you use."
+              : "Ces termes sont absents ou faibles par rapport aux offres types. N'ajoutez que ceux que vous utilisez.",
+        suggestion: isEn ? `Skills: ${line}` : `Compétences : ${line}`,
+        applyMode: "insert_after",
+        section: "Compétences",
+        approximate: !skills,
+      });
+    }
   }
 
-  // Longueur
   if (scores.readability.pages > 2) {
+    const tail = text.slice(Math.max(0, text.length - 80)).trim() || "(fin du CV)";
     push({
       kind: "length",
+      axis: "readability",
+      shortLabel: isEn ? "Length" : "Longueur",
       severity: "warning",
       textStart: Math.max(0, text.length - 80),
       textEnd: text.length,
-      quote: text.slice(Math.max(0, text.length - 80)).trim() || "(fin du CV)",
-      title: "Raccourcir le CV",
-      detail: `CV trop long (${scores.readability.pages} pages). Visez 1 à 2 pages.`,
-      suggestion: "Condenser les expériences anciennes ; retirer les détails non pertinents.",
+      quote: tail,
+      title: isEn
+        ? `Shorten to 1–2 pages (now ~${scores.readability.pages})`
+        : `Passer à 1–2 pages (actuellement ~${scores.readability.pages})`,
+      detail: isEn
+        ? "Cut older roles to title + 1 bullet; remove redundant soft skills lists."
+        : "Réduisez les postes anciens à intitulé + 1 puce ; retirez les listes de soft skills redondantes.",
+      suggestion: tail,
       applyMode: "replace",
       approximate: true,
     });
   }
 
-  // LinkedIn
-  if (!detectLinkedIn(text) && annotations.filter((a) => a.kind === "missing_email").length < 3) {
+  if (!detectLinkedIn(text)) {
     push({
-      kind: "missing_email",
+      kind: "missing_linkedin",
+      axis: "structure",
+      shortLabel: "LinkedIn",
       severity: "info",
       textStart: 0,
       textEnd: Math.min(50, text.length),
       quote: text.slice(0, Math.min(50, text.length)).trim(),
-      title: "Ajouter un profil LinkedIn",
-      detail: "Un lien LinkedIn renforce la crédibilité et facilite le contact RH.",
-      suggestion: "linkedin.com/in/prenom-nom",
+      title: isEn ? "Add your LinkedIn URL" : "Ajouter votre URL LinkedIn",
+      detail: isEn
+        ? "Edit the placeholder with your real profile slug, then accept to insert it in the header."
+        : "Remplacez le placeholder par le slug de votre vrai profil, puis acceptez pour l'insérer en tête.",
+      suggestion: "[linkedin.com/in/votre-profil]",
       applyMode: "insert_header",
       section: "Coordonnées",
       approximate: true,
     });
   }
 
-  void lang;
+  if (scores.readability.hasColumnsSmell || scores.readability.hasTables) {
+    push({
+      kind: "layout",
+      axis: "readability",
+      shortLabel: isEn ? "Layout" : "Mise en page",
+      severity: "warning",
+      textStart: 0,
+      textEnd: Math.min(30, text.length),
+      quote: text.slice(0, Math.min(30, text.length)).trim() || "(document)",
+      title: isEn
+        ? "Layout may confuse ATS (columns/tables)"
+        : "Mise en page risquée pour les ATS (colonnes/tableaux)",
+      detail: isEn
+        ? "We detected column or table signals. Prefer a linear export for ATS applications."
+        : "Colonnes ou tableaux détectés. Préférez un export linéaire pour les candidatures ATS.",
+      suggestion: "",
+      applyMode: "replace",
+      approximate: true,
+    });
+  }
+
   return annotations;
+}
+
+function shortLabelFor(kind) {
+  const map = {
+    typo: "Orthographe",
+    missing_email: "Email",
+    missing_phone: "Téléphone",
+    missing_linkedin: "LinkedIn",
+    missing_section: "Section",
+    passive_verb: "Verbe",
+    missing_metric: "Chiffre",
+    gap: "Gap",
+    keyword: "Mots-clés",
+    length: "Longueur",
+    layout: "Mise en page",
+  };
+  return map[kind] || "Correction";
 }
 
 function guessSection(text, offset) {
@@ -1013,7 +1173,7 @@ export function analyzeCv(rawText, fileMeta = {}) {
     text,
     { readability, structure, content, keywords },
     spelling,
-    detectedLang
+    uiLang
   );
 
   const strengths = [
@@ -1245,94 +1405,18 @@ export function analyzeCv(rawText, fileMeta = {}) {
     tags.splice(0, tags.length, ...translateTags(tags));
 
     const translateAnnotation = (ann) => {
+      // Copy already built in uiLang by buildAnnotations — only localize section labels
       const out = { ...ann };
-
-      const mapTitleDetail = (title, detail) => {
-        out.title = title;
-        out.detail = detail;
+      const sectionMap = {
+        Coordonnées: "Contact details",
+        Document: "Document",
+        Expérience: "Experience",
+        Formation: "Education",
+        Compétences: "Skills",
+        Profil: "Profile",
+        Langues: "Languages",
       };
-
-      if (ann.kind === "typo") {
-        mapTitleDetail("Fix spelling", "“"+ (ann.quote || "") +"” is a frequent typo. Correcting it sends a positive signal.");
-      } else if (ann.kind === "missing_email") {
-        if ((ann.title || "").toLowerCase().includes("linkedin")) {
-          mapTitleDetail(
-            "Add a LinkedIn profile",
-            "A LinkedIn link improves credibility and helps HR contact you."
-          );
-          out.section = "Contact details";
-          out.suggestion = "linkedin.com/in/first-last";
-        } else {
-          mapTitleDetail(
-            "Add an email address",
-            "No email address detected. ATS and recruiters must be able to contact you."
-          );
-          out.section = "Contact details";
-          out.suggestion = String(out.suggestion || "").replace(/prenom\.nom/i, "first.last");
-          out.applyMode = out.applyMode || "insert_header";
-        }
-      } else if (ann.kind === "missing_section") {
-        const title = ann.title || "";
-        if (title.includes("Expérience")) {
-          mapTitleDetail(
-            "Add a Professional Experience section",
-            "ATS needs clear job history with titles, companies and date ranges."
-          );
-          out.section = "Document";
-          out.suggestion = `\n\nPROFESSIONAL EXPERIENCE\nJob Title — Company (YYYY - YYYY)\n- Led … (+X% / Y clients)\n`;
-        } else if (title.includes("Formation")) {
-          mapTitleDetail(
-            "Add an Education section",
-            "Include degree, school, and date range in a simple ATS-friendly block."
-          );
-          out.section = "Document";
-          out.suggestion = `\n\nEDUCATION\nDegree — School (YYYY - YYYY)\n`;
-        } else {
-          mapTitleDetail(
-            "Add a Skills section",
-            "List job-relevant tools and competencies using a concise, keyword-friendly format."
-          );
-          out.section = "Document";
-          out.suggestion = `\n\nSKILLS\nProject management, Agile, Excel, reporting, communication, analysis\n`;
-        }
-      } else if (ann.kind === "passive_verb") {
-        mapTitleDetail(
-          "Replace passive wording",
-          "Passive phrasing sends a weaker ATS signal. Use an action verb + measurable impact."
-        );
-        out.title = "Replace passive wording";
-        out.section = out.section || "Experience";
-        out.suggestion = String(out.suggestion || "").replace(/^[Pp]iloté\s+/i, "Led ");
-      } else if (ann.kind === "missing_metric") {
-        mapTitleDetail(
-          "Add measurable results",
-          "Without metrics (%, €, volumes, deadlines), it’s hard to quantify impact."
-        );
-        out.section = out.section || "Experience";
-      } else if (ann.kind === "gap") {
-        mapTitleDetail(
-          "Justify the employment gap",
-          "An unexplained employment gap draws immediate attention. Add context so recruiters understand what you did."
-        );
-        out.section = "Experience";
-        // Try to keep year range from detail.
-        const m = (ann.detail || "").match(/\((\d+)–(\d+)\)/);
-        if (m) {
-          out.suggestion = `Training / personal project / volunteering (${m[1]}–${m[2]}) — develop your skills X`;
-        }
-      } else if (ann.kind === "keyword") {
-        mapTitleDetail(
-          "Strengthen job-relevant keywords",
-          "Your keyword density is low for targeted job postings. Add the most relevant terms."
-        );
-        out.section = "Skills";
-      } else if (ann.kind === "length") {
-        mapTitleDetail(
-          "Shorten your CV",
-          "A too-long CV may be truncated by ATS filters. Aim for 1–2 pages."
-        );
-        out.section = "Document";
-      }
+      if (out.section && sectionMap[out.section]) out.section = sectionMap[out.section];
       return out;
     };
 
