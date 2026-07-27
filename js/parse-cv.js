@@ -4,12 +4,27 @@
  */
 
 const SECTION_HEADERS = [
-  { key: "experience", re: /^(exp[ée]riences?(?:\s+professionnelles?)?|parcours(?:\s+professionnel)?|emploi|career|work\s+experience|professional\s+experience|expériences?)$/i },
-  { key: "education", re: /^(formations?|education|éducation|dipl[ôo]mes?|études|etudes|academic|formation\s+initiale)$/i },
-  { key: "skills", re: /^(comp[ée]tences?|skills?|savoir[-\s]?faire|technologies|outils|hard\s+skills|compétences\s+techniques)$/i },
+  {
+    key: "experience",
+    re: /^(exp[ée]riences?(?:\s+professionnelles?)?|parcours(?:\s+professionnel)?|emploi|career|work\s+experience|professional\s+experience)$/i,
+  },
+  {
+    key: "education",
+    re: /^(formations?(?:\s+et\s+dipl[ôo]mes?)?|education|éducation|dipl[ôo]mes?|études|etudes|academic|formation\s+initiale)$/i,
+  },
+  {
+    key: "skills",
+    re: /^(comp[ée]tences?(?:\s+techniques)?|skills?|savoir[-\s]?faire|technologies|outils|hard\s+skills|expertise\s+technique)$/i,
+  },
   { key: "languages", re: /^(langues?|languages?)$/i },
-  { key: "summary", re: /^(profil|r[ée]sum[ée]|objective|objectif|about|à propos|synth[èe]se|summary)$/i },
-  { key: "other", re: /^(centres?\s+d['’]int[ée]r[êe]t|intérêts|interests|certifications?|projets?|publications?|bénévolat|volontariat)$/i },
+  {
+    key: "summary",
+    re: /^(profil|r[ée]sum[ée]|objective|objectif|about|à propos|synth[èe]se|summary)$/i,
+  },
+  {
+    key: "other",
+    re: /^(centres?\s+d['’]int[ée]r[êe]t|intérêts|interests|certifications?|projets?|publications?|bénévolat|volontariat)$/i,
+  },
 ];
 
 const MONTHS =
@@ -61,6 +76,82 @@ const LINKEDIN_RE = /linkedin\.com\/in\/[\w\-]+/i;
  */
 
 /**
+ * Normalise un titre de section (letter-spacing PDF, NFKC, casse).
+ * "E X P É R I E N C E" → "expérience"
+ * @param {string} raw
+ */
+export function normalizeHeading(raw) {
+  let t = String(raw || "")
+    .normalize("NFKC")
+    .replace(/[:：]\s*$/, "")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (!t) return "";
+  const tokens = t.split(" ");
+  if (tokens.length >= 3) {
+    const singleCount = tokens.filter((x) => Array.from(x).length === 1).length;
+    if (singleCount / tokens.length >= 0.55) {
+      t = tokens.join("");
+    } else {
+      const out = [];
+      let buf = "";
+      for (const tok of tokens) {
+        const chars = Array.from(tok);
+        if (chars.length === 1 && /[\p{L}\p{M}]/u.test(tok)) {
+          buf += tok;
+        } else {
+          if (buf) {
+            out.push(buf);
+            buf = "";
+          }
+          out.push(tok);
+        }
+      }
+      if (buf) out.push(buf);
+      t = out.join(" ");
+    }
+  }
+  return t.toLowerCase().trim();
+}
+
+function matchSectionKey(normalized) {
+  if (!normalized) return null;
+  for (const s of SECTION_HEADERS) {
+    if (s.re.test(normalized)) return s.key;
+  }
+  return null;
+}
+
+/**
+ * Jointure gap-aware d'items PDF d'une même ligne.
+ * @param {{ str?: string, rect?: { x?: number, w?: number } }[]} bucket
+ */
+export function joinItemsGapAware(bucket) {
+  if (!bucket?.length) return "";
+  let out = bucket[0].str || "";
+  for (let i = 1; i < bucket.length; i++) {
+    const prev = bucket[i - 1];
+    const cur = bucket[i];
+    const curStr = cur.str || "";
+    if (!curStr) continue;
+    if (/\s$/.test(out) || /^\s/.test(curStr)) {
+      out += curStr;
+      continue;
+    }
+    const prevEnd = (prev.rect?.x ?? 0) + (prev.rect?.w ?? 0);
+    const dx = (cur.rect?.x ?? 0) - prevEnd;
+    const charW = Math.max(
+      (prev.rect?.w ?? 0.01) / Math.max(Array.from(prev.str || " ").length, 1),
+      0.003
+    );
+    // Space only when gap looks like a word break (not mid-glyph fragments)
+    if (dx > charW * 0.35) out += " ";
+    out += curStr;
+  }
+  return out.replace(/\s+/g, " ").trim();
+}
+
+/**
  * Construit des lignes depuis pagesGeo PDF (items → lignes par Y).
  * @param {import('./extract.js').PageGeo[]} pagesGeo
  * @returns {CvLine[]}
@@ -77,11 +168,7 @@ export function linesFromPagesGeo(pagesGeo) {
     const flush = () => {
       if (!bucket.length) return;
       bucket.sort((a, b) => (a.rect?.x ?? 0) - (b.rect?.x ?? 0));
-      const text = bucket
-        .map((i) => i.str)
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
+      const text = joinItemsGapAware(bucket);
       if (!text) return;
       const xs = bucket.map((i) => i.rect?.x ?? 0);
       const ys = bucket.map((i) => i.rect?.y ?? 0);
@@ -142,20 +229,53 @@ export function linesFromText(text) {
 }
 
 function isSectionHeader(line) {
-  const t = line.text.replace(/[:：]\s*$/, "").trim();
-  if (t.length > 48) return null;
-  // ALL CAPS or Title-like short line
-  const compact = t.replace(/\s+/g, " ");
-  for (const s of SECTION_HEADERS) {
-    if (s.re.test(compact)) return s.key;
+  const raw = String(line?.text || "").trim();
+  if (!raw) return null;
+  // Bullets / numbered lines are never section headers
+  if (/^[-•●▪–—*□■▫◦‣]\s+/.test(raw) || /^\d+[.)]\s+/.test(raw)) return null;
+
+  const normalized = normalizeHeading(raw);
+  // Guard: avoid matching long body lines (after normalize)
+  if (normalized.length <= 64) {
+    const exact = matchSectionKey(normalized);
+    if (exact) return exact;
   }
-  // Heuristic: short uppercase heading
-  if (compact.length <= 32 && compact === compact.toUpperCase() && /[A-ZÀ-Ü]{3,}/.test(compact)) {
+
+  // Prefix form: "EXPÉRIENCE — Dev…" / "Formation | Master…"
+  const prefix = normalized.split(/\s*[—–\-|•·]\s*/)[0]?.trim() || "";
+  if (prefix && prefix.length <= 48 && prefix !== normalized) {
+    const key = matchSectionKey(prefix);
+    if (key) return key;
+  }
+
+  // Starts-with known heading then space (short heading prefix on a longer line)
+  if (normalized.length <= 80) {
     for (const s of SECTION_HEADERS) {
-      if (s.re.test(compact.toLowerCase())) return s.key;
+      const body = s.re.source.replace(/^\^/, "").replace(/\$$/, "");
+      const startRe = new RegExp(`^(?:${body})(?:\\s|$)`, "i");
+      if (startRe.test(normalized)) {
+        // Only if the matched head is the whole first phrase (≤ 3 words of heading)
+        const words = normalized.split(/\s+/);
+        for (let n = 1; n <= Math.min(4, words.length); n++) {
+          const head = words.slice(0, n).join(" ");
+          if (matchSectionKey(head)) return s.key;
+        }
+      }
     }
   }
   return null;
+}
+
+/** Contenu éventuel après un titre « SECTION — reste ». */
+function headingRest(raw) {
+  const t = String(raw || "")
+    .replace(/[:：]\s*$/, "")
+    .trim();
+  const parts = t.split(/\s*[—–\-|]\s+/);
+  if (parts.length < 2) return "";
+  const head = normalizeHeading(parts[0]);
+  if (!matchSectionKey(head)) return "";
+  return parts.slice(1).join(" — ").trim();
 }
 
 export function parseDateRange(line) {
@@ -217,6 +337,11 @@ export function parseCv(text, opts = {}) {
     if (key) {
       current = key;
       if (!sectionOrder.includes(key)) sectionOrder.push(key);
+      const rest = headingRest(line.text);
+      if (rest) {
+        if (!sections[current]) sections[current] = [];
+        sections[current].push(rest);
+      }
       continue;
     }
     if (!sections[current]) sections[current] = [];
@@ -489,4 +614,4 @@ export function detectColumnsFromGeo(pagesGeo) {
   return detectColumnSmell(lines);
 }
 
-export { DATE_RANGE_RE, SECTION_HEADERS };
+export { DATE_RANGE_RE, SECTION_HEADERS, isSectionHeader };

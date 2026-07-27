@@ -149,27 +149,41 @@ export async function extractFromPdf(file) {
     const viewport = page.getViewport({ scale: 1 });
     const content = await page.getTextContent();
     const items = [];
+    let prev = null;
 
     for (const it of content.items) {
       if (!it.str) continue;
       const rect = itemToNormRect(it, viewport.width, viewport.height);
       const str = it.str;
+
+      // Gap-aware space: avoid "C hargé" from per-glyph PDF items
+      if (prev && !/\s$/.test(prev.str) && !/^\s/.test(str)) {
+        const prevRect = prev.rect;
+        const charW = Math.max(
+          (prevRect?.w ?? 0.01) / Math.max(Array.from(prev.str || " ").length, 1),
+          0.003
+        );
+        const prevEnd = (prevRect?.x ?? 0) + (prevRect?.w ?? 0);
+        const dx = (rect?.x ?? 0) - prevEnd;
+        if (dx > charW * 0.35) {
+          text += " ";
+          cursor += 1;
+        }
+      }
+
       const textStart = cursor;
       const textEnd = cursor + str.length;
-      items.push({
+      const item = {
         str,
         page: i,
         rect: rect || { x: 0, y: 0, w: 0, h: 0 },
         textStart,
         textEnd,
-      });
+      };
+      items.push(item);
       text += str;
       cursor = textEnd;
-      // espace entre items (approx pdf.js)
-      if (!/\s$/.test(str)) {
-        text += " ";
-        cursor += 1;
-      }
+      prev = item;
       itemCount += 1;
     }
     text += "\n";

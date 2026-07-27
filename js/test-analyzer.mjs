@@ -4,7 +4,7 @@
 import { analyzeCv, attachGeometry } from "./analyzer.js";
 import { applyAll } from "./optimize.js";
 import { rectsForRange } from "./extract.js";
-import { parseCv, parseDateRange, findEmploymentGaps } from "./parse-cv.js";
+import { parseCv, parseDateRange, findEmploymentGaps, normalizeHeading } from "./parse-cv.js";
 import { buildAho, ahoFind } from "./skills-match.js";
 import { buildCleanHtml, buildCvModel } from "./export-cv.js";
 import { buildFaithfulHtml } from "./export-reconstruct.js";
@@ -463,6 +463,81 @@ Lead Frontend — StartupXYZ
   const view = new Uint8Array(keep);
   assert.equal(view[0], 37); // '%'
   console.log("✓ cloneBytesForPdf survives transfer/detach OK");
+}
+
+// —— Exigeant: letter-spaced headings + readability cap ——
+{
+  assert.equal(normalizeHeading("E X P É R I E N C E"), "expérience");
+  assert.equal(normalizeHeading("F O R M A T I O N"), "formation");
+  assert.equal(normalizeHeading("C O M P É T E N C E S"), "compétences");
+  assert.ok(normalizeHeading("Expériences professionnelles").includes("exp"));
+
+  const spacedCv = `
+Marie Dupont
+marie@test.com | 06 12 34 56 78
+
+E X P É R I E N C E
+Dev — Co (2020 - 2022)
+- Piloté un projet
+
+F O R M A T I O N
+Master — Univ (2018 - 2020)
+
+C O M P É T E N C E S
+JavaScript, React, management
+`;
+  const spacedParsed = parseCv(spacedCv);
+  assert.ok(spacedParsed.sections.experience?.length > 0, "letter-spaced EXPÉRIENCE must parse");
+  assert.ok(spacedParsed.sections.education?.length > 0, "letter-spaced FORMATION must parse");
+  assert.ok(spacedParsed.sections.skills?.length > 0, "letter-spaced COMPÉTENCES must parse");
+  const spacedReport = analyzeCv(spacedCv, { pages: 1, parsed: spacedParsed });
+  const shOk = spacedReport.checklist.find((c) => c.id === "standard_headings");
+  assert.ok(shOk?.ok, "standard_headings ok when letter-spaced titles present");
+  console.log("✓ letter-spaced section headings detected OK");
+}
+
+{
+  // Simulate parse fail: text has words but no heading lines → readability capped
+  const noHeadings = `
+Samir Benali
+samir@exemple.com | 06 11 22 33 44
+linkedin.com/in/samir
+J'ai travaillé comme consultant avec de la formation interne et des compétences Excel.
+Texte suffisamment long pour l'extractibilité ATS avec des détails sur le parcours professionnel
+et des réalisations diverses sans titres de section standards machine-lisibles ici vraiment.
+`;
+  const r = analyzeCv(noHeadings, { pages: 1 });
+  const sh = r.checklist.find((c) => c.id === "standard_headings");
+  assert.ok(sh && sh.ok === false, "standard_headings must fail without section titles");
+  assert.ok(
+    r.categories.readability.score <= 18,
+    `readability must be capped when headings KO, got ${r.categories.readability.score}`
+  );
+  assert.ok(r.categories.readability.score < 25, "no perfect readability without headings");
+  assert.equal(r.passes, false, "cannot pass ATS without Expérience section");
+  console.log(
+    "✓ readability cap + fail without headings OK",
+    r.categories.readability.score,
+    r.total
+  );
+}
+
+{
+  // Regression: « formation » in a bullet still ≠ Education section
+  const bulletOnly = `
+Samir Benali
+samir@exemple.com | 06 11 22 33 44
+EXPÉRIENCE PROFESSIONNELLE
+Consultant — Acme (2018 - 2020)
+- Suivi de la formation interne des nouveaux arrivants
+COMPÉTENCES
+Excel, reporting
+`;
+  const r = analyzeCv(bulletOnly, { pages: 1 });
+  const eduOk = r.checklist.find((c) => c.id === "section_education");
+  assert.ok(eduOk && eduOk.ok === false, "formation in bullet ≠ Education heading");
+  assert.ok(r.categories.readability.score <= 18, "missing Formation caps readability");
+  console.log("✓ bullet « formation » still not a section + readability capped OK");
 }
 
 console.log("Tous les tests OK");
