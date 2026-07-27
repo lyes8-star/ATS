@@ -34,11 +34,17 @@ import * as extractApi from "./extract.js";
  * @param {{ onReset?: () => void }} hooks
  */
 export async function mountStudio(root, session, hooks = {}) {
-  session.annotations = (session.annotations || []).map((a) => ({
+  const raw = (session.annotations || []).map((a) => ({
     ...a,
     status: a.status || "pending",
   }));
-  session.selectedId = session.selectedId || session.annotations[0]?.id || null;
+  // Ciblage : ne garder que les annotations avec un passage identifiable
+  session.annotations = raw.filter((a) => hasUsableQuote(a));
+  if (session.report) session.report.annotations = session.annotations;
+  session.selectedId =
+    session.annotations.find((a) => a.id === session.selectedId)?.id ||
+    session.annotations[0]?.id ||
+    null;
   session.scoreBefore = session.report?.total ?? null;
   session.previewOptimized = false;
   session.previewShowsWorking = false;
@@ -49,6 +55,19 @@ export async function mountStudio(root, session, hooks = {}) {
   renderList(root, session);
   renderDetail(root, session);
   updateBar(root, session);
+  highlightSelection(root, session);
+  if (session.selectedId) {
+    const preview = root.querySelector("#cv-preview");
+    if (preview) scrollPreviewToAnnotation(preview, session.selectedId);
+  }
+}
+
+/** Quote utilisable pour cibler dans le fichier d'origine */
+function hasUsableQuote(a) {
+  const q = String(a.quote || "").trim();
+  if (!q) return false;
+  if (/^\([^)]*\)$/.test(q)) return false; // placeholders "(document)", "(début)", …
+  return true;
 }
 
 function studioShell(session) {
@@ -149,7 +168,6 @@ function studioShell(session) {
     <div class="studio-bar" role="region" aria-label="Actions">
       <p id="studio-bar-count" class="studio-bar-count"></p>
       <div class="studio-bar-actions">
-        <button type="button" class="btn-secondary" id="btn-back-report">${escapeHtml(t("studio.actions.backReport"))}</button>
         <button type="button" class="btn-secondary hidden" id="btn-pro-analyze">${escapeHtml(t("studio.actions.proAnalyze"))}</button>
       </div>
     </div>
@@ -223,23 +241,6 @@ function bindStudio(root, session, hooks) {
     focusFailedChecklist(root, session, btn.getAttribute("data-check-id"));
   });
 
-  root.querySelector("#btn-back-report")?.addEventListener("click", () => {
-    // Return to detailed report without destroying session
-    const upload = document.getElementById("view-upload");
-    const results = document.getElementById("view-results");
-    const studio = document.getElementById("view-studio");
-    studio?.classList.add("hidden");
-    upload?.classList.add("hidden");
-    results?.classList.remove("hidden");
-    const sub = document.getElementById("subnav-title");
-    if (sub) {
-      sub.textContent =
-        window.ATSi18n?.t?.("results.subnav") || "Résultat du contrôle";
-    }
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    window.ATSAnalytics?.track?.("ats_studio_back_report");
-  });
-
   root.querySelector("#btn-pro-analyze")?.addEventListener("click", () => {
     runProAnalyze(root, session);
   });
@@ -249,6 +250,7 @@ function bindStudio(root, session, hooks) {
   }
 
   showJdOverlap(root, session);
+  void hooks;
 }
 
 function showJdOverlap(root, session) {
@@ -457,6 +459,13 @@ function renderDetail(root, session) {
         ? `<p class="ann-placement">${escapeHtml(t("studio.zoneApprox"))}</p>`
         : "";
 
+  const quote = String(ann.quote || "").trim();
+  const suggestion = String(ann.suggestion || "").trim();
+  const showReform =
+    suggestion &&
+    suggestion !== quote &&
+    !/^\[.+\]$/.test(suggestion); /* skip bare placeholders like [email] alone if same as action */
+
   detail.innerHTML = `
     <div class="ann-detail-card severity-${ann.severity}">
       <p class="ann-where"><span>${escapeHtml(t("studio.detail.where"))}</span> ${
@@ -465,42 +474,59 @@ function renderDetail(root, session) {
         ann.shortLabel ? ` · ${escapeHtml(ann.shortLabel)}` : ""
       }</p>
       ${placementNote}
-      <p class="ann-quote">« ${escapeHtml(ann.quote || "")} »</p>
+      <p class="ann-quote-label">${escapeHtml(t("studio.detail.passage"))}</p>
+      <blockquote class="ann-quote">« ${escapeHtml(quote)} »</blockquote>
       <h3>${escapeHtml(ann.title)}</h3>
       <p class="ann-why-label">${escapeHtml(t("studio.detail.why"))}</p>
       <p class="ann-problem">${escapeHtml(ann.detail || "")}</p>
       <p class="ann-self-edit">${escapeHtml(t("studio.detail.selfEdit"))}</p>
-      <label class="ann-suggest-label" for="ann-suggest-input">${escapeHtml(t("studio.detail.correction"))}</label>
-      <textarea id="ann-suggest-input" class="ann-suggest" rows="3">${escapeHtml(ann.suggestion || "")}</textarea>
+      ${
+        showReform
+          ? `<p class="ann-reform-label">${escapeHtml(t("studio.detail.reform"))}</p>
+             <p class="ann-reform-text">${escapeHtml(suggestion)}</p>`
+          : ""
+      }
       <div class="ann-actions">
-        <button type="button" class="analyze-btn" id="btn-copy">${escapeHtml(t("studio.actions.copySuggestion"))}</button>
-        <button type="button" class="btn-secondary" id="btn-ignore">${escapeHtml(t("studio.actions.ignore"))}</button>
+        <button type="button" class="analyze-btn" id="btn-copy-passage">${escapeHtml(
+          t("studio.actions.copyPassage")
+        )}</button>
+        ${
+          showReform
+            ? `<button type="button" class="btn-ghost-text" id="btn-copy-reform">${escapeHtml(
+                t("studio.actions.copyReform")
+              )}</button>`
+            : ""
+        }
+        <button type="button" class="btn-secondary" id="btn-ignore">${escapeHtml(
+          t("studio.actions.ignore")
+        )}</button>
       </div>
     </div>`;
 
-  const input = detail.querySelector("#ann-suggest-input");
-
-  detail.querySelector("#btn-copy")?.addEventListener("click", async () => {
-    const suggestion = (input?.value ?? ann.suggestion ?? "").trim();
+  const copyText = async (text, toastKey) => {
     try {
-      if (suggestion && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(suggestion);
-      } else if (suggestion && input) {
-        input.focus();
-        input.select();
-        document.execCommand("copy");
+      if (text && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("clipboard");
       }
       session.annotations = updateAnnotation(session.annotations, ann.id, {
         status: "noted",
-        suggestion,
       });
-      showToast(root, t("studio.copied"));
-      window.ATSAnalytics?.track?.("ats_suggestion_copied", { id: ann.id });
+      showToast(root, t(toastKey));
+      window.ATSAnalytics?.track?.("ats_passage_copied", { id: ann.id });
       afterDecision(root, session);
     } catch (err) {
       console.warn(err);
       showToast(root, t("studio.copyFailed"));
     }
+  };
+
+  detail.querySelector("#btn-copy-passage")?.addEventListener("click", () => {
+    copyText(quote, "studio.copiedPassage");
+  });
+  detail.querySelector("#btn-copy-reform")?.addEventListener("click", () => {
+    copyText(suggestion, "studio.copiedReform");
   });
 
   detail.querySelector("#btn-ignore")?.addEventListener("click", () => {

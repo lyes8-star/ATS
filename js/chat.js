@@ -32,6 +32,14 @@ window.ATSChat = (function () {
         q: "Les fautes d’orthographe comptent-elles ?",
         a: "Oui pour les recruteurs. Nous signalons les fautes fréquentes FR/EN ; elles n’entrent pas toutes dans le score /100 mais restent un signal négatif fort.",
       },
+      {
+        q: "Comment sont ciblées les zones à corriger ?",
+        a: "Chaque suggestion pointe un passage précis de votre CV (citation + page). Copiez le passage, cherchez-le dans Word/Canva, puis corrigez vous-même — pas d’édition dans l’outil.",
+      },
+      {
+        q: "Y a-t-il un rapport séparé et un atelier ?",
+        a: "Non : après analyse vous voyez une vue unique avec le score et le CV annoté. Plus besoin de basculer entre rapport et suggestions.",
+      },
     ],
     en: [
       {
@@ -61,6 +69,14 @@ window.ATSChat = (function () {
       {
         q: "Do spelling mistakes matter?",
         a: "Yes for recruiters. We flag common FR/EN spelling issues — not all of them count toward the /100 score, but they remain a negative signal.",
+      },
+      {
+        q: "How are correction zones targeted?",
+        a: "Each suggestion points to a precise passage in your CV (quote + page). Copy the passage, find it in Word/Canva, then edit yourself — no in-tool editing.",
+      },
+      {
+        q: "Is there a separate report and studio?",
+        a: "No: after analysis you get one view with the score and the annotated CV. No more switching between report and suggestions.",
       },
     ],
   };

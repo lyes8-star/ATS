@@ -332,8 +332,14 @@ export function scrollPreviewToAnnotation(container, id) {
     container.querySelector(`.ann-box[data-id="${id}"]`) ||
     container.querySelector(`.ann-mark[data-id="${id}"]`) ||
     container.querySelector(`.ann-approx-banner[data-id="${id}"]`);
-  el?.scrollIntoView({ behavior: "smooth", block: "center" });
-  el?.focus?.({ preventScroll: true });
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.focus?.({ preventScroll: true });
+  el.classList.remove("ann-pulse");
+  // reflow to restart animation
+  void el.offsetWidth;
+  el.classList.add("ann-pulse");
+  window.setTimeout(() => el.classList.remove("ann-pulse"), 1200);
 }
 
 function escapeHtml(str) {

@@ -1128,7 +1128,23 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
     });
   }
 
-  return annotations;
+  return annotations
+    .map((a) => {
+      const q = String(a.quote || "").trim();
+      if (q && !/^\([^)]*\)$/.test(q)) return a;
+      const fromOffsets =
+        a.textStart != null && a.textEnd != null
+          ? text.slice(a.textStart, a.textEnd).replace(/\s+/g, " ").trim()
+          : "";
+      const fallback = fromOffsets || text.slice(0, 80).replace(/\s+/g, " ").trim();
+      if (!fallback) return null;
+      return {
+        ...a,
+        quote: fallback.slice(0, 140),
+        approximate: true,
+      };
+    })
+    .filter(Boolean);
 }
 
 function shortLabelFor(kind) {
