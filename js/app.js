@@ -352,7 +352,7 @@ function showResults() {
   els.viewUpload.classList.add("hidden");
   els.viewStudio?.classList.add("hidden");
   els.viewResults.classList.remove("hidden");
-  els.subnavTitle.textContent = window.ATSi18n?.t?.("results.subnav") || "Résultat de votre analyse ATS";
+  els.subnavTitle.textContent = window.ATSi18n?.t?.("results.subnav") || "Résultat du contrôle";
   els.btnNewTest.classList.remove("hidden");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -362,13 +362,9 @@ async function openStudio() {
   els.viewResults.classList.add("hidden");
   els.viewUpload.classList.add("hidden");
   els.viewStudio.classList.remove("hidden");
-  els.subnavTitle.textContent = window.ATSi18n?.t?.("studio.title") || "Atelier CV annoté";
+  els.subnavTitle.textContent = window.ATSi18n?.t?.("studio.title") || "Corrections proposées";
   els.btnNewTest.classList.remove("hidden");
-  await mountStudio(els.studioRoot, session, {
-    onRetest: (report) => {
-      void report;
-    },
-  });
+  await mountStudio(els.studioRoot, session, {});
   window.scrollTo({ top: 0, behavior: "smooth" });
   window.ATSAnalytics?.track?.("ats_studio_open", {
     annotations: session.annotations.length,
@@ -527,9 +523,10 @@ async function runAnalysis() {
     });
     setLoading(true, 3);
     await wait(350);
-    // Atelier = unique surface post-analyse (score + zones + corrections)
+    // Rapport détaillé = surface principale ; atelier = suggestions optionnelles
     setLoading(false);
-    await openStudio();
+    renderResults(report);
+    showResults();
   } catch (err) {
     setLoading(false);
     console.error(err);

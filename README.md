@@ -15,9 +15,9 @@ Ouvrir http://localhost:8080/
 ## Fonctionnalités produit
 
 - Upload PDF / DOCX — analyse **locale par défaut** (aucun envoi sans case Extrait / Pro)
-- **Atelier annoté = expérience principale** après analyse
+- **Rapport détaillé** après analyse ; atelier = suggestions à copier
 - Score /100 + 4 axes ; parse structuré, lexiques, overlap offre
-- **Export CV 1 page propre** (ATS Clean) — HTML/DOCX, **sans** mention générateur
+- **Rapport + correctifs** — l’utilisateur modifie son CV lui-même (pas d’export produit)
 - **Enrichissement Extrait** opt-in : LanguageTool, géocode, classification photo (extrait)
 - **Mode Pro** opt-in : Worker Cloudflare (LLM annotations, ESCO, PDF reflow + Extrait)
 - **Retest automatique** avec delta de score

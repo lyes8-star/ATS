@@ -18,28 +18,28 @@ Contexte typique : mobile ou desktop, première visite, besoin d’un score clai
 
 ## Product Purpose
 
-Outil gratuit **Test Mon CV** (`https://www.testmoncv.fr/`) : analyser un CV (PDF/DOCX) **localement dans le navigateur** (par défaut), produire un score /100, un **atelier de corrections**, télécharger le **document modifié**, avec options consenties :
+Outil gratuit **Test Mon CV** (`https://www.testmoncv.fr/`) : analyser un CV (PDF/DOCX) **localement dans le navigateur** (par défaut), produire un **score /100** et un **rapport détaillé** avec **correctifs proposés** (à appliquer soi-même dans le fichier d’origine), avec options consenties :
 
 - **Enrichissement Extrait** — Worker : LanguageTool, géocode Nominatim, classification photo vs logo (extrait uniquement, pas le fichier complet).
-- **Mode Pro** — Worker : LLM, ESCO, PDF + les mêmes enrichissements Extrait.
+- **Mode Pro** — Worker : suggestions LLM + ESCO (pas d’export PDF produit).
 
-Succès = le visiteur dépose un CV, atterrit dans l’atelier, accepte des corrections, télécharge un CV **lisible**, reteste le score, et choisit s’il active Extrait et/ou Mode Pro.
+Succès = le visiteur dépose un CV, lit le rapport, consulte les corrections proposées, **modifie son CV lui-même**, et choisit s’il active Extrait et/ou Mode Pro.
 
 ## Positioning
 
-Atelier de contrôle de CV — immédiat, respectueux de la vie privée — analyse navigateur + corrections guidées sur le document chargé.
+Contrôle de CV — immédiat, respectueux de la vie privée — analyse navigateur + correctifs à appliquer soi-même (pas d’export de CV).
 
 ## Conversion & proof
 
-- **Primary CTA:** déposer / contrôler mon CV → **ouvrir l’atelier**.
-- **Secondary CTAs:** voir le rapport ; télécharger le document modifié ; export linéaire ; retester ; aide FAQ ; pages légales / accessibilité.
-- **Line a visitor remembers after 10 seconds:** Votre CV à côté des zones à corriger — acceptez, téléchargez, retestez. Sans envoyer le fichier.
+- **Primary CTA:** déposer / contrôler mon CV → **rapport détaillé**.
+- **Secondary CTAs:** voir les corrections proposées ; aide FAQ ; pages légales / accessibilité.
+- **Line a visitor remembers after 10 seconds:** Score + passages à corriger — vous gardez la main sur votre fichier.
 - **Belief ladder:**
   1. L’outil est gratuit et immédiat.
   2. Mon CV ne quitte pas mon appareil.
-  3. Je vois **où** corriger sur mon CV (pas seulement un rapport).
-  4. J’accepte les suggestions, télécharge un CV **fidèle à ma mise en page**, et compare le score avant / après.
-- **Proof on hand:** score jauge, atelier split-view, delta de score, export HTML/PDF — compléter `.impeccable/assets/proof/` si témoignages.
+  3. Je vois **où** corriger sur mon CV (pas seulement un score).
+  4. Je copie les propositions et je modifie mon fichier d’origine.
+- **Proof on hand:** score jauge, checklist, suggestions annotées — compléter `.impeccable/assets/proof/` si témoignages.
 
 ## Brand Personality
 
