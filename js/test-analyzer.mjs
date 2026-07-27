@@ -828,4 +828,87 @@ Excel
   console.log("✓ export reparse recovers bullets OK", model.roles[0].bullets);
 }
 
+{
+  // Hard-only keyword density: soft skills alone must not inflate keyword score
+  const softHeavy = `
+Alice Soft
+alice@mail.com | 06 11 22 33 44
+Paris
+PROFIL
+Profil collaboratif et leadership.
+EXPÉRIENCE
+Assistant — Corp (2020 - 2022)
+- Responsable de la communication interne
+FORMATION
+Licence (2018 - 2020)
+COMPÉTENCES
+communication, leadership, collaboration, teamwork, créativité
+`;
+  const softR = analyzeCv(softHeavy, {
+    pages: 1,
+    skillsMatch: {
+      hits: ["communication", "leadership", "collaboration", "teamwork"],
+      hardHits: [],
+      softHits: ["communication", "leadership", "collaboration", "teamwork"],
+      count: 0,
+      density: 0,
+    },
+  });
+  const dens = softR.checklist.find((c) => c.id === "keyword_density");
+  assert.ok(dens && dens.ok === false, "soft-only skills fail keyword_density");
+  assert.ok(softR.categories.keywords.score <= 15, "keywords capped without JD / hard density");
+  console.log("✓ keyword hard-only scoring OK", softR.categories.keywords.score);
+}
+
+{
+  // Pass blocked without email even with strong content
+  const noEmail = goodCv.replace(/marie\.dupont@email\.com\s*\|\s*/, "");
+  const r = analyzeCv(noEmail, { fileName: "no-email.pdf", pages: 1 });
+  assert.equal(r.passes, false, "cannot pass ATS without email");
+  const emailDiag = r.diagnostics.find((d) => d.checkId === "email");
+  assert.ok(emailDiag, "diagnostic card for email KO");
+  console.log("✓ pass blocked without email OK");
+}
+
+{
+  // Accept in-place updates workingText via applyAll
+  const { applyAll } = await import("./optimize.js");
+  const src = "acceuil client et professionel\ntexte pour passer le seuil de caractères extractibles minimum ici.";
+  const rep = analyzeCv(src, { pages: 1 });
+  const typo = rep.annotations.find((a) => a.kind === "typo");
+  assert.ok(typo);
+  typo.status = "accepted";
+  const { text: workingText } = applyAll(src, [typo]);
+  assert.ok(!/acceuil/i.test(workingText) || workingText.includes(typo.suggestion));
+  assert.ok(workingText.includes(typo.suggestion) || /accueil/i.test(workingText));
+  console.log("✓ Accept in-place workingText OK");
+}
+
+{
+  // DOCX patch replace round-trip
+  const { mergeAdjacentWt, replaceInDocumentXml } = await import("./export-docx.js");
+  const xml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>acceuil client</w:t></w:r></w:p></w:body></w:document>`;
+  const merged = mergeAdjacentWt(xml);
+  const { xml: out, ok } = replaceInDocumentXml(merged, "acceuil", "accueil");
+  assert.equal(ok, true);
+  assert.ok(out.includes("accueil"));
+  assert.ok(!out.includes(">acceuil<"));
+  console.log("✓ DOCX patch replace round-trip OK");
+}
+
+{
+  const roleGaps = {
+    role: "developer",
+    missing: ["kubernetes", "terraform"],
+    present: ["javascript"],
+    packSize: 20,
+  };
+  const r = analyzeCv(goodCv, { pages: 1, roleKeywordGaps: roleGaps });
+  const rk = r.checklist.find((c) => c.id === "role_keywords");
+  assert.ok(rk && rk.ok === false, "role_keywords fails when pack terms missing");
+  const ann = r.annotations.find((a) => a.checkId === "role_keywords");
+  assert.ok(ann && /kubernetes/i.test(ann.suggestion), "role_keywords insert_after suggestion");
+  console.log("✓ role_keywords check + annotation OK");
+}
+
 console.log("Tous les tests OK");

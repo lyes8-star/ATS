@@ -76,7 +76,17 @@ export async function renderPdfPreview(container, pdfDoc, annotations, opts = {}
           badge.textContent = short ? `${num} · ${short}` : num;
           badge.title = ann.title || "";
           box.appendChild(badge);
-          if (ann.id === selectedId && ann.detail) {
+          if (ann.status === "accepted" && opts.showAppliedSuggestions) {
+            box.classList.add("is-applied");
+            const applied = document.createElement("span");
+            applied.className = "ann-applied-text";
+            const quote = (ann.quote || "").slice(0, 48);
+            const sug = (ann.suggestion || "").slice(0, 80);
+            applied.innerHTML = quote
+              ? `<span class="ann-strike">${escapeHtml(quote)}</span> → <span class="ann-new">${escapeHtml(sug)}</span>`
+              : `<span class="ann-new">${escapeHtml(sug)}</span>`;
+            box.appendChild(applied);
+          } else if (ann.id === selectedId && ann.detail) {
             const tip = document.createElement("span");
             tip.className = "ann-callout";
             tip.textContent = ann.title;
@@ -136,7 +146,20 @@ function highlightRange(index, start, end, ann, onSelect, selectedId) {
       ann.id === selectedId ? " is-selected" : ""
     }${ann.status === "accepted" ? " is-accepted" : ""}`;
     mark.dataset.id = ann.id;
-    mark.textContent = mid;
+    if (ann.status === "accepted" && ann.suggestion) {
+      mark.classList.add("is-applied");
+      mark.textContent = "";
+      const strike = document.createElement("span");
+      strike.className = "ann-strike";
+      strike.textContent = mid;
+      const arrow = document.createTextNode(" → ");
+      const neu = document.createElement("span");
+      neu.className = "ann-new";
+      neu.textContent = String(ann.suggestion).slice(0, 120);
+      mark.append(strike, arrow, neu);
+    } else {
+      mark.textContent = mid;
+    }
     mark.setAttribute("aria-label", `Annotation ${ann.id.replace("ann-", "")} : ${ann.title}`);
     mark.title = ann.title || "";
     if (ann.id === selectedId) {
@@ -311,4 +334,12 @@ export function scrollPreviewToAnnotation(container, id) {
     container.querySelector(`.ann-approx-banner[data-id="${id}"]`);
   el?.scrollIntoView({ behavior: "smooth", block: "center" });
   el?.focus?.({ preventScroll: true });
+}
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

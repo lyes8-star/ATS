@@ -141,6 +141,25 @@ function appendParagraphBeforeBodyEnd(xml, text) {
   return xml.slice(0, end) + p + xml.slice(end);
 }
 
+/** Clone an ArrayBuffer safely (detached-buffer aware). */
+export function cloneArrayBuffer(buffer) {
+  if (!buffer || buffer.detached) {
+    throw new Error("ArrayBuffer DOCX détaché ou manquant.");
+  }
+  return buffer.slice(0);
+}
+
+/**
+ * Applique une seule annotation acceptée sur un buffer DOCX (clone).
+ * @param {ArrayBuffer} arrayBuffer
+ * @param {object} ann
+ */
+export async function patchSingleAnnotation(arrayBuffer, ann) {
+  const clone = cloneArrayBuffer(arrayBuffer);
+  const marked = { ...ann, status: "accepted" };
+  return patchDocxInPlace(clone, [marked]);
+}
+
 /**
  * Applique les annotations acceptées sur un ArrayBuffer DOCX.
  * @param {ArrayBuffer} arrayBuffer
@@ -196,7 +215,11 @@ export async function patchDocxInPlace(arrayBuffer, annotations) {
  * @param {object} [meta]
  */
 export async function downloadOptimizedDocx(session, meta = {}) {
-  let buffer = session.extracted?.originalBuffer;
+  let buffer =
+    (session.workingDocxBuffer && !session.workingDocxBuffer.detached
+      ? session.workingDocxBuffer
+      : null) ||
+    session.extracted?.originalBuffer;
   if (!buffer || buffer.detached) {
     buffer = session.originalFile ? await session.originalFile.arrayBuffer() : null;
     if (buffer && session.extracted) {
@@ -207,27 +230,44 @@ export async function downloadOptimizedDocx(session, meta = {}) {
     throw new Error("Fichier DOCX original indisponible ou buffer détaché.");
   }
 
+  // Si workingDocxBuffer déjà patché au fil des Accept → télécharger tel quel
+  if (session.workingDocxBuffer && !session.workingDocxBuffer.detached) {
+    const blob = new Blob([session.workingDocxBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+    triggerDownload(blob, `${baseName(meta.fileName || session.originalFile?.name)}-modifie.docx`);
+    return { usedFallback: false, failed: [] };
+  }
+
   try {
     await ensurePizZipScript();
     const { blob, failed } = await patchDocxInPlace(buffer, session.annotations || []);
     if (failed.length > Math.ceil((session.annotations || []).filter((a) => a.status === "accepted").length / 2)) {
       // Trop d'échecs → fallback
       const { downloadReconstructedDocx } = await import("./export-reconstruct.js");
-      await downloadReconstructedDocx(session.optimizedText, session.report?.parsed, {
-        ...meta,
-        fallbackReason: "inplace-partial-fail",
-      });
+      await downloadReconstructedDocx(
+        session.workingText || session.optimizedText,
+        session.report?.parsed,
+        {
+          ...meta,
+          fallbackReason: "inplace-partial-fail",
+        }
+      );
       return { usedFallback: true, failed };
     }
-    triggerDownload(blob, `${baseName(meta.fileName || session.originalFile?.name)}-optimise.docx`);
+    triggerDownload(blob, `${baseName(meta.fileName || session.originalFile?.name)}-modifie.docx`);
     return { usedFallback: false, failed };
   } catch (err) {
     console.warn("DOCX in-place failed, fallback reconstruct", err);
     const { downloadReconstructedDocx } = await import("./export-reconstruct.js");
-    await downloadReconstructedDocx(session.optimizedText, session.report?.parsed, {
-      ...meta,
-      fallbackReason: String(err.message || err),
-    });
+    await downloadReconstructedDocx(
+      session.workingText || session.optimizedText,
+      session.report?.parsed,
+      {
+        ...meta,
+        fallbackReason: String(err.message || err),
+      }
+    );
     return { usedFallback: true, failed: [] };
   }
 }

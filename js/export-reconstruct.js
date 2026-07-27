@@ -202,10 +202,10 @@ function ensureDocxLib() {
 export async function downloadLayoutFaithful(session, meta = {}) {
   const format = session.extracted?.format;
   let resolvedParsed = meta.parsed ?? session.report?.parsed ?? null;
-  if (!meta.parsed && session.optimizedText) {
+  if (!meta.parsed && (session.workingText || session.optimizedText)) {
     try {
       const { parseCv } = await import("./parse-cv.js");
-      resolvedParsed = parseCv(session.optimizedText);
+      resolvedParsed = parseCv(session.workingText || session.optimizedText);
     } catch {
       /* keep stale */
     }
@@ -220,9 +220,13 @@ export async function downloadLayoutFaithful(session, meta = {}) {
     const { downloadOptimizedDocx } = await import("./export-docx.js");
     return downloadOptimizedDocx(session, opts);
   }
-  downloadCleanHtml(session.optimizedText, resolvedParsed, opts);
+  downloadCleanHtml(session.workingText || session.optimizedText, resolvedParsed, opts);
   try {
-    await downloadReconstructedDocx(session.optimizedText, resolvedParsed, opts);
+    await downloadReconstructedDocx(
+      session.workingText || session.optimizedText,
+      resolvedParsed,
+      opts
+    );
   } catch (err) {
     console.warn("DOCX reconstruct skipped", err);
   }

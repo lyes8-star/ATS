@@ -460,6 +460,7 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       applyMode: "insert_header",
       section: "Coordonnées",
       approximate: true,
+      checkId: "email",
     });
   }
   if (!detectPhone(text)) {
@@ -479,6 +480,7 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       applyMode: "insert_header",
       section: "Coordonnées",
       approximate: true,
+      checkId: "phone",
     });
   }
 
@@ -598,6 +600,7 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         suggestion,
         applyMode: "replace",
         approximate: false,
+        checkId: "metrics",
       });
       metricAnns += 1;
     }
@@ -623,8 +626,38 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
           : "- [Action] … ([chiffre : % / volume / €])",
         applyMode: "insert_after",
         approximate: true,
+        checkId: "metrics",
       });
     }
+  }
+
+  // Role pack hard keywords missing
+  const roleGaps = scores.keywords?.roleKeywordGaps;
+  if (roleGaps?.role && roleGaps.missing?.length) {
+    const skills = sectionAnchor(text, "skills", parsed);
+    const missingList = roleGaps.missing.slice(0, 5);
+    const suggestion = isEn
+      ? `Skills / tools: ${missingList.join(", ")}`
+      : `Compétences / outils : ${missingList.join(", ")}`;
+    push({
+      kind: "role_keywords",
+      axis: "keywords",
+      shortLabel: isEn ? "Role pack" : "Pack métier",
+      severity: "warning",
+      textStart: skills?.textStart ?? Math.max(0, text.length - 1),
+      textEnd: skills?.textEnd ?? text.length,
+      quote: skills?.quote || "(compétences)",
+      title: isEn
+        ? `Add hard skills for « ${roleGaps.role} »`
+        : `Ajouter des termes hard du pack « ${roleGaps.role} »`,
+      detail: isEn
+        ? `Missing from your CV vs the inferred role pack: ${missingList.join(", ")}. Only add tools you actually use.`
+        : `Manquants vs le pack de rôle inféré : ${missingList.join(", ")}. N'ajoutez que des outils que vous maîtrisez vraiment.`,
+      suggestion,
+      applyMode: "insert_after",
+      approximate: true,
+      checkId: "role_keywords",
+    });
   }
 
   // Gaps: employment roles only (no year-soup fallback)
@@ -708,6 +741,7 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         applyMode: "insert_after",
         section: "Compétences",
         approximate: !skills,
+        checkId: "keyword_density",
       });
     }
   }
@@ -1073,6 +1107,7 @@ function shortLabelFor(kind) {
     missing_metric: "Chiffre",
     gap: "Gap",
     keyword: "Mots-clés",
+    role_keywords: "Pack métier",
     length: "Longueur",
     layout: "Mise en page",
     reading_order: "Ordre",
@@ -1659,38 +1694,56 @@ function scoreContent(text, fileMeta = {}) {
   }
 
   const roles = fileMeta.parsed?.roles || [];
+  /* Exigent: métriques sur les 2 rôles récents (≥ 50 % des puces) */
+  const recentRoles = roles.slice(0, 2);
   let bullets = 0;
   let bulletsWithMetrics = 0;
-  if (roles.length) {
-    for (const r of roles) {
+  let bulletsWithAction = 0;
+  const ACTION_LINE =
+    /\b(pilot[ée]|dirig[ée]|d[ée]velopp[ée]|optimis[ée]|augment[ée]|r[ée]duit[e]?|lanc[ée]|cr[ée][ée]|mis en place|led|managed|developed|designed|created|launched|improved|optimized|increased|reduced|built|delivered|achieved)\b/i;
+  if (recentRoles.length) {
+    for (const r of recentRoles) {
       for (const b of r.bullets || []) {
         bullets += 1;
         if (bulletHasResultMetric(b)) bulletsWithMetrics += 1;
+        if (ACTION_LINE.test(b)) bulletsWithAction += 1;
       }
     }
   }
+  /* Fallback document-wide si peu de rôles parsés */
+  if (bullets < 2) {
+    bullets = 0;
+    bulletsWithMetrics = 0;
+    bulletsWithAction = 0;
+    for (const line of text.split(/\n/)) {
+      if (!/^[\s•\-\*]+/.test(line)) continue;
+      bullets += 1;
+      if (bulletHasResultMetric(line)) bulletsWithMetrics += 1;
+      if (ACTION_LINE.test(line)) bulletsWithAction += 1;
+    }
+  }
   const metrics = countResultMetrics(text);
-  if (bullets >= 3) {
-    const ratio = bulletsWithMetrics / bullets;
-    if (ratio >= 0.4) {
+  const metricsRatio = bullets ? bulletsWithMetrics / bullets : 0;
+  if (bullets >= 2) {
+    if (metricsRatio >= 0.5) {
       score += 9;
       checks.push({
         id: "metrics",
         ok: true,
-        label: `Résultats chiffrés présents (${bulletsWithMetrics}/${bullets} puces).`,
+        label: `Résultats chiffrés présents (${bulletsWithMetrics}/${bullets} puces des 2 rôles récents, seuil 50 %).`,
       });
-    } else if (ratio >= 0.15) {
-      score += 5;
+    } else if (metricsRatio >= 0.25) {
+      score += 4;
       checks.push({
         id: "metrics",
         ok: false,
-        label: "Quelques chiffres — ajoutez davantage de métriques.",
+        label: `Métriques insuffisantes (${bulletsWithMetrics}/${bullets} sur 2 rôles récents — seuil 50 %).`,
       });
     } else {
       checks.push({
         id: "metrics",
         ok: false,
-        label: "Presque aucun résultat chiffré — les ATS et RH valorisent les preuves.",
+        label: "Presque aucun résultat chiffré sur les rôles récents — les ATS et RH valorisent les preuves.",
       });
     }
   } else if (metrics >= 5) {
@@ -1701,11 +1754,11 @@ function scoreContent(text, fileMeta = {}) {
       label: `Résultats chiffrés présents (${metrics} indicateurs).`,
     });
   } else if (metrics >= 2) {
-    score += 5;
+    score += 4;
     checks.push({
       id: "metrics",
       ok: false,
-      label: "Quelques chiffres — ajoutez davantage de métriques.",
+      label: "Quelques chiffres — ajoutez davantage de métriques (seuil 50 % des puces récentes).",
     });
   } else {
     checks.push({
@@ -1713,6 +1766,22 @@ function scoreContent(text, fileMeta = {}) {
       ok: false,
       label: "Presque aucun résultat chiffré — les ATS et RH valorisent les preuves.",
     });
+  }
+
+  /* Verbe d'action sans objet/métrique = pas de full credit (déjà scoré plus haut via verbHits) */
+  if (bullets >= 2 && bulletsWithAction > 0) {
+    const actionWithMetric = recentRoles
+      .flatMap((r) => r.bullets || [])
+      .filter((b) => ACTION_LINE.test(b) && bulletHasResultMetric(b)).length;
+    const bareAction = Math.max(0, bulletsWithAction - actionWithMetric);
+    if (bareAction >= 2 && metricsRatio < 0.5) {
+      score = Math.max(0, score - 2);
+      checks.push({
+        id: "action_without_metric",
+        ok: false,
+        label: `${bareAction} verbe(s) d'action sans chiffre — créditez l'impact avec une métrique.`,
+      });
+    }
   }
 
   const wordCount = words.length;
@@ -1779,61 +1848,82 @@ function scoreKeywords(text, fileMeta = {}) {
   const checks = [];
   let score = 0;
   const skillsMatch = fileMeta.skillsMatch;
-  // Prefer Aho–Corasick hits; never naive substring for scoring
-  let found = [];
-  if (skillsMatch?.hits?.length) {
-    found = skillsMatch.hits.filter((k) => String(k).length >= 3);
+  const jd = fileMeta.jdOverlap;
+  const roleGaps = fileMeta.roleKeywordGaps;
+
+  // Hard skills only for density (soft skills excluded from scoring)
+  let hardFound = [];
+  if (skillsMatch?.hardHits?.length) {
+    hardFound = skillsMatch.hardHits.filter((k) => String(k).length >= 3);
+  } else if (skillsMatch?.hits?.length) {
+    hardFound = skillsMatch.hits.filter((k) => String(k).length >= 3);
   } else {
     const lower = text.toLowerCase();
-    found = PROFESSIONAL_KEYWORDS.filter((k) => {
+    hardFound = PROFESSIONAL_KEYWORDS.filter((k) => {
       if (k.length < 3) return false;
       const re = new RegExp(`\\b${escapeReg(k)}\\b`, "i");
       return re.test(lower);
     });
   }
-  const unique = new Set(found);
+  const unique = new Set(hardFound);
 
   if (unique.size >= 12) {
     score += 12;
     checks.push({
       id: "keyword_density",
       ok: true,
-      label: `Vocabulaire professionnel riche (${unique.size} mots-clés).`,
+      label: `Mots-clés métier hard détectés (${unique.size}).`,
     });
   } else if (unique.size >= 6) {
-    score += 8;
+    score += 6;
     checks.push({
       id: "keyword_density",
       ok: false,
-      label: `Densité de mots-clés moyenne (${unique.size}).`,
+      label: `Densité hard moyenne (${unique.size}) — ajoutez outils/méthodes concrets.`,
     });
   } else {
-    score += 3;
+    score += 2;
     checks.push({
       id: "keyword_density",
       ok: false,
-      label: "Peu de mots-clés métier — alignez-vous sur les offres cibles.",
+      label: "Peu de mots-clés métier hard — alignez-vous sur les outils de votre cible.",
     });
   }
 
   const diversity = unique.size;
   if (diversity >= 8) {
-    score += 8;
+    score += 6;
     checks.push({
       id: "keyword_diversity",
       ok: true,
-      label: "Bonne diversité lexicale pour matcher les offres.",
+      label: "Bonne diversité d'outils et méthodes.",
     });
   } else {
-    score += 3;
+    score += 2;
     checks.push({
       id: "keyword_diversity",
       ok: false,
-      label: "Diversifiez le vocabulaire (outils, soft skills, domaines).",
+      label: "Diversifiez les outils/méthodes (pas seulement des soft skills).",
     });
   }
 
-  const jd = fileMeta.jdOverlap;
+  // Role pack gaps
+  if (roleGaps?.role && roleGaps.missing?.length) {
+    checks.push({
+      id: "role_keywords",
+      ok: false,
+      label: `Pack « ${roleGaps.role} » : ${roleGaps.missing.length} terme(s) hard manquant(s) (ex. ${roleGaps.missing.slice(0, 3).join(", ")}).`,
+    });
+    score = Math.max(0, score - Math.min(4, roleGaps.missing.length));
+  } else if (roleGaps?.role) {
+    score += 2;
+    checks.push({
+      id: "role_keywords",
+      ok: true,
+      label: `Pack « ${roleGaps.role} » bien couvert.`,
+    });
+  }
+
   if (jd && jd.score != null) {
     if (jd.score >= 50) {
       score += 5;
@@ -1850,6 +1940,9 @@ function scoreKeywords(text, fileMeta = {}) {
         label: `Faible alignement avec l'offre (${jd.score}%) — reprenez les termes clés.`,
       });
     }
+  } else {
+    // Cap without JD — Excellent needs offer or strong hard density
+    score = Math.min(score, 15);
   }
 
   return {
@@ -1857,6 +1950,7 @@ function scoreKeywords(text, fileMeta = {}) {
     checks,
     keywords: [...unique].slice(0, 24),
     jdOverlap: jd || null,
+    roleKeywordGaps: roleGaps || null,
   };
 }
 
@@ -1907,6 +2001,73 @@ function buildTags(text, content, structure) {
 
 function buildDiagnostics(text, scores) {
   const diagnostics = [];
+  const checklist = buildChecklist(
+    scores.readability || { checks: [] },
+    scores.structure || { checks: [] },
+    scores.content || { checks: [] },
+    scores.keywords || { checks: [] }
+  );
+  const byId = Object.fromEntries(checklist.map((c) => [c.id, c]));
+
+  /** Cartes 1:1 pour checks critiques KO — lien studio via checkId */
+  const CRITICAL = [
+    {
+      id: "email",
+      severity: "critical",
+      title: "E-mail manquant",
+      tip: "→ Placez votre e-mail en texte clair en tête de CV.",
+    },
+    {
+      id: "phone",
+      severity: "critical",
+      title: "Téléphone manquant",
+      tip: "→ Ajoutez un numéro joignable en texte (pas dans une image).",
+    },
+    {
+      id: "identity_name",
+      severity: "critical",
+      title: "Nom candidat peu identifiable",
+      tip: "→ Mettez Prénom Nom en texte en haut du document.",
+    },
+    {
+      id: "standard_headings",
+      severity: "critical",
+      title: "Titres de sections non standards",
+      tip: "→ Utilisez Expérience / Formation / Compétences (libellés ATS).",
+    },
+    {
+      id: "metrics",
+      severity: "warning",
+      title: "Manque de résultats chiffrés",
+      tip: "→ Ajoutez des métriques sur ≥ 50 % des puces des 2 rôles récents.",
+    },
+    {
+      id: "keyword_density",
+      severity: "warning",
+      title: "Densité de mots-clés hard insuffisante",
+      tip: "→ Listez outils et méthodes concrets (pas seulement des soft skills).",
+    },
+    {
+      id: "role_keywords",
+      severity: "warning",
+      title: "Termes hard du pack métier manquants",
+      tip: "→ Complétez la section Compétences avec les outils de votre cible.",
+    },
+  ];
+
+  for (const crit of CRITICAL) {
+    const check = byId[crit.id];
+    if (check && !check.ok) {
+      diagnostics.push({
+        severity: crit.severity,
+        title: crit.title,
+        body: check.label || crit.title,
+        tip: crit.tip,
+        checkId: crit.id,
+      });
+    }
+  }
+
   // Prefer employment-only gaps from structured parse
   const empGaps = scores.structure?.employmentGaps || [];
   if (empGaps.length) {
@@ -1916,11 +2077,11 @@ function buildDiagnostics(text, scores) {
       title: "Trou d'emploi non justifié",
       body: `Un écart d'environ ${gap.months} mois entre deux expériences (${gap.from}–${gap.to}) peut interroger. Expliquez-le brièvement si pertinent.`,
       tip: "→ Mentionnez l'activité durant cette période : formation, projet, bénévolat, création d'entreprise.",
+      checkId: "employment_gap",
     });
   }
 
   const academicCount = ACADEMIC_MARKERS.filter((m) => text.toLowerCase().includes(m)).length;
-  // Soft signal only — not a penalty without a target JD
   if (academicCount >= 3 && !scores.keywords?.jdOverlap) {
     diagnostics.push({
       severity: "info",
@@ -1930,51 +2091,22 @@ function buildDiagnostics(text, scores) {
     });
   }
 
-  if (!scores.content.hasMetrics) {
-    diagnostics.push({
-      severity: "warning",
-      title: "Manque de résultats chiffrés",
-      body: "Sans métriques (%, €, volumes, délais), votre impact est difficile à scorer par un ATS et à juger par un RH.",
-      tip: "→ Ajoutez 3 à 5 chiffres concrets par expérience récente.",
-    });
-  }
-
-  const emailOk = detectEmail(text);
-  const phoneOk = detectPhone(text);
-  if (!emailOk || !phoneOk) {
-    diagnostics.push({
-      severity: "critical",
-      title: "Coordonnées incomplètes",
-      body: "Un ATS et un recruteur doivent pouvoir vous contacter immédiatement. Email et téléphone sont indispensables.",
-      tip: "→ Placez email + téléphone en haut du CV, en texte (pas dans une image).",
-    });
-  }
-
-  if (scores.readability.pages > 2) {
+  if (scores.readability?.pages > 2) {
     diagnostics.push({
       severity: "warning",
       title: "CV trop long pour les filtres ATS",
       body: "Au-delà de 2 pages, le signal dilue et certains parseurs tronquent le contenu.",
       tip: "→ Condenser expériences anciennes et retirer les détails non pertinents.",
+      checkId: "page_length",
     });
   }
 
-  if (scores.readability.hasColumnsSmell || scores.readability.hasTables) {
+  if (scores.readability?.hasColumnsSmell || scores.readability?.hasTables) {
     diagnostics.push({
       severity: "warning",
       title: "Mise en page potentiellement hostile ATS",
       body: "Colonnes ou tableaux peuvent faire lire le texte dans le désordre par certains robots.",
       tip: "→ Préférez une lecture linéaire ; gardez le design si vous exportez aussi une version ATS linéaire.",
-    });
-  }
-
-  const weakVerbs = scores.content.checks.some((c) => !c.ok && /verbe|faible/i.test(c.label));
-  if (weakVerbs) {
-    diagnostics.push({
-      severity: "info",
-      title: "Formulations passives ou descriptives",
-      body: "Les listes de tâches (« responsable de… ») scorent moins bien que des verbes d'action.",
-      tip: "→ Remplacez par : piloté, développé, augmenté, réduit, lancé…",
     });
   }
 
@@ -2323,7 +2455,37 @@ export function analyzeCv(rawText, fileMeta = {}) {
           title: "Missing quantified results",
           body:
             "Without metrics (%, €, volumes, deadlines), your impact is hard for an ATS to score and for HR to evaluate.",
-          tip: "→ Add 3 to 5 concrete indicators per recent role.",
+          tip: "→ Add metrics on ≥ 50% of bullets in your 2 most recent roles.",
+        },
+        "E-mail manquant": {
+          title: "Missing email",
+          body: "No email detected in plain text.",
+          tip: "→ Place your email in plain text at the top of the CV.",
+        },
+        "Téléphone manquant": {
+          title: "Missing phone number",
+          body: "No phone number detected in plain text.",
+          tip: "→ Add a reachable number as text (not inside an image).",
+        },
+        "Nom candidat peu identifiable": {
+          title: "Candidate name not clearly identifiable",
+          body: "First/last name missing or unclear at the top of the CV.",
+          tip: "→ Put First Last as selectable text at the top of the document.",
+        },
+        "Titres de sections non standards": {
+          title: "Non-standard section headings",
+          body: "ATS-friendly headings (Experience / Education / Skills) were not detected.",
+          tip: "→ Use Experience / Education / Skills (ATS labels).",
+        },
+        "Densité de mots-clés hard insuffisante": {
+          title: "Insufficient hard keyword density",
+          body: "Too few concrete tools/methods detected.",
+          tip: "→ List concrete tools and methods (not only soft skills).",
+        },
+        "Termes hard du pack métier manquants": {
+          title: "Missing hard terms from role pack",
+          body: "Your CV is missing key hard skills for the inferred role pack.",
+          tip: "→ Complete the Skills section with tools from your target role.",
         },
         "Coordonnées incomplètes": {
           title: "Incomplete contact details",
@@ -2408,7 +2570,17 @@ export function analyzeCv(rawText, fileMeta = {}) {
     });
   }
 
-  const passes = total >= 70 && readability.score >= 15 && !!structure.hasExp;
+  const emailOk = structure.checks.some((c) => c.id === "email" && c.ok);
+  const phoneOk = structure.checks.some((c) => c.id === "phone" && c.ok);
+  const completeRoleOk = structure.checks.some((c) => c.id === "complete_role" && c.ok);
+  const roleDatesOk = structure.checks.some((c) => c.id === "role_dates" && c.ok);
+  const passes =
+    total >= 70 &&
+    readability.score >= 15 &&
+    !!structure.hasExp &&
+    emailOk &&
+    phoneOk &&
+    (completeRoleOk || roleDatesOk);
 
   return {
     fileName: fileMeta.fileName || "CV",
@@ -2491,6 +2663,7 @@ export async function analyzeCvAsync(rawText, fileMeta = {}, opts = {}) {
     preloadAnalysisData,
     matchSkills,
     matchJdOverlap,
+    matchRoleKeywordGaps,
     countVerbs,
     loadTechWhitelist,
     loadAtsLayoutRules,
@@ -2519,9 +2692,13 @@ export async function analyzeCvAsync(rawText, fileMeta = {}, opts = {}) {
     profilePhotoHint: fileMeta.profilePhotoHint,
   });
   const detectedLang = detectLanguage(normalizeText(rawText));
-  const [skillsMatch, verbStats] = await Promise.all([
+  const [skillsMatch, verbStats, roleKeywordGaps] = await Promise.all([
     matchSkills(rawText),
     countVerbs(rawText, detectedLang === "en" ? "en" : "fr"),
+    matchRoleKeywordGaps(rawText, {
+      headline: parsed?.headline || "",
+      roleTitle: parsed?.roles?.[0]?.title || "",
+    }),
   ]);
 
   let jdOverlap = null;
@@ -2554,6 +2731,7 @@ export async function analyzeCvAsync(rawText, fileMeta = {}, opts = {}) {
     skillsMatch,
     verbStats,
     jdOverlap,
+    roleKeywordGaps,
     techWhitelist,
     spelling,
     layoutRules,
