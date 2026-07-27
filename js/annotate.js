@@ -71,8 +71,17 @@ export async function renderPdfPreview(container, pdfDoc, annotations, opts = {}
         if (ri === 0) {
           const badge = document.createElement("span");
           badge.className = "ann-badge";
-          badge.textContent = ann.id.replace("ann-", "");
+          const num = ann.id.replace("ann-", "");
+          const short = (ann.shortLabel || "").slice(0, 14);
+          badge.textContent = short ? `${num} · ${short}` : num;
+          badge.title = ann.title || "";
           box.appendChild(badge);
+          if (ann.id === selectedId && ann.detail) {
+            const tip = document.createElement("span");
+            tip.className = "ann-callout";
+            tip.textContent = ann.title;
+            box.appendChild(tip);
+          }
         }
         box.addEventListener("click", (e) => {
           e.preventDefault();
@@ -129,14 +138,29 @@ function highlightRange(index, start, end, ann, onSelect, selectedId) {
     mark.dataset.id = ann.id;
     mark.textContent = mid;
     mark.setAttribute("aria-label", `Annotation ${ann.id.replace("ann-", "")} : ${ann.title}`);
+    mark.title = ann.title || "";
+    if (ann.id === selectedId) {
+      mark.dataset.callout = ann.title || "";
+    }
     mark.addEventListener("click", (e) => {
       e.preventDefault();
       onSelect?.(ann.id);
     });
 
+    // Callout next to selected mark
+    const wrapMark = document.createElement("span");
+    wrapMark.className = "ann-mark-wrap";
+    wrapMark.appendChild(mark);
+    if (ann.id === selectedId) {
+      const tip = document.createElement("span");
+      tip.className = "ann-callout ann-callout-inline";
+      tip.textContent = ann.title || ann.shortLabel || "";
+      wrapMark.appendChild(tip);
+    }
+
     const frag = document.createDocumentFragment();
     if (before) frag.appendChild(document.createTextNode(before));
-    frag.appendChild(mark);
+    frag.appendChild(wrapMark);
     if (after) frag.appendChild(document.createTextNode(after));
     node.parentNode.replaceChild(frag, node);
     return true;

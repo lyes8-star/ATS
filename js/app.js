@@ -335,12 +335,6 @@ async function openStudio() {
   els.subnavTitle.textContent = window.ATSi18n?.t?.("studio.title") || "Atelier CV annoté";
   els.btnNewTest.classList.remove("hidden");
   await mountStudio(els.studioRoot, session, {
-    onShowReport: () => {
-      renderResults(session.report);
-      showResults();
-      // From report, CTA returns to studio
-      document.getElementById("btn-open-studio")?.addEventListener("click", openStudio);
-    },
     onRetest: (report) => {
       void report;
     },
@@ -459,8 +453,7 @@ async function runAnalysis() {
     });
     setLoading(true, 3);
     await wait(350);
-    // Prépare le rapport (lien secondaire depuis l'atelier) mais ouvre l'atelier en premier.
-    renderResults(report);
+    // Atelier = unique surface post-analyse (score + zones + corrections)
     setLoading(false);
     await openStudio();
   } catch (err) {

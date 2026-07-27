@@ -102,7 +102,19 @@ const passiveReport = analyzeCv(passiveCv, { pages: 1 });
 const passiveAnn = passiveReport.annotations.find((a) => a.kind === "passive_verb");
 assert.ok(passiveAnn, "expected passive_verb annotation");
 assert.ok(passiveAnn.suggestion.toLowerCase().includes("pilot"));
+assert.ok(!/\+18|40 clients|\+X\s*%/i.test(passiveAnn.suggestion), "no fake metrics on passive");
+assert.ok(/Remplacer|Replace/i.test(passiveAnn.title) && /responsable/i.test(passiveAnn.title));
 console.log("✓ Annotation verbe passif OK");
+
+const typoReport = analyzeCv(
+  "acceuil client et professionel\n" + "texte pour passer le seuil de caractères extractibles minimum ici. ".repeat(3),
+  { pages: 1 }
+);
+const typoAnn = typoReport.annotations.find((a) => a.kind === "typo");
+assert.ok(typoAnn);
+assert.ok(/Corriger|Fix/i.test(typoAnn.title) && typoAnn.title.includes(typoAnn.quote));
+assert.ok(!/prenom\.nom@email\.com/i.test(JSON.stringify(typoReport.annotations)));
+console.log("✓ Annotation typo concrète OK");
 
 // attachGeometry fallback
 const geo = attachGeometry(passiveReport.annotations, [], {
