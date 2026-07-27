@@ -2,7 +2,7 @@
  * Export CV — thème « ATS Clean » : 1 colonne, 1 page, zéro branding.
  * Contenu structuré via parse-cv (pas de dump mur de texte).
  */
-import { parseCv } from "./parse-cv.js";
+import { parseCv, LOCATION_RE, ADDRESS_RE, isSectionHeader } from "./parse-cv.js";
 
 function escapeHtml(str) {
   return String(str)
@@ -10,6 +10,262 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+const PLACEHOLDER_RE = /^\[[^\]]{2,80}\]$/;
+const EMAIL_LIKE = /@/;
+const PHONE_LIKE = /(\+?\d[\d\t .,\-]{7,}\d)|(\b0[1-9](?:[.\-\t ]?\d{2}){4}\b)/;
+const LINKEDIN_LIKE = /linkedin\.com\/in\/[\w\-]+/i;
+const JOB_TITLE_LIKE =
+  /\b(chargé|chargée|consultant|manager|développeur|développeuse|ingénieur|responsable|directeur|directrice|assistant|recrutement|commercial|curriculum|vitae)\b/i;
+
+function isUnresolvedPlaceholder(line) {
+  return PLACEHOLDER_RE.test(String(line || "").trim());
+}
+
+function isLocationOrAddressLine(line) {
+  const t = String(line || "").trim();
+  if (!t) return false;
+  // Strip decorative brackets for detection: [75001 Paris]
+  const inner = t.replace(/^\[/, "").replace(/\]$/, "").trim();
+  if (isUnresolvedPlaceholder(t) && /(paris|ville|city|adresse|address|\d{5})/i.test(t)) return true;
+  try {
+    return LOCATION_RE.test(inner) || ADDRESS_RE.test(inner) || LOCATION_RE.test(t) || ADDRESS_RE.test(t);
+  } catch {
+    return /\b\d{5}\b/.test(inner) || /\b(Paris|Lyon|Marseille)\b/i.test(inner);
+  }
+}
+
+function isContactNoiseLine(line) {
+  const t = String(line || "").trim();
+  if (!t) return true;
+  if (EMAIL_LIKE.test(t) || PHONE_LIKE.test(t) || LINKEDIN_LIKE.test(t)) return true;
+  if (isLocationOrAddressLine(t)) return true;
+  if (isUnresolvedPlaceholder(t)) return true;
+  if (isSectionHeader({ text: t })) return true;
+  return false;
+}
+
+function cleanDisplayField(s) {
+  return String(s || "")
+    .replace(/\(\s*\)/g, "")
+    .replace(/\[\s*\]/g, "")
+    .replace(/\s+[—–\-]\s*$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function resolveDisplayName(parsed, flat) {
+  const fromContact =
+    parsed.contact?.name ||
+    [parsed.contact?.firstName, parsed.contact?.lastName].filter(Boolean).join(" ") ||
+    "";
+  if (
+    fromContact &&
+    !isUnresolvedPlaceholder(fromContact) &&
+    !isLocationOrAddressLine(fromContact) &&
+    !JOB_TITLE_LIKE.test(fromContact)
+  ) {
+    return fromContact;
+  }
+  for (const l of flat.header || []) {
+    const t = String(l || "").trim();
+    if (t.length < 3 || t.length > 60) continue;
+    if (isContactNoiseLine(t)) continue;
+    if (JOB_TITLE_LIKE.test(t)) continue;
+    const tokens = t.split(/\s+/).filter(Boolean);
+    const alpha = tokens.filter((x) => /^[A-Za-zÀ-ü][A-Za-zÀ-ü'-]*$/.test(x));
+    if (alpha.length >= 2 && alpha.length <= 4) return alpha.join(" ");
+  }
+  return "Curriculum Vitae";
+}
+
+function resolveHeadline(parsed, flat, name) {
+  const candidates = [];
+  if (parsed.headline) candidates.push(parsed.headline);
+  for (const l of flat.header || []) candidates.push(l);
+  if (parsed.roles?.[0]?.title) candidates.push(parsed.roles[0].title);
+  for (const c of candidates) {
+    const t = String(c || "").trim();
+    if (!t || t === name) continue;
+    if (t.length < 3 || t.length > 80) continue;
+    if (isContactNoiseLine(t)) continue;
+    if (isLocationOrAddressLine(t)) continue;
+    return t;
+  }
+  return "";
+}
+
+function resolveLocation(parsed, flat) {
+  const raw = parsed.contact?.location || parsed.contact?.address || "";
+  if (raw && !isUnresolvedPlaceholder(raw)) {
+    // Prefer bare city from "[75001 Paris]" style capture
+    return String(raw).replace(/^\[/, "").replace(/\]$/, "").trim();
+  }
+  for (const l of flat.header || []) {
+    const t = String(l || "").trim();
+    const inner = t.replace(/^\[/, "").replace(/\]$/, "").trim();
+    if (isLocationOrAddressLine(t) && !EMAIL_LIKE.test(t) && !PHONE_LIKE.test(t)) {
+      return inner;
+    }
+  }
+  return "";
+}
+
+/**
+ * Construit un modèle de layout CV depuis texte (+ parse optionnel).
+ * Compresse vers ~1 page (rôles anciens raccourcis).
+ * Toujours reparse le texte pour éviter un `parsed` stale après optimize.applyAll.
+ */
+export function buildCvModel(optimizedText, parsedIn = null, meta = {}) {
+  const text = optimizedText || "";
+  // Prefer fresh parse of optimized text; merge contact hints from parsedIn if present
+  const fresh = parseCv(text);
+  const parsed = {
+    ...fresh,
+    contact: {
+      ...fresh.contact,
+      // Prefer non-placeholder identity from either source
+      name:
+        (!isUnresolvedPlaceholder(fresh.contact?.name) && fresh.contact?.name) ||
+        (!isUnresolvedPlaceholder(parsedIn?.contact?.name) && parsedIn?.contact?.name) ||
+        fresh.contact?.name ||
+        parsedIn?.contact?.name ||
+        null,
+      firstName: fresh.contact?.firstName || parsedIn?.contact?.firstName || null,
+      lastName: fresh.contact?.lastName || parsedIn?.contact?.lastName || null,
+      email: fresh.contact?.email || parsedIn?.contact?.email || null,
+      phone: fresh.contact?.phone || parsedIn?.contact?.phone || null,
+      linkedin: fresh.contact?.linkedin || parsedIn?.contact?.linkedin || null,
+      location:
+        (!isUnresolvedPlaceholder(fresh.contact?.location) && fresh.contact?.location) ||
+        (!isUnresolvedPlaceholder(parsedIn?.contact?.location) && parsedIn?.contact?.location) ||
+        fresh.contact?.location ||
+        parsedIn?.contact?.location ||
+        null,
+      address:
+        (!isUnresolvedPlaceholder(fresh.contact?.address) && fresh.contact?.address) ||
+        (!isUnresolvedPlaceholder(parsedIn?.contact?.address) && parsedIn?.contact?.address) ||
+        fresh.contact?.address ||
+        parsedIn?.contact?.address ||
+        null,
+    },
+    headline: fresh.headline || parsedIn?.headline || null,
+  };
+  const flat = parseCvSections(text);
+  const lang = meta.lang === "en" ? "en" : "fr";
+
+  const name = resolveDisplayName(parsed, flat);
+  const title = resolveHeadline(parsed, flat, name);
+  const location = resolveLocation(parsed, flat);
+
+  const contactParts = [
+    parsed.contact?.email,
+    parsed.contact?.phone,
+    parsed.contact?.linkedin,
+    location,
+  ].filter((p) => p && !isUnresolvedPlaceholder(p));
+  if (!contactParts.length) {
+    for (const l of flat.header) {
+      if (EMAIL_LIKE.test(l) || LINKEDIN_LIKE.test(l) || PHONE_LIKE.test(l)) {
+        if (!isUnresolvedPlaceholder(l)) contactParts.push(l);
+      }
+    }
+  }
+
+  const summaryLines = (flat.summary?.length ? flat.summary : parsed.sections?.summary || [])
+    .filter((l) => l && !/^profil$/i.test(l.trim()) && !isUnresolvedPlaceholder(l))
+    .slice(0, 4);
+
+  // Roles from structured parse; merge flat bullets when structured bullets empty
+  let roles = (parsed.roles || []).map((r) => ({
+    title: cleanDisplayField(r.title),
+    company: cleanDisplayField(r.company),
+    startYear: r.startYear,
+    endYear: r.endYear,
+    ongoing: r.ongoing,
+    bullets: (r.bullets || []).map(cleanDisplayField).filter(Boolean).slice(0, 5),
+  }));
+
+  const flatRoles = flat.experience?.length ? rolesFromFlatLines(flat.experience) : [];
+  if (!roles.length) {
+    roles = flatRoles;
+  } else if (flatRoles.length) {
+    roles = roles.map((r, i) => {
+      if ((r.bullets || []).length) return r;
+      const match =
+        flatRoles.find(
+          (f) =>
+            (f.title && r.title && f.title.toLowerCase().includes(r.title.toLowerCase().slice(0, 12))) ||
+            (f.company && r.company && f.company.toLowerCase() === r.company.toLowerCase())
+        ) || flatRoles[i];
+      if (match?.bullets?.length) {
+        return { ...r, bullets: match.bullets.slice(0, 5) };
+      }
+      return r;
+    });
+  }
+
+  // Soft 1-page compression: keep recent roles fuller, trim older
+  const maxRoles = 4;
+  if (roles.length > maxRoles) {
+    roles = roles.slice(0, maxRoles - 1).concat(
+      roles.slice(maxRoles - 1).map((r) => ({
+        ...r,
+        bullets: (r.bullets || []).slice(0, 1),
+      }))
+    );
+  } else {
+    roles = roles.map((r, i) => ({
+      ...r,
+      bullets: (r.bullets || []).slice(0, i < 2 ? 5 : 3),
+    }));
+  }
+
+  let education = (parsed.educationRoles || []).map((r) => ({
+    title: cleanDisplayField(r.title || r.raw),
+    company: cleanDisplayField(r.company),
+    startYear: r.startYear,
+    endYear: r.endYear,
+  }));
+  if (!education.length) {
+    education = (flat.education || [])
+      .filter((l) => l && !/^formation/i.test(l) && !isUnresolvedPlaceholder(l))
+      .slice(0, 4)
+      .map((l) => ({ title: cleanDisplayField(l), company: "", startYear: null, endYear: null }));
+  }
+  education = education.slice(0, 3);
+
+  const skills =
+    (parsed.skills?.length ? parsed.skills : extractSkillsFromFlat(flat.skills)).slice(0, 18);
+
+  const languages = (flat.languages || parsed.sections?.languages || [])
+    .filter((l) => l && !/^langues?/i.test(l) && !isUnresolvedPlaceholder(l))
+    .slice(0, 6);
+
+  const other = (flat.other || [])
+    .filter((l) => l && !isUnresolvedPlaceholder(l))
+    .slice(0, 6);
+
+  const order =
+    parsed.sectionOrder?.filter((k) => k !== "header").length > 0
+      ? parsed.sectionOrder.filter((k) => k !== "header")
+      : ["summary", "experience", "education", "skills", "languages", "other"];
+
+  return {
+    lang,
+    name,
+    title,
+    contactLine: contactParts.join(" · "),
+    summaryLines,
+    roles,
+    education,
+    skills,
+    languages,
+    other,
+    order,
+    titles: SECTION_TITLES[lang],
+  };
 }
 
 export const SECTION_TITLES = {
@@ -90,125 +346,6 @@ export function parseCvSections(text) {
   }
 
   return sections;
-}
-
-/**
- * Construit un modèle de layout CV depuis texte (+ parse optionnel).
- * Compresse vers ~1 page (rôles anciens raccourcis).
- */
-export function buildCvModel(optimizedText, parsedIn = null, meta = {}) {
-  const text = optimizedText || "";
-  const parsed = parsedIn || parseCv(text);
-  const flat = parseCvSections(text);
-  const lang = meta.lang === "en" ? "en" : "fr";
-
-  const name =
-    parsed.contact?.name ||
-    flat.header.find((l) => l.length > 2 && l.length < 60 && !/@/.test(l) && !/\d{2}/.test(l)) ||
-    flat.header[0] ||
-    "Curriculum Vitae";
-
-  const title =
-    flat.header.find(
-      (l) =>
-        l !== name &&
-        l.length > 3 &&
-        l.length < 80 &&
-        !/@/.test(l) &&
-        !/linkedin|http|tel|\+?\d[\d\s.\-]{7,}/i.test(l)
-    ) ||
-    parsed.roles?.[0]?.title ||
-    "";
-
-  const contactParts = [
-    parsed.contact?.email,
-    parsed.contact?.phone,
-    parsed.contact?.linkedin,
-  ].filter(Boolean);
-  if (!contactParts.length) {
-    for (const l of flat.header.slice(1)) {
-      if (/@|linkedin|\+?\d/.test(l)) contactParts.push(l);
-    }
-  }
-
-  const summaryLines = (flat.summary?.length ? flat.summary : parsed.sections?.summary || [])
-    .filter((l) => l && !/^profil$/i.test(l.trim()))
-    .slice(0, 4);
-
-  // Roles from structured parse preferred; else reconstruct from flat experience lines
-  let roles = (parsed.roles || []).map((r) => ({
-    title: r.title,
-    company: r.company,
-    startYear: r.startYear,
-    endYear: r.endYear,
-    ongoing: r.ongoing,
-    bullets: (r.bullets || []).slice(0, 5),
-  }));
-
-  if (!roles.length && flat.experience?.length) {
-    roles = rolesFromFlatLines(flat.experience);
-  }
-
-  // Soft 1-page compression: keep recent roles fuller, trim older
-  const maxRoles = 4;
-  if (roles.length > maxRoles) {
-    roles = roles.slice(0, maxRoles - 1).concat(
-      roles.slice(maxRoles - 1).map((r) => ({
-        ...r,
-        bullets: (r.bullets || []).slice(0, 1),
-      }))
-    );
-  } else {
-    roles = roles.map((r, i) => ({
-      ...r,
-      bullets: (r.bullets || []).slice(0, i < 2 ? 5 : 3),
-    }));
-  }
-
-  let education = (parsed.educationRoles || []).map((r) => ({
-    title: r.title || r.raw,
-    company: r.company,
-    startYear: r.startYear,
-    endYear: r.endYear,
-  }));
-  if (!education.length) {
-    education = (flat.education || [])
-      .filter((l) => l && !/^formation/i.test(l))
-      .slice(0, 4)
-      .map((l) => ({ title: l, company: "", startYear: null, endYear: null }));
-  }
-  education = education.slice(0, 3);
-
-  const skills =
-    (parsed.skills?.length ? parsed.skills : extractSkillsFromFlat(flat.skills)).slice(0, 18);
-
-  const languages = (flat.languages || parsed.sections?.languages || [])
-    .filter((l) => l && !/^langues?/i.test(l))
-    .slice(0, 6);
-
-  const other = (flat.other || [])
-    .filter(Boolean)
-    .slice(0, 6);
-
-  const order =
-    parsed.sectionOrder?.filter((k) => k !== "header").length > 0
-      ? parsed.sectionOrder.filter((k) => k !== "header")
-      : ["summary", "experience", "education", "skills", "languages", "other"];
-
-  return {
-    lang,
-    name,
-    title,
-    contactLine: contactParts.join(" · "),
-    summaryLines,
-    roles,
-    education,
-    skills,
-    languages,
-    other,
-    order,
-    titles: SECTION_TITLES[lang],
-  };
 }
 
 function rolesFromFlatLines(lines) {

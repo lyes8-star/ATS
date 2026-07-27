@@ -201,19 +201,28 @@ function ensureDocxLib() {
  */
 export async function downloadLayoutFaithful(session, meta = {}) {
   const format = session.extracted?.format;
+  let resolvedParsed = meta.parsed ?? session.report?.parsed ?? null;
+  if (!meta.parsed && session.optimizedText) {
+    try {
+      const { parseCv } = await import("./parse-cv.js");
+      resolvedParsed = parseCv(session.optimizedText);
+    } catch {
+      /* keep stale */
+    }
+  }
   const opts = {
     fileName: meta.fileName || session.originalFile?.name,
     lang: meta.lang || window.ATSi18n?.getLang?.() || "fr",
-    parsed: session.report?.parsed,
-    layoutHostile: session.report?.layoutHostile,
+    parsed: resolvedParsed,
+    layoutHostile: meta.layoutHostile ?? session.report?.layoutHostile,
   };
   if (format === "docx") {
     const { downloadOptimizedDocx } = await import("./export-docx.js");
     return downloadOptimizedDocx(session, opts);
   }
-  downloadCleanHtml(session.optimizedText, session.report?.parsed, opts);
+  downloadCleanHtml(session.optimizedText, resolvedParsed, opts);
   try {
-    await downloadReconstructedDocx(session.optimizedText, session.report?.parsed, opts);
+    await downloadReconstructedDocx(session.optimizedText, resolvedParsed, opts);
   } catch (err) {
     console.warn("DOCX reconstruct skipped", err);
   }

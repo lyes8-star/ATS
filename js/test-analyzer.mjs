@@ -763,4 +763,69 @@ Lecture, cinéma, sport, voyages, musique
   console.log("✓ photo face keeps ATS warning OK");
 }
 
+{
+  const { buildCvModel } = await import("./export-cv.js");
+  const { applyAll } = await import("./optimize.js");
+  const sparse = `
+Chargé de recrutement
+lyes@exemple.com | 07 69 43 78 86
+FORMATION
+Master RH — EFFICOM (2017 – 2019)
+EXPÉRIENCE
+Consultant — LTD (2020 - 2022)
+Suivi des dossiers candidats au quotidien
+`;
+  const optimized = applyAll(sparse, [
+    {
+      id: "loc",
+      status: "accepted",
+      applyMode: "insert_header",
+      suggestion: "[75001 Paris]",
+      checkId: "identity_address",
+    },
+  ]).text;
+  assert.ok(optimized.startsWith("[75001 Paris]\n"), "header inserts as own line");
+  assert.ok(!optimized.startsWith("[75001 Paris] |"), "no pipe-joined header");
+  const stale = parseCv(sparse);
+  const model = buildCvModel(optimized, stale, { lang: "fr" });
+  assert.notEqual(model.name, "[75001 Paris]");
+  assert.ok(!/75001/.test(model.name), "name is not postal address");
+  assert.ok(!/\[75001/.test(model.title || ""), "headline is not location placeholder");
+  assert.match(model.contactLine, /75001 Paris|Paris/);
+  assert.ok(!/\(\)/.test(JSON.stringify(model.education)), "no empty () in education");
+  assert.ok(
+    (model.roles[0]?.bullets || []).length >= 1,
+    "soft/prose bullets recovered for experience"
+  );
+  console.log("✓ export identity/location/() /bullets OK", model.name, model.contactLine);
+}
+
+{
+  const { buildCvModel } = await import("./export-cv.js");
+  const withName = `
+Lyes Amara
+Chargé de recrutement
+lyes@exemple.com | 06 12 34 56 78
+Paris
+EXPÉRIENCE
+Consultant — Acme (2019 - 2021)
+- Mission A
+FORMATION
+Master (2017 - 2019)
+COMPÉTENCES
+Excel
+`;
+  const staleEmptyBullets = parseCv(withName);
+  // Simulate stale parse with empty bullets while optimized text gained a bullet
+  staleEmptyBullets.roles = staleEmptyBullets.roles.map((r) => ({ ...r, bullets: [] }));
+  const optimized = withName.replace("- Mission A", "- Mission A\n- Mission B ajoutée");
+  const model = buildCvModel(optimized, staleEmptyBullets, { lang: "fr" });
+  assert.equal(model.name, "Lyes Amara");
+  assert.ok(
+    (model.roles[0]?.bullets || []).some((b) => /Mission/i.test(b)),
+    "fresh parse recovers bullets despite stale empty roles"
+  );
+  console.log("✓ export reparse recovers bullets OK", model.roles[0].bullets);
+}
+
 console.log("Tous les tests OK");

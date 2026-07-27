@@ -416,18 +416,45 @@ function wrapText(text, font, size, maxWidth) {
 
 function buildPdfLines(text, lang) {
   const blocks = [];
-  const lines = String(text || "").split(/\n/);
-  let first = true;
+  const lines = String(text || "")
+    .split(/\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
   const headerRe =
     /^(exp[ée]rience|formation|comp[ée]tences?|langues?|profil|skills|education|languages)/i;
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) continue;
-    if (first) {
-      blocks.push({ type: "h1", text: line });
-      first = false;
+  const placeholderRe = /^\[[^\]]{2,80}\]$/;
+  const locationRe =
+    /\b(?:\d{5}\s+)?(?:Paris|Lyon|Marseille|Lille|Toulouse|Remote|France)\b|\b\d{5}\b/i;
+  const emailRe = /@/;
+  const phoneRe = /(\+?\d[\d\t .,\-]{7,}\d)|(\b0[1-9](?:[.\-\t ]?\d{2}){4}\b)/;
+
+  const isBadH1 = (line) =>
+    placeholderRe.test(line) ||
+    locationRe.test(line) ||
+    emailRe.test(line) ||
+    phoneRe.test(line) ||
+    headerRe.test(line);
+
+  const isNameLike = (line) => {
+    if (isBadH1(line) || line.length > 60) return false;
+    const tokens = line.split(/\s+/).filter(Boolean);
+    const alpha = tokens.filter((t) => /^[A-Za-zÀ-ü][A-Za-zÀ-ü'-]*$/.test(t));
+    return alpha.length >= 2 && alpha.length <= 4;
+  };
+
+  let h1 =
+    lines.find((l) => isNameLike(l)) ||
+    lines.find((l) => !isBadH1(l) && l.length > 2 && l.length < 60) ||
+    (lang === "en" ? "Curriculum Vitae" : "Curriculum Vitae");
+  blocks.push({ type: "h1", text: h1 });
+
+  let skippedH1 = false;
+  for (const line of lines) {
+    if (!skippedH1 && line === h1) {
+      skippedH1 = true;
       continue;
     }
+    if (placeholderRe.test(line)) continue;
     if (headerRe.test(line) && line.length < 48) {
       blocks.push({ type: "h2", text: line });
       continue;
