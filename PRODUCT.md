@@ -18,9 +18,12 @@ Contexte typique : mobile ou desktop, première visite, besoin d’un score clai
 
 ## Product Purpose
 
-Outil gratuit **ATS Check** : analyser un CV (PDF/DOCX) **localement dans le navigateur** (par défaut), produire un score ATS /100, un **atelier annoté**, télécharger un **CV 1 page propre** (thème ATS Clean, sans branding outil), avec **Mode Pro** opt-in (Worker : LLM, ESCO, PDF).
+Outil gratuit **Test Mon CV** (`https://www.testmoncv.fr/`) : analyser un CV (PDF/DOCX) **localement dans le navigateur** (par défaut), produire un score ATS /100, un **atelier annoté**, télécharger un **CV 1 page propre** (thème ATS Clean, sans branding outil), avec options consenties :
 
-Succès = le visiteur dépose un CV, atterrit dans l’atelier, accepte des corrections, télécharge un CV **lisible et professionnel**, reteste le score, et choisit s’il active le Mode Pro.
+- **Enrichissement Extrait** — Worker : LanguageTool, géocode Nominatim, classification photo vs logo (extrait uniquement, pas le fichier complet).
+- **Mode Pro** — Worker : LLM, ESCO, PDF + les mêmes enrichissements Extrait.
+
+Succès = le visiteur dépose un CV, atterrit dans l’atelier, accepte des corrections, télécharge un CV **lisible et professionnel**, reteste le score, et choisit s’il active Extrait et/ou Mode Pro.
 
 ## Positioning
 
@@ -52,7 +55,7 @@ Ton : professionnel, direct, sans jargon inutile. Émotions visées : contrôle,
 
 ## Design Principles
 
-1. **Marque d’abord** — ATS Check lisible dès le premier viewport.
+1. **Marque d’abord** — Test Mon CV lisible dès le premier viewport.
 2. **Une idée par section** — hero = upload + promesse ; pas de clutter.
 3. **Preuve par le score** — jauge + catégories, pas d’abstraction décorative.
 4. **Confidentialité visible** — rappel « analyse locale » près de l’upload et dans le footer.

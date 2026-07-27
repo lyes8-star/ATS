@@ -1,5 +1,5 @@
 /**
- * JSON-LD SEO pour ATS Check.
+ * JSON-LD SEO pour Test Mon CV.
  */
 window.ATSSeo = (function () {
   function inject(data) {
@@ -13,8 +13,8 @@ window.ATSSeo = (function () {
   }
 
   function build(site) {
-    const url = (site.url || "https://www.ats-check.fr/").replace(/\/?$/, "/");
-    const name = site.name || "ATS Check";
+    const url = (site.url || "https://www.testmoncv.fr/").replace(/\/?$/, "/");
+    const name = site.name || "Test Mon CV";
     return {
       "@context": "https://schema.org",
       "@graph": [
@@ -67,7 +67,7 @@ window.ATSSeo = (function () {
               name: "L’analyse envoie-t-elle mon CV sur un serveur ?",
               acceptedAnswer: {
                 "@type": "Answer",
-                text: "Par défaut non : l’analyse est locale. Le Mode Pro optionnel peut envoyer temporairement le texte du CV à un Worker (LLM/ESCO/PDF) sans conservation longue.",
+                text: "Par défaut non : l’analyse est locale. L’Enrichissement Extrait (optionnel) envoie un extrait pour grammaire / géocode / photo. Le Mode Pro peut aussi envoyer le texte pour LLM/ESCO/PDF, sans conservation longue.",
               },
             },
             {

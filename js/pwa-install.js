@@ -26,7 +26,7 @@
       /* ignore */
     }
 
-    const name = window.ATS_SITE?.name || "ATS Check";
+    const name = window.ATS_SITE?.name || "Test Mon CV";
     const el = document.createElement("div");
     el.id = "pwaInstall";
     el.className = "pwa-install";

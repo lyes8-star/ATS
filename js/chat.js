@@ -14,11 +14,15 @@ window.ATSChat = (function () {
       },
       {
         q: "Mes données sont-elles envoyées sur un serveur ?",
-        a: "Par défaut non : l’analyse locale reste dans votre navigateur. Si vous cochez Mode Pro, le texte du CV est envoyé temporairement à notre Worker (LLM / ESCO / PDF) sans conservation longue. Voir la politique de confidentialité.",
+        a: "Par défaut non : l’analyse locale reste dans votre navigateur. Avec « Enrichissement Extrait », un extrait (texte / image d’en-tête) part temporairement vers notre Worker (grammaire, géocode, photo). Avec Mode Pro, le texte du CV part aussi pour LLM / ESCO / PDF. Aucune conservation longue. Voir la politique de confidentialité.",
       },
       {
         q: "Qu’est-ce que le Mode Pro ?",
-        a: "Option consentie : suggestions LLM, matching compétences ESCO, et export PDF avancé via un Worker Cloudflare. Sans Mode Pro, tout reste 100 % local.",
+        a: "Option consentie : suggestions LLM, matching compétences ESCO, et export PDF avancé via un Worker Cloudflare. Sans Mode Pro ni Extrait, tout reste 100 % local.",
+      },
+      {
+        q: "Qu’est-ce que l’Enrichissement Extrait ?",
+        a: "Option plus légère que le Mode Pro : envoi temporaire d’un extrait pour LanguageTool, géocodage d’adresse et classification photo vs logo. Pas d’IA générative.",
       },
       {
         q: "Que faire si mon score est faible ?",
@@ -40,11 +44,15 @@ window.ATSChat = (function () {
       },
       {
         q: "Are my data sent to a server?",
-        a: "By default no — local analysis stays in your browser. If you enable Pro mode, CV text is sent temporarily to our Worker (LLM / ESCO / PDF) with no long-term retention. See the privacy policy.",
+        a: "By default no — local analysis stays in your browser. With Extract enrichment, a short extract (text / header image) is sent temporarily for grammar, geocoding and photo classification. With Pro mode, CV text is also sent for LLM / ESCO / PDF. No long-term retention. See the privacy policy.",
       },
       {
         q: "What is Pro mode?",
-        a: "An opt-in: LLM suggestions, ESCO skill matching, and advanced PDF export via a Cloudflare Worker. Without Pro mode, everything stays 100% local.",
+        a: "An opt-in: LLM suggestions, ESCO skill matching, and advanced PDF export via a Cloudflare Worker. Without Pro or Extract, everything stays 100% local.",
+      },
+      {
+        q: "What is Extract enrichment?",
+        a: "A lighter opt-in than Pro: temporary extract for LanguageTool, address geocoding, and photo vs logo classification. No generative AI.",
       },
       {
         q: "What should I do if my score is low?",
@@ -68,7 +76,7 @@ window.ATSChat = (function () {
   let lastFocused = null;
 
   function email() {
-    return window.ATS_SITE?.email || "contact@ats-check.fr";
+    return window.ATS_SITE?.email || "contact@testmoncv.fr";
   }
 
   function track(name, params) {
@@ -191,7 +199,7 @@ window.ATSChat = (function () {
   function init() {
     ensureDom();
     const mail = panelEl.querySelector("#atsChatMail");
-    if (mail) mail.href = `mailto:${email()}?subject=${encodeURIComponent("Question ATS Check")}`;
+    if (mail) mail.href = `mailto:${email()}?subject=${encodeURIComponent("Question Test Mon CV")}`;
 
     fabEl.addEventListener("click", () => (open ? closePanel() : openPanel()));
     panelEl.addEventListener("click", (e) => {
@@ -205,7 +213,7 @@ window.ATSChat = (function () {
     });
     document.addEventListener("ats:site-ready", () => {
       const m = document.getElementById("atsChatMail");
-      if (m) m.href = `mailto:${email()}?subject=${encodeURIComponent("Question ATS Check")}`;
+      if (m) m.href = `mailto:${email()}?subject=${encodeURIComponent("Question Test Mon CV")}`;
     });
 
     document.addEventListener("ats:lang-changed", () => {

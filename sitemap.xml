@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://www.ats-check.fr/</loc>
+    <loc>https://www.testmoncv.fr/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://www.ats-check.fr/mentions-legales/</loc>
+    <loc>https://www.testmoncv.fr/mentions-legales/</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://www.ats-check.fr/confidentialite/</loc>
+    <loc>https://www.testmoncv.fr/confidentialite/</loc>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
-    <loc>https://www.ats-check.fr/cookies/</loc>
+    <loc>https://www.testmoncv.fr/cookies/</loc>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
-    <loc>https://www.ats-check.fr/accessibilite/</loc>
+    <loc>https://www.testmoncv.fr/accessibilite/</loc>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>

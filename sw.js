@@ -1,5 +1,5 @@
-/* Service worker ATS Check — cache app shell (chemins relatifs) */
-const CACHE = "ats-shell-v2";
+/* Service worker Test Mon CV — cache app shell (chemins relatifs) */
+const CACHE = "tmc-shell-v1";
 
 function shellUrls() {
   const base = self.registration.scope;

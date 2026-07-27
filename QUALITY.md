@@ -39,7 +39,9 @@ Dimensions imposées (réf. `reference/audit.md`) :
 |----------|----------------|
 | Consent Mode v2 deny-by-default | `js/consent.js` |
 | Tags SEA seulement après opt-in | `js/analytics.js` |
-| Pas d’upload CV | analyse locale documentée + privacy |
+| Pas d’upload CV par défaut | analyse locale ; Extrait / Pro uniquement après case à cocher |
+| Enrichissement Extrait | `ats_enrich_consent_v1` — texte/image d’en-tête via Worker (LT, géocode, photo) |
+| Mode Pro | `ats_pro_consent_v1` — LLM / ESCO / PDF (+ Extrait) |
 | Headers (nosniff, XFO, Referrer, Permissions-Policy) | `_headers` |
 | security.txt | `.well-known/security.txt` |
 | Soft anti-copie (off en a11y) | `js/protect.js` |

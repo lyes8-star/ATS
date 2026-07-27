@@ -893,26 +893,29 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
     });
   }
 
-  if (parsed?.layout?.profilePhotoHint) {
-    push({
-      kind: "profile_photo",
-      axis: "readability",
-      shortLabel: isEn ? "Photo" : "Photo",
-      severity: "warning",
-      textStart: 0,
-      textEnd: Math.min(30, text.length),
-      quote: text.slice(0, Math.min(30, text.length)).trim() || "(en-tête)",
-      title: isEn
-        ? "Profile photo may hurt ATS parsing"
-        : "Photo de profil risquée pour les ATS",
-      detail: isEn
-        ? "Images in the header are often ignored or scramble reading order. Prefer plain-text contact."
-        : "Une image en en-tête est souvent ignorée ou brouille l'ordre de lecture. Préférez des coordonnées en texte.",
-      suggestion: "",
-      applyMode: "replace",
-      approximate: true,
-      checkId: "profile_photo",
-    });
+  if (parsed?.layout?.profilePhotoHint || parsed?.layout?.photoKind === "face") {
+    const soft = parsed?.layout?.photoKind === "logo" || parsed?.layout?.photoKind === "other";
+    if (!soft) {
+      push({
+        kind: "profile_photo",
+        axis: "readability",
+        shortLabel: isEn ? "Photo" : "Photo",
+        severity: "warning",
+        textStart: 0,
+        textEnd: Math.min(30, text.length),
+        quote: text.slice(0, Math.min(30, text.length)).trim() || "(en-tête)",
+        title: isEn
+          ? "Profile photo may hurt ATS parsing"
+          : "Photo de profil risquée pour les ATS",
+        detail: isEn
+          ? "Images in the header are often ignored or scramble reading order. Prefer plain-text contact."
+          : "Une image en en-tête est souvent ignorée ou brouille l'ordre de lecture. Préférez des coordonnées en texte.",
+        suggestion: "",
+        applyMode: "replace",
+        approximate: true,
+        checkId: "profile_photo",
+      });
+    }
   }
 
   const headline = (parsed?.headline || "").trim();
@@ -1304,7 +1307,18 @@ function scoreReadability(text, fileMeta) {
   }
 
   const profilePhotoHint = !!(layout?.profilePhotoHint || fileMeta.profilePhotoHint);
-  if (profilePhotoHint) {
+  const photoKind =
+    fileMeta.photoClassify?.kind || fileMeta.parsed?.layout?.photoKind || null;
+  if (photoKind === "logo" || photoKind === "other") {
+    checks.push({
+      id: "profile_photo",
+      ok: true,
+      label:
+        photoKind === "logo"
+          ? "Image d’en-tête classée logo/décoratif (risque ATS faible)."
+          : "Image d’en-tête classée décorative (risque ATS faible).",
+    });
+  } else if (profilePhotoHint || photoKind === "face") {
     score = Math.max(0, score - 1);
     checks.push({
       id: "profile_photo",
@@ -1431,12 +1445,16 @@ function scoreStructure(text, fileMeta = {}) {
   }
 
   const hasAddress = Boolean(contact?.location || contact?.address);
+  const geo = contact?.geo || fileMeta.geo || null;
   if (hasAddress) {
-    score += 1;
+    score += geo?.ok && geo.confidence >= 0.4 ? 2 : 1;
     checks.push({
       id: "identity_address",
       ok: true,
-      label: "Adresse ou localisation détectée.",
+      label:
+        geo?.ok && geo.confidence >= 0.4
+          ? `Adresse/localisation confirmée (géocode ${Math.round(geo.confidence * 100)}%).`
+          : "Adresse ou localisation détectée.",
     });
   } else {
     checks.push({
@@ -2543,3 +2561,215 @@ export async function analyzeCvAsync(rawText, fileMeta = {}, opts = {}) {
 }
 
 export { labelForScore, buildAnnotations, findSpellingIssues };
+
+/**
+ * Fusionne grammaire LT / géocode / classification photo dans un rapport déjà calculé.
+ * @param {object} report
+ * @param {{ grammar?: { issues?: object[] }, geo?: object, photo?: object }} enrich
+ * @param {{ lang?: string }} [opts]
+ */
+export function mergeRemoteEnrichment(report, enrich = {}, opts = {}) {
+  if (!report) return report;
+  const isEn = opts.lang === "en";
+  const issues = enrich.grammar?.issues || [];
+  if (issues.length) {
+    const spelling = [...(report.spelling || [])];
+    const seen = new Set(spelling.map((s) => `${s.textStart}:${String(s.wrong || "").toLowerCase()}`));
+    for (const issue of issues) {
+      const key = `${issue.textStart ?? ""}:${String(issue.wrong || "").toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      spelling.push({
+        wrong: issue.wrong,
+        right: issue.right || issue.wrong,
+        context: issue.context || "",
+        textStart: issue.textStart ?? 0,
+        textEnd: issue.textEnd ?? (issue.textStart ?? 0) + String(issue.wrong || "").length,
+        kind: issue.kind === "typo" ? "typo" : "grammar",
+      });
+    }
+    report.spelling = spelling;
+
+    // Rebuild grammar/typo annotations from new issues only
+    let seq = (report.annotations || []).length;
+    for (const s of issues) {
+      const isGrammar = s.kind !== "typo";
+      seq += 1;
+      report.annotations = report.annotations || [];
+      report.annotations.push({
+        id: `ann-enrich-${seq}`,
+        page: 1,
+        rects: [],
+        approximate: s.textStart == null,
+        status: "pending",
+        section: "Document",
+        axis: "content",
+        kind: isGrammar ? "grammar" : "typo",
+        shortLabel: isGrammar ? (isEn ? "Grammar" : "Grammaire") : isEn ? "Spelling" : "Orthographe",
+        severity: isGrammar ? "warning" : "critical",
+        textStart: s.textStart ?? 0,
+        textEnd: s.textEnd ?? 0,
+        quote: s.wrong,
+        title: isEn
+          ? `Fix « ${s.wrong} » → « ${s.right} »`
+          : `Corriger « ${s.wrong} » → « ${s.right} »`,
+        detail: s.context || s.message || "",
+        suggestion: s.right || "",
+        applyMode: "replace",
+        checkId: isGrammar ? "grammar_quality" : "spelling_quality",
+      });
+    }
+
+    // Update checklist content axes
+    const typoCount = spelling.filter((s) => s.kind !== "grammar").length;
+    const grammarCount = spelling.filter((s) => s.kind === "grammar").length;
+    upsertCheck(report, "spelling_quality", typoCount === 0, typoCount === 0
+      ? (isEn ? "Spelling: no common issues detected." : "Orthographe : pas de faute fréquente détectée.")
+      : (isEn
+          ? `Spelling: ${typoCount} common issue(s).`
+          : `Orthographe : ${typoCount} faute(s) fréquente(s).`));
+    upsertCheck(report, "grammar_quality", grammarCount === 0, grammarCount === 0
+      ? (isEn ? "Grammar: no doubtful wording detected." : "Grammaire : pas de tournure douteuse détectée.")
+      : (isEn
+          ? `Grammar: ${grammarCount} wording issue(s) to fix.`
+          : `Grammaire : ${grammarCount} tournure(s) à corriger.`));
+
+    // Light content score penalty if not already low
+    if (report.categories?.content && (typoCount || grammarCount)) {
+      const pen = Math.min(4, typoCount) + Math.min(2, grammarCount);
+      report.categories.content.score = Math.max(0, report.categories.content.score - pen);
+      report.total = Math.max(
+        0,
+        (report.categories.readability?.score || 0) +
+          (report.categories.structure?.score || 0) +
+          report.categories.content.score +
+          (report.categories.keywords?.score || 0)
+      );
+    }
+  }
+
+  if (enrich.geo) {
+    report.parsed = report.parsed || {};
+    report.parsed.contact = report.parsed.contact || {};
+    report.parsed.contact.geo = enrich.geo;
+    if (enrich.geo.ok && enrich.geo.confidence >= 0.4) {
+      upsertCheck(
+        report,
+        "identity_address",
+        true,
+        isEn
+          ? `Address/location confirmed (geocode ${Math.round(enrich.geo.confidence * 100)}%).`
+          : `Adresse/localisation confirmée (géocode ${Math.round(enrich.geo.confidence * 100)}%).`
+      );
+    } else if ((report.parsed.contact.location || report.parsed.contact.address) && enrich.geo.ok === false) {
+      // Keep address ok but add soft annotation
+      report.annotations = report.annotations || [];
+      report.annotations.push({
+        id: `ann-geo-${Date.now()}`,
+        page: 1,
+        rects: [],
+        approximate: true,
+        status: "pending",
+        section: isEn ? "Contact details" : "Coordonnées",
+        axis: "structure",
+        kind: "missing_location",
+        shortLabel: isEn ? "Location" : "Adresse",
+        severity: "info",
+        textStart: 0,
+        textEnd: 20,
+        quote: report.parsed.contact.location || report.parsed.contact.address || "",
+        title: isEn ? "Could not verify this location" : "Localisation non vérifiée",
+        detail: isEn
+          ? "Geocoding did not match a known place. Prefer City or ZIP + City in plain text."
+          : "Le géocodage n’a pas trouvé de lieu connu. Préférez Ville ou CP + Ville en texte clair.",
+        suggestion: "",
+        applyMode: "replace",
+        checkId: "identity_address",
+      });
+    }
+  }
+
+  if (enrich.photo?.kind) {
+    report.parsed = report.parsed || {};
+    report.parsed.layout = report.parsed.layout || {};
+    report.parsed.layout.photoKind = enrich.photo.kind;
+    report.photoClassify = enrich.photo;
+    if (enrich.photo.kind === "logo" || enrich.photo.kind === "other") {
+      upsertCheck(
+        report,
+        "profile_photo",
+        true,
+        enrich.photo.kind === "logo"
+          ? (isEn
+              ? "Header image classified as logo/decorative (low ATS risk)."
+              : "Image d’en-tête classée logo/décoratif (risque ATS faible).")
+          : (isEn
+              ? "Header image classified as decorative (low ATS risk)."
+              : "Image d’en-tête classée décorative (risque ATS faible).")
+      );
+      // Downgrade or remove face warning annotations
+      report.annotations = (report.annotations || []).filter((a) => a.kind !== "profile_photo");
+      if (report.categories?.readability) {
+        report.categories.readability.score = Math.min(25, report.categories.readability.score + 1);
+        report.total = Math.max(
+          0,
+          report.categories.readability.score +
+            (report.categories.structure?.score || 0) +
+            (report.categories.content?.score || 0) +
+            (report.categories.keywords?.score || 0)
+        );
+      }
+    } else if (enrich.photo.kind === "face") {
+      upsertCheck(
+        report,
+        "profile_photo",
+        false,
+        isEn
+          ? "Profile photo detected — often ignored or harmful to ATS parsers; prefer plain text."
+          : "Photo de profil détectée — souvent ignorée ou nuisible aux parseurs ATS ; préférez le texte."
+      );
+    }
+  }
+
+  if (Array.isArray(report.checklist)) {
+    // Rebuild checklist uniqueness from category checks when present
+    const byId = new Map(report.checklist.map((c) => [c.id, c]));
+    report.checklist = [...byId.values()];
+  }
+  return report;
+}
+
+function upsertCheck(report, id, ok, label) {
+  if (!report.checklist) report.checklist = [];
+  const existing = report.checklist.find((c) => c.id === id);
+  if (existing) {
+    existing.ok = ok;
+    existing.label = label;
+  } else {
+    report.checklist.push({ id, axis: "content", ok, label });
+  }
+  for (const cat of Object.values(report.categories || {})) {
+    // categories don't store checks on report — checklist is source of truth in UI
+    void cat;
+  }
+  // Also patch strengths/blockers lightly
+  const inBlockers = (report.blockers || []).find((b) => b.id === id);
+  const inStrengths = (report.strengths || []).find((s) => s.id === id);
+  if (ok) {
+    report.blockers = (report.blockers || []).filter((b) => b.id !== id);
+    if (!inStrengths) {
+      report.strengths = report.strengths || [];
+      report.strengths.push({ id, ok: true, label, category: "Enrichissement" });
+    } else {
+      inStrengths.label = label;
+    }
+  } else {
+    report.strengths = (report.strengths || []).filter((s) => s.id !== id);
+    if (!inBlockers) {
+      report.blockers = report.blockers || [];
+      report.blockers.push({ id, ok: false, label, category: "Enrichissement" });
+    } else {
+      inBlockers.label = label;
+    }
+  }
+}

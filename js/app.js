@@ -1,13 +1,19 @@
-import { analyzeCvAsync, attachGeometry } from "./analyzer.js";
+import { analyzeCvAsync, attachGeometry, mergeRemoteEnrichment } from "./analyzer.js";
 import { extractDocument, revokeExtractObjectUrl } from "./extract.js";
 import * as extractApi from "./extract.js";
 import { mountStudio } from "./studio.js";
 import {
   hasProConsent,
   setProConsent,
+  hasEnrichConsent,
+  setEnrichConsent,
+  canCallEnrich,
   isProConfigured,
   proAnalyze,
   proSkills,
+  enrichGrammar,
+  enrichGeocode,
+  enrichPhoto,
 } from "./pro-client.js";
 
 const CIRCUMFERENCE = 2 * Math.PI * 90;
@@ -25,6 +31,7 @@ const els = {
   emailInput: document.getElementById("email-input"),
   jdInput: document.getElementById("jd-input"),
   proConsent: document.getElementById("pro-consent"),
+  enrichConsent: document.getElementById("enrich-consent"),
   errorBanner: document.getElementById("error-banner"),
   loading: document.getElementById("loading"),
   loadingStep: document.getElementById("loading-step"),
@@ -417,7 +424,44 @@ async function runAnalysis() {
       scoreBefore: report.total,
       jobDescription: els.jdInput?.value || "",
       proEnabled: hasProConsent() && isProConfigured(),
+      enrichEnabled: canCallEnrich(),
     };
+
+    // Enrichissement Extrait (ou Pro) — grammar / geocode / photo
+    if (session.enrichEnabled) {
+      try {
+        setLoading(true, 2);
+        const lang = window.ATSi18n?.getLang?.() || "fr";
+        const contact = report.parsed?.contact || {};
+        const preview = extracted.profileImagePreview;
+        const [grammar, geo, photo] = await Promise.all([
+          enrichGrammar({ text: extracted.text, lang }).catch(() => null),
+          contact.address || contact.location
+            ? enrichGeocode({ address: contact.address, location: contact.location }).catch(() => null)
+            : Promise.resolve(null),
+          preview?.base64
+            ? enrichPhoto({ imageBase64: preview.base64, mime: preview.mime }).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+        mergeRemoteEnrichment(
+          report,
+          { grammar: grammar || undefined, geo: geo || undefined, photo: photo || undefined },
+          { lang }
+        );
+        const geoAnns = attachGeometry(report.annotations || [], extracted.pagesGeo, extractApi);
+        report.annotations = geoAnns;
+        session.annotations = geoAnns;
+        session.report = report;
+        session.selectedId = geoAnns[0]?.id || null;
+        window.ATSAnalytics?.track?.("ats_enrich_enabled", {
+          grammar: grammar?.issues?.length || 0,
+          geo: !!geo?.ok,
+          photo: photo?.kind || null,
+        });
+      } catch (enrichErr) {
+        console.warn("Enrichissement Extrait skipped", enrichErr);
+      }
+    }
 
     // Mode Pro enrichissement (opt-in) — annotations LLM + overlap ESCO
     if (session.proEnabled) {
@@ -505,6 +549,17 @@ if (els.proConsent) {
   els.proConsent.checked = hasProConsent();
   els.proConsent.addEventListener("change", () => {
     setProConsent(els.proConsent.checked);
+    if (els.proConsent.checked && els.enrichConsent) {
+      els.enrichConsent.checked = true;
+      setEnrichConsent(true);
+    }
+  });
+}
+
+if (els.enrichConsent) {
+  els.enrichConsent.checked = hasEnrichConsent();
+  els.enrichConsent.addEventListener("change", () => {
+    setEnrichConsent(els.enrichConsent.checked);
   });
 }
 

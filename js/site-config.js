@@ -38,11 +38,11 @@
         .catch((err) => {
           console.warn("[ATSSiteConfig]", err);
           window.ATS_SITE = {
-            name: "ATS Check",
+            name: "Test Mon CV",
           phone: "+33 1 84 80 00 00",
           phoneDisplay: "01 84 80 00 00",
-          email: "contact@crevia.fr",
-          dpoEmail: "dpo@crevia.fr",
+          email: "contact@testmoncv.fr",
+          dpoEmail: "dpo@testmoncv.fr",
           hours: "Lun – Ven : 9h00 – 18h00",
           address: {
             street: "10 rue Jean Baptiste",
@@ -51,7 +51,7 @@
             country: "France",
           },
           publisher: { name: "Crevia", url: "https://crevia.fr" },
-            url: "https://www.ats-check.fr/",
+            url: "https://www.testmoncv.fr/",
             gaId: "",
             adsId: "",
             themeColor: "#2c2a28",

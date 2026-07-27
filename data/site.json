@@ -1,13 +1,13 @@
 {
   "site": {
-    "name": "ATS Check",
-    "shortName": "ATS Check",
+    "name": "Test Mon CV",
+    "shortName": "Test Mon CV",
     "tagline": "Vérificateur de compatibilité ATS pour CV",
     "description": "85% des CV sont éliminés avant d'atteindre un recruteur. Testez gratuitement votre CV et obtenez votre score ATS en quelques secondes.",
     "phone": "+33 1 84 80 00 00",
     "phoneDisplay": "01 84 80 00 00",
-    "email": "contact@crevia.fr",
-    "dpoEmail": "dpo@crevia.fr",
+    "email": "contact@testmoncv.fr",
+    "dpoEmail": "dpo@testmoncv.fr",
     "hours": "Lun – Ven : 9h00 – 18h00",
     "address": {
       "street": "10 rue Jean Baptiste",
@@ -19,18 +19,18 @@
       "name": "Crevia",
       "url": "https://crevia.fr"
     },
-    "url": "https://www.ats-check.fr/",
+    "url": "https://www.testmoncv.fr/",
     "adsId": "",
     "gaId": "",
     "themeColor": "#2c2a28",
     "backgroundColor": "#faf6f0",
     "ogImage": "icons/og.jpg",
     "legal": {
-      "raisonSociale": "ATS Check",
+      "raisonSociale": "Test Mon CV",
       "forme": "À compléter (ex. SAS, SARL, EI)",
       "capital": "À compléter",
       "siret": "À compléter",
-      "responsablePublication": "Responsable de publication ATS Check",
+      "responsablePublication": "Responsable de publication Test Mon CV",
       "hebergeur": "GitHub Pages (GitHub Inc., 88 Colin P. Kelly Jr Street, San Francisco, CA 94107, USA) et/ou hébergeur statique selon le déploiement."
     },
     "social": {

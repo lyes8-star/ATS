@@ -200,10 +200,18 @@ export async function extractFromPdf(file) {
   const approximate = itemCount < 8 || text.replace(/\s/g, "").length < 40;
   const layout = analyzePdfLayout(pagesGeo);
   let profilePhotoHint = false;
+  let profileImagePreview = null;
   try {
     profilePhotoHint = await detectPdfProfilePhoto(doc);
   } catch {
     profilePhotoHint = false;
+  }
+  if (profilePhotoHint) {
+    try {
+      profileImagePreview = await extractPdfProfileImagePreview(doc);
+    } catch {
+      profileImagePreview = null;
+    }
   }
 
   return {
@@ -219,6 +227,7 @@ export async function extractFromPdf(file) {
     headerSparse: layout.headerSparse,
     readingOrderOk: layout.readingOrderOk,
     profilePhotoHint,
+    profileImagePreview,
     originalBuffer,
     objectUrl,
   };
@@ -296,6 +305,35 @@ export async function detectPdfProfilePhoto(pdfDoc) {
   // Fallback without reliable CTM: 1–3 images on page 1 often = photo/logo
   if (!OPS && anyImages >= 1 && anyImages <= 3) return true;
   return false;
+}
+
+/**
+ * Capture bandeau haut page 1 (JPEG base64) pour classification photo distante.
+ * @param {any} pdfDoc
+ * @returns {Promise<{ base64: string, mime: string }|null>}
+ */
+export async function extractPdfProfileImagePreview(pdfDoc) {
+  if (!pdfDoc?.numPages || typeof document === "undefined") return null;
+  const page = await pdfDoc.getPage(1);
+  const scale = 1.15;
+  const viewport = page.getViewport({ scale });
+  const cropH = Math.max(40, Math.floor(viewport.height * 0.35));
+  const full = document.createElement("canvas");
+  full.width = Math.floor(viewport.width);
+  full.height = Math.floor(viewport.height);
+  const fullCtx = full.getContext("2d");
+  if (!fullCtx) return null;
+  await page.render({ canvasContext: fullCtx, viewport }).promise;
+  const canvas = document.createElement("canvas");
+  canvas.width = full.width;
+  canvas.height = cropH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.drawImage(full, 0, 0, full.width, cropH, 0, 0, canvas.width, cropH);
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
+  const base64 = dataUrl.replace(/^data:image\/jpeg;base64,/, "");
+  if (!base64 || base64.length < 80) return null;
+  return { base64, mime: "image/jpeg" };
 }
 
 /**
@@ -444,6 +482,39 @@ export function detectDocxProfilePhoto(arrayBuffer, html) {
   return /<img[\s>]/i.test(early);
 }
 
+/**
+ * Première image média DOCX (header / début) → base64 pour classification.
+ * @param {ArrayBuffer} arrayBuffer
+ * @returns {{ base64: string, mime: string }|null}
+ */
+export function extractDocxProfileImagePreview(arrayBuffer) {
+  try {
+    const PizZip = window.PizZip || window.JSZip;
+    if (!PizZip || !arrayBuffer) return null;
+    const zip = new PizZip(arrayBuffer);
+    const media = Object.keys(zip.files || {})
+      .filter((n) => /^word\/media\//i.test(n) && /\.(png|jpe?g|webp|gif)$/i.test(n))
+      .sort();
+    if (!media.length) return null;
+    const name = media[0];
+    const file = zip.file(name);
+    if (!file) return null;
+    const u8 = file.asUint8Array?.() || null;
+    if (!u8 || !u8.length || u8.length > 1_500_000) return null;
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < u8.length; i += chunk) {
+      binary += String.fromCharCode(...u8.subarray(i, i + chunk));
+    }
+    const ext = name.split(".").pop()?.toLowerCase() || "jpeg";
+    const mime =
+      ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "gif" ? "image/gif" : "image/jpeg";
+    return { base64: btoa(binary), mime };
+  } catch {
+    return null;
+  }
+}
+
 export async function extractFromDocx(file) {
   if (!window.mammoth) throw new Error("Bibliothèque DOCX non chargée.");
   const arrayBuffer = await file.arrayBuffer();
@@ -455,6 +526,7 @@ export async function extractFromDocx(file) {
   const html = htmlResult.value || "<p></p>";
   const tableCount = countDocxTables(arrayBuffer, html);
   const profilePhotoHint = detectDocxProfilePhoto(arrayBuffer, html);
+  const profileImagePreview = profilePhotoHint ? extractDocxProfileImagePreview(arrayBuffer) : null;
   return {
     text,
     pages: null,
@@ -465,6 +537,7 @@ export async function extractFromDocx(file) {
     approximate: true,
     tableCount,
     profilePhotoHint,
+    profileImagePreview,
     originalBuffer: arrayBuffer,
   };
 }

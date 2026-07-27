@@ -38,7 +38,7 @@ Exported CVs must look like a professional one-page resume — not a text dump.
 - [ ] Name is visually primary; contact on one line
 - [ ] Experience shows title — company and dates
 - [ ] Bullets are `<li>` / Word bullets
-- [ ] HTML source has **no** “Généré”, “ATS Check”, or score footer
+- [ ] HTML source has **no** “Généré”, “Test Mon CV”, or score footer
 - [ ] Print CSS hides UI chrome
 - [ ] `npm run audit` passes
 

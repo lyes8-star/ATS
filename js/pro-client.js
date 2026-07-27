@@ -1,13 +1,15 @@
 /**
- * Client Mode Pro — appelle le Worker CF (analyse LLM, ESCO, PDF patch).
+ * Client Mode Pro + enrichissements Extrait —
+ * Worker CF : LLM / ESCO / PDF + grammar / geocode / photo.
  * Activé uniquement après consentement explicite.
  */
 
-const STORAGE_KEY = "ats_pro_consent_v1";
+const PRO_STORAGE_KEY = "ats_pro_consent_v1";
+const ENRICH_STORAGE_KEY = "ats_enrich_consent_v1";
 
 export function hasProConsent() {
   try {
-    return localStorage.getItem(STORAGE_KEY) === "1";
+    return localStorage.getItem(PRO_STORAGE_KEY) === "1";
   } catch {
     return false;
   }
@@ -15,12 +17,38 @@ export function hasProConsent() {
 
 export function setProConsent(ok) {
   try {
-    if (ok) localStorage.setItem(STORAGE_KEY, "1");
-    else localStorage.removeItem(STORAGE_KEY);
+    if (ok) {
+      localStorage.setItem(PRO_STORAGE_KEY, "1");
+      // Pro implique Extrait
+      localStorage.setItem(ENRICH_STORAGE_KEY, "1");
+    } else {
+      localStorage.removeItem(PRO_STORAGE_KEY);
+    }
   } catch {
     /* ignore */
   }
   document.dispatchEvent(new CustomEvent("ats:pro-consent", { detail: { enabled: !!ok } }));
+  if (ok) {
+    document.dispatchEvent(new CustomEvent("ats:enrich-consent", { detail: { enabled: true } }));
+  }
+}
+
+export function hasEnrichConsent() {
+  try {
+    return localStorage.getItem(ENRICH_STORAGE_KEY) === "1" || hasProConsent();
+  } catch {
+    return hasProConsent();
+  }
+}
+
+export function setEnrichConsent(ok) {
+  try {
+    if (ok) localStorage.setItem(ENRICH_STORAGE_KEY, "1");
+    else localStorage.removeItem(ENRICH_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+  document.dispatchEvent(new CustomEvent("ats:enrich-consent", { detail: { enabled: !!ok } }));
 }
 
 export function getProApiBase() {
@@ -39,15 +67,22 @@ export function isProConfigured() {
   return Boolean(getProApiBase());
 }
 
+/** Enrichissements distants possibles si Worker configuré + (Extrait ou Pro). */
+export function canCallEnrich() {
+  return isProConfigured() && hasEnrichConsent();
+}
+
 /**
  * @param {string} path
  * @param {object} body
- * @param {{ signal?: AbortSignal }} [opts]
+ * @param {{ signal?: AbortSignal, requirePro?: boolean }} [opts]
  */
 export async function proFetch(path, body, opts = {}) {
   const base = getProApiBase();
   if (!base) throw new Error("Mode Pro non configuré (proApiBase manquant).");
-  if (!hasProConsent()) throw new Error("Consentement Mode Pro requis.");
+  const requirePro = opts.requirePro !== false;
+  if (requirePro && !hasProConsent()) throw new Error("Consentement Mode Pro requis.");
+  if (!requirePro && !hasEnrichConsent()) throw new Error("Consentement Extrait requis.");
 
   const res = await fetch(`${base}${path}`, {
     method: "POST",
@@ -87,6 +122,51 @@ export async function proSkills(payload) {
     jobDescription: payload.jobDescription || "",
     lang: payload.lang || "fr",
   });
+}
+
+/**
+ * LanguageTool via Worker (Extrait ou Pro).
+ * @param {{ text: string, lang?: string }} payload
+ */
+export async function enrichGrammar(payload) {
+  return proFetch(
+    "/pro/grammar",
+    {
+      text: String(payload.text || "").slice(0, 20_000),
+      lang: payload.lang || "fr",
+    },
+    { requirePro: false }
+  );
+}
+
+/**
+ * Géocode Nominatim via Worker (Extrait ou Pro).
+ * @param {{ address?: string, location?: string }} payload
+ */
+export async function enrichGeocode(payload) {
+  return proFetch(
+    "/pro/geocode",
+    {
+      address: payload.address || "",
+      location: payload.location || "",
+    },
+    { requirePro: false }
+  );
+}
+
+/**
+ * Classification photo vs logo via Worker (Extrait ou Pro).
+ * @param {{ imageBase64: string, mime?: string }} payload
+ */
+export async function enrichPhoto(payload) {
+  return proFetch(
+    "/pro/photo-classify",
+    {
+      imageBase64: payload.imageBase64,
+      mime: payload.mime || "image/jpeg",
+    },
+    { requirePro: false }
+  );
 }
 
 /**

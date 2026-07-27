@@ -1,5 +1,5 @@
 /**
- * CMP cookies ATS Check — Consent Mode v2 + stockage 12 mois.
+ * CMP cookies Test Mon CV — Consent Mode v2 + stockage 12 mois.
  * Catégories : necessary | analytics | ads
  */
 window.ATSConsent = (function () {

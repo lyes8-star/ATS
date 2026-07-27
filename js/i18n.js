@@ -23,7 +23,11 @@
       "upload.jd.placeholder": "Collez l'annonce pour mesurer l'alignement mots-clés CV ↔ offre",
       "upload.pro.consent":
         "Mode Pro (optionnel) — j’accepte l’envoi temporaire de mon CV au serveur pour suggestions LLM, ESCO et PDF avancé. Aucune conservation longue.",
-      "upload.pro.hint": "Sans Mode Pro, l’analyse reste 100 % locale dans votre navigateur.",
+      "upload.pro.hint": "Sans Mode Pro ni Extrait, l’analyse reste 100 % locale dans votre navigateur.",
+      "upload.enrich.consent":
+        "Enrichissement Extrait (optionnel) — j’accepte l’envoi temporaire d’un extrait (texte / image d’en-tête) pour grammaire LanguageTool, géocodage d’adresse et classification photo. Aucune conservation longue.",
+      "upload.enrich.hint":
+        "L’extrait ne remplace pas le Mode Pro : pas d’IA générative ni d’export PDF avancé.",
       "upload.analyze.button": "Analyser mon CV",
 
       "header.newTest": "Nouveau test",
@@ -178,7 +182,7 @@
         "Conformément à la directive ePrivacy et aux recommandations de la CNIL.",
       "legal.accessibility.title": "Déclaration d’accessibilité",
       "legal.accessibility.updated":
-        "ATS Check s’engage à rendre son site accessible conformément au RGAA 4.1, aux WCAG 2.2 niveau AA et à la directive européenne EAA (2019/882) / norme EN 301 549.",
+        "Test Mon CV s’engage à rendre son site accessible conformément au RGAA 4.1, aux WCAG 2.2 niveau AA et à la directive européenne EAA (2019/882) / norme EN 301 549.",
     },
     en: {
       "hero.badge": "Free analysis — Instant result",
@@ -194,7 +198,11 @@
       "upload.jd.placeholder": "Paste the job posting to measure CV ↔ JD keyword alignment",
       "upload.pro.consent":
         "Pro mode (optional) — I agree to temporarily send my CV to the server for LLM suggestions, ESCO matching, and advanced PDF. No long-term retention.",
-      "upload.pro.hint": "Without Pro mode, analysis stays 100% local in your browser.",
+      "upload.pro.hint": "Without Pro mode or Extract enrichment, analysis stays 100% local in your browser.",
+      "upload.enrich.consent":
+        "Extract enrichment (optional) — I agree to temporarily send an extract (text / header image) for LanguageTool grammar, address geocoding, and photo classification. No long-term retention.",
+      "upload.enrich.hint":
+        "Extract does not replace Pro mode: no generative AI or advanced PDF export.",
       "upload.analyze.button": "Analyze my CV",
 
       "header.newTest": "New test",
@@ -339,7 +347,7 @@
         "In accordance with the ePrivacy Directive and CNIL recommendations.",
       "legal.accessibility.title": "Accessibility statement",
       "legal.accessibility.updated":
-        "ATS Check is committed to making this site accessible in accordance with RGAA 4.1, WCAG 2.2 AA level, and the European Accessibility Act (2019/882) / EN 301 549 standard.",
+        "Test Mon CV is committed to making this site accessible in accordance with RGAA 4.1, WCAG 2.2 AA level, and the European Accessibility Act (2019/882) / EN 301 549 standard.",
     },
   };
 
