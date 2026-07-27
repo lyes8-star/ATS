@@ -393,6 +393,7 @@ async function runAnalysis() {
         tableHint: extracted.tableHint,
         headerSparse: extracted.headerSparse,
         readingOrderOk: extracted.readingOrderOk,
+        profilePhotoHint: extracted.profilePhotoHint,
       },
       { jobDescription: els.jdInput?.value || "" }
     );

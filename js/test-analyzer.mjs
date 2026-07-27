@@ -411,6 +411,14 @@ Lead Frontend — StartupXYZ
   assert.ok(ids.includes("email"));
   assert.ok(ids.includes("section_experience"));
   assert.ok(ids.includes("metrics"));
+  assert.ok(ids.includes("identity_name"));
+  assert.ok(ids.includes("identity_address"));
+  assert.ok(ids.includes("profile_photo"));
+  assert.ok(ids.includes("job_title_headline"));
+  assert.ok(ids.includes("role_dates"));
+  assert.ok(ids.includes("interests"));
+  assert.ok(ids.includes("spelling_quality"));
+  assert.ok(ids.includes("grammar_quality"));
   assert.ok(new Set(ids).size === ids.length, "checklist ids unique");
   console.log("✓ checklist stable ids OK", r.checklist.filter((c) => c.ok).length + "/" + r.checklist.length);
 }
@@ -538,6 +546,165 @@ Excel, reporting
   assert.ok(eduOk && eduOk.ok === false, "formation in bullet ≠ Education heading");
   assert.ok(r.categories.readability.score <= 18, "missing Formation caps readability");
   console.log("✓ bullet « formation » still not a section + readability capped OK");
+}
+
+{
+  const { parsePersonName, parseLocationAddress, analyzeInterests } = await import("./parse-cv.js");
+  const fuzzy = parsePersonName(["Consultant Senior Cloud", "consultant@acme.com"]);
+  assert.equal(fuzzy.name, null, "job title must not be parsed as name");
+  assert.ok(fuzzy.headline, "job title becomes headline");
+
+  const okName = parsePersonName(["Marie Dupont", "Développeuse Full Stack", "marie@x.com"]);
+  assert.equal(okName.firstName, "Marie");
+  assert.equal(okName.lastName, "Dupont");
+  assert.match(okName.headline || "", /Développeuse/i);
+
+  const addr = parseLocationAddress("Marie\nmarie@x.com\n12 rue de la Paix\n75001 Paris\n");
+  assert.ok(addr.address && /rue de la Paix/i.test(addr.address), "street address detected");
+  assert.ok(addr.location && /75001|Paris/i.test(addr.location), "city/CP detected");
+
+  const withAddr = analyzeCv(
+    `
+Marie Dupont
+Développeuse
+marie@x.com | 06 12 34 56 78
+12 rue de Rivoli, 75001 Paris
+EXPÉRIENCE PROFESSIONNELLE
+Développeuse — TechCorp (2021 - 2023)
+- Développé une app pour 500 clients
+FORMATION
+Master Info (2019 - 2021)
+COMPÉTENCES
+React, Node, Agile
+` + " détail parcours professionnel. ".repeat(12),
+    { pages: 1 }
+  );
+  assert.ok(withAddr.checklist.find((c) => c.id === "identity_name")?.ok);
+  assert.ok(withAddr.checklist.find((c) => c.id === "identity_address")?.ok);
+  assert.ok(!withAddr.annotations.some((a) => a.kind === "missing_location"));
+  console.log("✓ identity name strict + address OK");
+}
+
+{
+  const photo = analyzeCv(goodCv, {
+    pages: 1,
+    profilePhotoHint: true,
+    parsed: parseCv(goodCv, { profilePhotoHint: true }),
+  });
+  const chk = photo.checklist.find((c) => c.id === "profile_photo");
+  assert.ok(chk && chk.ok === false, "profile_photo warns when hint");
+  assert.ok(photo.annotations.some((a) => a.kind === "profile_photo" && a.checkId === "profile_photo"));
+  assert.ok(photo.categories.readability.score < 25, "photo hint reduces readability");
+  console.log("✓ profile photo hint check OK");
+}
+
+{
+  const noDatesCv = `
+Marie Dupont
+Développeuse Full Stack
+marie@x.com | 06 12 34 56 78
+Paris
+EXPÉRIENCE PROFESSIONNELLE
+Développeuse Full Stack — TechCorp
+- Développé une plateforme SaaS
+Lead Frontend — StartupXYZ
+- Créé le design system
+FORMATION
+Master Informatique
+COMPÉTENCES
+React, Node, Agile, management
+` + " texte extractible supplémentaire. ".repeat(10);
+  const r = analyzeCv(noDatesCv, { pages: 1 });
+  assert.equal(r.checklist.find((c) => c.id === "role_dates")?.ok, false);
+  assert.ok(r.annotations.filter((a) => a.kind === "missing_dates").length >= 1);
+  assert.ok(r.checklist.find((c) => c.id === "job_title_headline")?.ok, "headline present on this sample");
+
+  const noHeadline = analyzeCv(
+    `
+Marie Dupont
+marie@x.com | 06 12 34 56 78
+Paris
+EXPÉRIENCE PROFESSIONNELLE
+Analyste données — DataCo (2019 - 2021)
+- Analysé des datasets clients
+FORMATION
+Master
+COMPÉTENCES
+SQL, Python, Excel
+` + " texte extractible. ".repeat(12),
+    { pages: 1 }
+  );
+  assert.equal(noHeadline.checklist.find((c) => c.id === "job_title_headline")?.ok, false);
+  assert.ok(noHeadline.annotations.some((a) => a.kind === "missing_headline"));
+  console.log("✓ role dates + headline annotations OK");
+}
+
+{
+  const emptyInterests = `
+Marie Dupont
+Manager
+marie@x.com | 06 12 34 56 78
+Paris
+PROFIL
+${"Manager expérimenté avec un parcours solide en coordination d'équipes. ".repeat(4)}
+EXPÉRIENCE PROFESSIONNELLE
+Manager — Acme (2020 - 2022)
+- Piloté une équipe de 5 personnes
+FORMATION
+Master
+COMPÉTENCES
+Excel, reporting, management
+CENTRES D'INTÉRÊT
+`;
+  const r = analyzeCv(emptyInterests, { pages: 1 });
+  assert.equal(r.checklist.find((c) => c.id === "interests")?.ok, false);
+  assert.ok(r.annotations.some((a) => a.kind === "empty_interests"));
+
+  const genericInterests = `
+Marie Dupont
+Manager
+marie@x.com | 06 12 34 56 78
+Paris
+PROFIL
+${"Manager expérimenté avec un parcours solide en coordination d'équipes. ".repeat(4)}
+EXPÉRIENCE PROFESSIONNELLE
+Manager — Acme (2020 - 2022)
+- Piloté une équipe
+FORMATION
+Master
+COMPÉTENCES
+Excel, reporting
+CENTRES D'INTÉRÊT
+Lecture, cinéma, sport, voyages, musique
+`;
+  const g = analyzeCv(genericInterests, { pages: 1 });
+  assert.equal(g.checklist.find((c) => c.id === "interests")?.ok, false);
+  assert.ok(g.annotations.some((a) => a.kind === "generic_interests"));
+  console.log("✓ interests empty/generic checks OK");
+}
+
+{
+  const clean = analyzeCv(goodCv, { pages: 1 });
+  const dirty = analyzeCv(
+    goodCv.replace("Développé une plateforme", "j'ai réaliser une plateforme").replace(
+      "Optimisé les performances",
+      "Optimisé les performances parceque et parmis les équipes"
+    ),
+    { pages: 1 }
+  );
+  assert.ok(dirty.annotations.some((a) => a.kind === "grammar"));
+  assert.equal(dirty.checklist.find((c) => c.id === "grammar_quality")?.ok, false);
+  assert.ok(
+    dirty.categories.content.score < clean.categories.content.score,
+    `spelling/grammar must lower content score (${dirty.categories.content.score} < ${clean.categories.content.score})`
+  );
+  assert.ok(dirty.checklist.find((c) => c.id === "spelling_quality"));
+  console.log(
+    "✓ spelling/grammar content penalty OK",
+    clean.categories.content.score,
+    "→",
+    dirty.categories.content.score
+  );
 }
 
 console.log("Tous les tests OK");

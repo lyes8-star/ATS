@@ -30,6 +30,7 @@
  *   tableHint?: boolean,
  *   headerSparse?: boolean,
  *   readingOrderOk?: boolean,
+ *   profilePhotoHint?: boolean,
  *   originalBuffer?: ArrayBuffer|null,
  *   objectUrl?: string|null
  * }} ExtractResult
@@ -198,6 +199,12 @@ export async function extractFromPdf(file) {
 
   const approximate = itemCount < 8 || text.replace(/\s/g, "").length < 40;
   const layout = analyzePdfLayout(pagesGeo);
+  let profilePhotoHint = false;
+  try {
+    profilePhotoHint = await detectPdfProfilePhoto(doc);
+  } catch {
+    profilePhotoHint = false;
+  }
 
   return {
     text,
@@ -211,9 +218,84 @@ export async function extractFromPdf(file) {
     tableHint: layout.tableHint,
     headerSparse: layout.headerSparse,
     readingOrderOk: layout.readingOrderOk,
+    profilePhotoHint,
     originalBuffer,
     objectUrl,
   };
+}
+
+/**
+ * Heuristique photo de profil : images peintes dans le bandeau haut page 1.
+ * @param {any} pdfDoc
+ */
+export async function detectPdfProfilePhoto(pdfDoc) {
+  if (!pdfDoc?.numPages) return false;
+  const page = await pdfDoc.getPage(1);
+  const viewport = page.getViewport({ scale: 1 });
+  const ops = await page.getOperatorList();
+  const fns = ops.fnArray || [];
+  const args = ops.argsArray || [];
+  const OPS = window.pdfjsLib?.OPS;
+  const paintIds = new Set();
+  const transformId = OPS?.transform;
+  if (OPS) {
+    [
+      "paintImageXObject",
+      "paintInlineImageXObject",
+      "paintImageMaskXObject",
+      "paintImageXObjectRepeat",
+      "paintInlineImageXObjectGroup",
+    ].forEach((k) => {
+      if (typeof OPS[k] === "number") paintIds.add(OPS[k]);
+    });
+  } else {
+    [85, 86, 83, 84, 87].forEach((n) => paintIds.add(n));
+  }
+
+  // Best-effort CTM y tracking to prefer header-band images (y < ~0.35 from top)
+  let ctm = [1, 0, 0, 1, 0, 0];
+  const stack = [];
+  let topBandImages = 0;
+  let anyImages = 0;
+  const pageH = viewport.height || 1;
+
+  for (let i = 0; i < fns.length; i++) {
+    const fn = fns[i];
+    if (OPS?.save === fn) {
+      stack.push(ctm.slice());
+      continue;
+    }
+    if (OPS?.restore === fn) {
+      ctm = stack.pop() || ctm;
+      continue;
+    }
+    if (transformId != null && fn === transformId && Array.isArray(args[i]) && args[i].length >= 6) {
+      const m = args[i];
+      // Multiply CTM: new = m × ctm (pdf.js order)
+      const a = m[0] * ctm[0] + m[1] * ctm[2];
+      const b = m[0] * ctm[1] + m[1] * ctm[3];
+      const c = m[2] * ctm[0] + m[3] * ctm[2];
+      const d = m[2] * ctm[1] + m[3] * ctm[3];
+      const e = m[4] * ctm[0] + m[5] * ctm[2] + ctm[4];
+      const f = m[4] * ctm[1] + m[5] * ctm[3] + ctm[5];
+      ctm = [a, b, c, d, e, f];
+      continue;
+    }
+    if (!paintIds.has(fn)) continue;
+    anyImages += 1;
+    // PDF y grows upward; top band ≈ high y. Normalize to top-from-page fraction.
+    const yFromTop = 1 - (ctm[5] || 0) / pageH;
+    const absScale = Math.abs(ctm[0] || 0) + Math.abs(ctm[3] || 0);
+    const smallish = absScale === 0 || absScale < pageH * 0.9;
+    if (yFromTop < 0.35 || (anyImages <= 2 && smallish)) {
+      topBandImages += 1;
+    }
+  }
+
+  if (topBandImages >= 1 && topBandImages <= 4) return true;
+  // Fallback without reliable CTM: 1–3 images on page 1 often = photo/logo
+  if (!OPS && anyImages >= 1 && anyImages <= 3) return true;
+  return false;
 }
 
 /**
@@ -330,6 +412,38 @@ function countDocxTables(arrayBuffer, html) {
   return (html.match(/<table[\s>]/gi) || []).length;
 }
 
+/**
+ * Photo / image en tête DOCX (drawing/blip dans le début du document ou header).
+ * @param {ArrayBuffer} arrayBuffer
+ * @param {string} html
+ */
+export function detectDocxProfilePhoto(arrayBuffer, html) {
+  try {
+    const PizZip = window.PizZip || window.JSZip;
+    if (PizZip) {
+      const zip = new PizZip(arrayBuffer);
+      const headerFiles = Object.keys(zip.files || {}).filter((n) =>
+        /word\/header\d*\.xml$/i.test(n)
+      );
+      for (const name of headerFiles) {
+        const xml = zip.file(name)?.asText?.() || "";
+        if (/<w:drawing[\s>]|<a:blip[\s>]/i.test(xml)) return true;
+      }
+      const docXml = zip.file("word/document.xml")?.asText?.() || "";
+      // First ~8k of body: early drawings often = profile photo
+      const head = docXml.slice(0, 12000);
+      const drawings = (head.match(/<w:drawing[\s>]/gi) || []).length;
+      const blips = (head.match(/<a:blip[\s>]/gi) || []).length;
+      if (drawings >= 1 || blips >= 1) return true;
+    }
+  } catch {
+    /* fall through */
+  }
+  // HTML from mammoth: early <img>
+  const early = String(html || "").slice(0, 2500);
+  return /<img[\s>]/i.test(early);
+}
+
 export async function extractFromDocx(file) {
   if (!window.mammoth) throw new Error("Bibliothèque DOCX non chargée.");
   const arrayBuffer = await file.arrayBuffer();
@@ -340,6 +454,7 @@ export async function extractFromDocx(file) {
   const text = raw.value || "";
   const html = htmlResult.value || "<p></p>";
   const tableCount = countDocxTables(arrayBuffer, html);
+  const profilePhotoHint = detectDocxProfilePhoto(arrayBuffer, html);
   return {
     text,
     pages: null,
@@ -349,6 +464,7 @@ export async function extractFromDocx(file) {
     html,
     approximate: true,
     tableCount,
+    profilePhotoHint,
     originalBuffer: arrayBuffer,
   };
 }
@@ -369,6 +485,7 @@ export async function extractFromTxt(file) {
     html,
     approximate: true,
     tableCount: 0,
+    profilePhotoHint: false,
     originalBuffer: null,
   };
 }

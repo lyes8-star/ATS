@@ -86,6 +86,57 @@ const COMMON_TYPOS = [
   { wrong: /\bai\s+eu\s+l'?occasion\b/gi, right: "j'ai eu l'occasion" },
 ];
 
+const COMMON_GRAMMAR = [
+  { wrong: /\bj['']ai\s+réalis[ée]r\b/gi, right: "j'ai réalisé" },
+  { wrong: /\bj['']ai\s+gér[ée]r\b/gi, right: "j'ai géré" },
+  { wrong: /\bj['']ai\s+développ[ée]r\b/gi, right: "j'ai développé" },
+  { wrong: /\bj['']ai\s+mis\s+en\s+placee\b/gi, right: "j'ai mis en place" },
+  { wrong: /\bles\s+missions?\s+qui\s+m['']a\b/gi, right: "les missions qui m'ont" },
+  { wrong: /\bparceque\b/gi, right: "parce que" },
+  { wrong: /\bmalgré\s+que\b/gi, right: "bien que" },
+  { wrong: /\bau\s+final\b/gi, right: "au final → finalement / pour finir" },
+  { wrong: /\bparmis\b/gi, right: "parmi" },
+  { wrong: /\ben\s+temps\s+que\b/gi, right: "en tant que" },
+  { wrong: /\bdu\s+coup\b/gi, right: "par conséquent / ainsi" },
+  { wrong: /\bça\s+a\s+été\b/gi, right: "cela a été" },
+  { wrong: /\bje\s+me\s+suis\s+occupé\s+de\s+de\b/gi, right: "je me suis occupé de" },
+  { wrong: /\bresponsable\s+des?\s+suivis?\s+des?\s+dossiers\b/gi, right: "assuré le suivi des dossiers" },
+];
+
+function findGrammarIssues(text, lang) {
+  if (lang === "en") return [];
+  const issues = [];
+  const seen = new Set();
+  for (const tip of COMMON_GRAMMAR) {
+    tip.wrong.lastIndex = 0;
+    let m;
+    while ((m = tip.wrong.exec(text)) !== null) {
+      const key = m[0].toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const start = Math.max(0, m.index - 30);
+      const end = Math.min(text.length, m.index + m[0].length + 30);
+      let ctx = text.slice(start, end).replace(/\s+/g, " ").trim();
+      if (start > 0) ctx = "…" + ctx;
+      if (end < text.length) ctx = ctx + "…";
+      const right = tip.right.includes("→")
+        ? tip.right
+        : m[0].replace(tip.wrong, tip.right);
+      tip.wrong.lastIndex = 0;
+      issues.push({
+        wrong: m[0],
+        right: right.includes("→") ? right.split("→").pop().trim() : right,
+        context: ctx,
+        textStart: m.index,
+        textEnd: m.index + m[0].length,
+        kind: "grammar",
+      });
+      if (issues.length >= 8) return issues;
+    }
+  }
+  return issues;
+}
+
 function normalizeText(text) {
   // Offset-preserving: keep alignment with PDF pagesGeo / applyAll.
   // Only strip nulls and normalize CRLF — do NOT trim or collapse newlines.
@@ -122,14 +173,14 @@ function detectEmail(text) {
 }
 
 function detectPhone(text) {
-  return /(\+?\d[\d\s.\-]{7,}\d)|(\b0[1-9](?:[\s.\-]?\d{2}){4}\b)/.test(text);
+  return /(\+?\d[\d\t .,\-]{7,}\d)|(\b0[1-9](?:[.\-\t ]?\d{2}){4}\b)/.test(text);
 }
 
 function detectLinkedIn(text) {
   return /linkedin\.com\/in\/[\w\-.%]+/i.test(text || "");
 }
 
-const PHONE_LIKE_RE = /(\+?\d[\d\s.\-]{7,}\d)|(\b0[1-9](?:[\s.\-]?\d{2}){4}\b)/;
+const PHONE_LIKE_RE = /(\+?\d[\d\t .,\-]{7,}\d)|(\b0[1-9](?:[.\-\t ]?\d{2}){4}\b)/;
 
 /** Métriques « résultat » uniquement (pas dates / tél / CP). */
 function countResultMetrics(text) {
@@ -360,11 +411,18 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
 
   for (const s of spelling) {
     const ctx = (s.context || "").replace(/\s+/g, " ").trim();
+    const isGrammar = s.kind === "grammar";
     push({
-      kind: "typo",
+      kind: isGrammar ? "grammar" : "typo",
       axis: "content",
-      shortLabel: isEn ? "Spelling" : "Orthographe",
-      severity: "critical",
+      shortLabel: isGrammar
+        ? isEn
+          ? "Grammar"
+          : "Grammaire"
+        : isEn
+          ? "Spelling"
+          : "Orthographe",
+      severity: isGrammar ? "warning" : "critical",
       textStart: s.textStart,
       textEnd: s.textEnd,
       quote: s.wrong,
@@ -372,11 +430,16 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ? `Fix « ${s.wrong} » → « ${s.right} »`
         : `Corriger « ${s.wrong} » → « ${s.right} »`,
       detail: ctx
-        ? (isEn ? `Found here: ${ctx}` : `Repéré ici : ${ctx}`)
-        : (isEn ? "Replace this misspelling on your CV." : "Remplacez cette faute telle qu'elle apparaît sur votre CV."),
+        ? isEn
+          ? `Found here: ${ctx}`
+          : `Repéré ici : ${ctx}`
+        : isEn
+          ? "Replace this wording on your CV."
+          : "Remplacez cette formulation telle qu'elle apparaît sur votre CV.",
       suggestion: s.right,
       applyMode: "replace",
       approximate: false,
+      checkId: isGrammar ? "grammar_quality" : "spelling_quality",
     });
   }
 
@@ -787,7 +850,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
     });
   }
 
-  if (!parsed?.contact?.name) {
+  const hasStrictName = Boolean(parsed?.contact?.firstName && parsed?.contact?.lastName);
+  if (!hasStrictName) {
     push({
       kind: "missing_name",
       axis: "structure",
@@ -795,16 +859,161 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       severity: "warning",
       textStart: 0,
       textEnd: Math.min(40, text.length),
-      quote: text.slice(0, Math.min(40, text.length)).trim(),
-      title: isEn ? "Add your full name in plain text" : "Ajouter votre nom complet en texte",
+      quote: (parsed?.contact?.name || text.slice(0, Math.min(40, text.length))).trim(),
+      title: isEn ? "Add your full name (first + last) in plain text" : "Ajouter prénom et nom en texte clair",
       detail: isEn
-        ? "ATS need a clear candidate name at the top (not only in a logo/image)."
-        : "Les ATS ont besoin d'un nom candidat clair en tête (pas seulement dans un logo/image).",
+        ? "ATS need a clear first and last name at the top (not a job title or logo)."
+        : "Les ATS ont besoin d'un prénom + nom clairs en tête (pas un intitulé de poste ni un logo).",
       suggestion: "[Prénom Nom]",
       applyMode: "insert_header",
       section: "Coordonnées",
       approximate: true,
       checkId: "identity_name",
+    });
+  }
+
+  if (!parsed?.contact?.location && !parsed?.contact?.address) {
+    push({
+      kind: "missing_location",
+      axis: "structure",
+      shortLabel: isEn ? "Location" : "Adresse",
+      severity: "info",
+      textStart: 0,
+      textEnd: Math.min(50, text.length),
+      quote: text.slice(0, Math.min(50, text.length)).trim(),
+      title: isEn ? "Add a city or address in plain text" : "Ajouter une ville ou une adresse en texte",
+      detail: isEn
+        ? "Location helps ATS location filters. Prefer City or ZIP + City (street optional)."
+        : "La localisation aide les filtres ATS. Indiquez Ville ou CP + Ville (rue optionnelle).",
+      suggestion: isEn ? "[City, Country]" : "[75001 Paris]",
+      applyMode: "insert_header",
+      section: "Coordonnées",
+      approximate: true,
+      checkId: "identity_address",
+    });
+  }
+
+  if (parsed?.layout?.profilePhotoHint) {
+    push({
+      kind: "profile_photo",
+      axis: "readability",
+      shortLabel: isEn ? "Photo" : "Photo",
+      severity: "warning",
+      textStart: 0,
+      textEnd: Math.min(30, text.length),
+      quote: text.slice(0, Math.min(30, text.length)).trim() || "(en-tête)",
+      title: isEn
+        ? "Profile photo may hurt ATS parsing"
+        : "Photo de profil risquée pour les ATS",
+      detail: isEn
+        ? "Images in the header are often ignored or scramble reading order. Prefer plain-text contact."
+        : "Une image en en-tête est souvent ignorée ou brouille l'ordre de lecture. Préférez des coordonnées en texte.",
+      suggestion: "",
+      applyMode: "replace",
+      approximate: true,
+      checkId: "profile_photo",
+    });
+  }
+
+  const headline = (parsed?.headline || "").trim();
+  const hasRoles = (parsed?.roles || []).length > 0;
+  const nameNorm = (parsed?.contact?.name || "").trim().toLowerCase();
+  const headlineIsName = headline && nameNorm && headline.toLowerCase() === nameNorm;
+  if (hasRoles && (!headline || headlineIsName)) {
+    push({
+      kind: "missing_headline",
+      axis: "structure",
+      shortLabel: isEn ? "Title" : "Titre",
+      severity: "warning",
+      textStart: 0,
+      textEnd: Math.min(40, text.length),
+      quote: (parsed?.contact?.name || text.slice(0, 40)).trim(),
+      title: isEn ? "Add a clear job title under your name" : "Ajouter un intitulé de poste sous votre nom",
+      detail: isEn
+        ? "A headline job title helps ATS and recruiters map your target role."
+        : "Un intitulé sous le nom aide les ATS et recruteurs à cibler votre poste.",
+      suggestion: isEn ? "[Target job title]" : "[Intitulé de poste ciblé]",
+      applyMode: "insert_header",
+      section: "Coordonnées",
+      approximate: true,
+      checkId: "job_title_headline",
+    });
+  }
+
+  let missingDateAnns = 0;
+  for (const role of parsed?.roles || []) {
+    if (missingDateAnns >= 3) break;
+    if (role.startYear) continue;
+    const quote = (role.title || role.company || role.raw || "poste").slice(0, 80);
+    const loc = locateQuote(text, quote) || {
+      textStart: 0,
+      textEnd: Math.min(40, text.length),
+      quote,
+    };
+    push({
+      kind: "missing_dates",
+      axis: "structure",
+      shortLabel: isEn ? "Dates" : "Dates",
+      severity: "warning",
+      ...loc,
+      title: isEn
+        ? `Add dates for « ${quote.slice(0, 40)} »`
+        : `Ajouter des dates pour « ${quote.slice(0, 40)} »`,
+      detail: isEn
+        ? "Each role should include start–end years (or “present”) so ATS can map your timeline."
+        : "Chaque poste doit avoir des années début–fin (ou « aujourd'hui ») pour cartographier le parcours.",
+      suggestion: isEn
+        ? `${role.title || "[Title]"} — ${role.company || "[Company]"} (YYYY – YYYY)`
+        : `${role.title || "[Intitulé]"} — ${role.company || "[Entreprise]"} (AAAA – AAAA)`,
+      applyMode: "insert_after",
+      approximate: true,
+      checkId: "role_dates",
+    });
+    missingDateAnns += 1;
+  }
+
+  const interests = parsed?.interests;
+  if (interests?.status === "empty") {
+    push({
+      kind: "empty_interests",
+      axis: "structure",
+      shortLabel: isEn ? "Interests" : "Intérêts",
+      severity: "warning",
+      textStart: Math.max(0, text.length - 1),
+      textEnd: text.length,
+      quote: "(centres d'intérêt)",
+      title: isEn ? "Fill the Interests section" : "Compléter la section Centres d'intérêt",
+      detail: isEn
+        ? "The heading exists but has no items. Add 3–5 concrete interests or remove the section."
+        : "Le titre est là mais sans contenu. Ajoutez 3–5 intérêts concrets ou retirez la section.",
+      suggestion: isEn
+        ? "Interests: [hobby linked to your role], [sport], [community]"
+        : "Centres d'intérêt : [activité liée au poste], [sport], [engagement]",
+      applyMode: "insert_after",
+      approximate: true,
+      checkId: "interests",
+    });
+  } else if (interests?.status === "generic") {
+    push({
+      kind: "generic_interests",
+      axis: "structure",
+      shortLabel: isEn ? "Interests" : "Intérêts",
+      severity: "info",
+      textStart: Math.max(0, text.length - 1),
+      textEnd: text.length,
+      quote: (interests.lines || []).slice(0, 3).join(", ") || "(intérêts)",
+      title: isEn
+        ? "Make interests more specific (3–5 items)"
+        : "Cibler 3–5 centres d'intérêt parlants",
+      detail: isEn
+        ? "Generic lists (cinema, sport, travel) add little signal. Prefer concrete, discussable interests."
+        : "Les listes génériques (cinéma, sport, voyage) apportent peu. Préférez des intérêts concrets et discutables.",
+      suggestion: isEn
+        ? "Interests: [specific project / sport / community]"
+        : "Centres d'intérêt : [projet / sport / engagement précis]",
+      applyMode: "insert_after",
+      approximate: true,
+      checkId: "interests",
     });
   }
 
@@ -844,11 +1053,18 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
 function shortLabelFor(kind) {
   const map = {
     typo: "Orthographe",
+    grammar: "Grammaire",
     missing_email: "Email",
     missing_phone: "Téléphone",
     missing_linkedin: "LinkedIn",
     missing_section: "Section",
     missing_name: "Nom",
+    missing_location: "Adresse",
+    missing_headline: "Titre",
+    missing_dates: "Dates",
+    empty_interests: "Intérêts",
+    generic_interests: "Intérêts",
+    profile_photo: "Photo",
     incomplete_role: "Poste",
     passive_verb: "Verbe",
     missing_metric: "Chiffre",
@@ -1087,6 +1303,22 @@ function scoreReadability(text, fileMeta) {
     });
   }
 
+  const profilePhotoHint = !!(layout?.profilePhotoHint || fileMeta.profilePhotoHint);
+  if (profilePhotoHint) {
+    score = Math.max(0, score - 1);
+    checks.push({
+      id: "profile_photo",
+      ok: false,
+      label: "Photo de profil détectée — souvent ignorée ou nuisible aux parseurs ATS ; préférez le texte.",
+    });
+  } else {
+    checks.push({
+      id: "profile_photo",
+      ok: true,
+      label: "Pas de photo de profil détectée en en-tête.",
+    });
+  }
+
   // Exigeant: pas de lisibilité « parfaite » si headings ATS non parsables
   const parsed = fileMeta.parsed;
   const hasExp = hasParsedSection(parsed, "experience");
@@ -1148,21 +1380,21 @@ function scoreStructure(text, fileMeta = {}) {
   const contact = parsed?.contact;
 
   if (contact?.email || detectEmail(text)) {
-    score += 5;
+    score += 4;
     checks.push({ id: "email", ok: true, label: "Adresse e-mail présente." });
   } else {
     checks.push({ id: "email", ok: false, label: "Aucune adresse e-mail détectée." });
   }
 
   if (contact?.phone || detectPhone(text)) {
-    score += 4;
+    score += 3;
     checks.push({ id: "phone", ok: true, label: "Numéro de téléphone détecté." });
   } else {
     checks.push({ id: "phone", ok: false, label: "Téléphone manquant ou non reconnu." });
   }
 
   if (contact?.linkedin || detectLinkedIn(text)) {
-    score += 3;
+    score += 2;
     checks.push({ id: "linkedin", ok: true, label: "Profil LinkedIn mentionné." });
   } else {
     checks.push({ id: "linkedin", ok: false, label: "Lien LinkedIn absent." });
@@ -1182,34 +1414,70 @@ function scoreStructure(text, fileMeta = {}) {
     });
   }
 
-  if (contact?.name) {
-    score += 1;
-    checks.push({ id: "identity_name", ok: true, label: "Nom candidat détecté." });
-  } else {
-    checks.push({ id: "identity_name", ok: false, label: "Nom candidat peu identifiable." });
-  }
-
-  if (contact?.location) {
-    checks.push({ id: "identity_location", ok: true, label: "Localisation détectée." });
+  const hasStrictName = Boolean(contact?.firstName && contact?.lastName);
+  if (hasStrictName) {
+    score += 2;
+    checks.push({
+      id: "identity_name",
+      ok: true,
+      label: "Prénom et nom clairement identifiés.",
+    });
   } else {
     checks.push({
-      id: "identity_location",
+      id: "identity_name",
       ok: false,
-      label: "Localisation absente (ville/CP) — utile pour le filtrage ATS.",
+      label: "Prénom/nom absents ou peu identifiables (évitez un intitulé de poste à la place).",
     });
   }
 
-  const hasTitle =
-    (parsed?.roles?.[0]?.title && parsed.roles[0].title.length > 2) ||
-    JOB_TITLE_HINTS.test(text.slice(0, 800));
-  if (hasTitle) {
-    score += 4;
+  const hasAddress = Boolean(contact?.location || contact?.address);
+  if (hasAddress) {
+    score += 1;
+    checks.push({
+      id: "identity_address",
+      ok: true,
+      label: "Adresse ou localisation détectée.",
+    });
+  } else {
+    checks.push({
+      id: "identity_address",
+      ok: false,
+      label: "Localisation absente (ville/adresse) — utile pour le filtrage ATS.",
+    });
+  }
+
+  const hasHeadline = Boolean(parsed?.headline && parsed.headline.trim());
+  const hasRoleTitle = Boolean(parsed?.roles?.[0]?.title && parsed.roles[0].title.length > 2);
+  const hasTitleHint = JOB_TITLE_HINTS.test(text.slice(0, 800));
+  if (hasHeadline || hasRoleTitle || hasTitleHint) {
+    score += 3;
     checks.push({ id: "job_title", ok: true, label: "Titre/intitulé de poste présent." });
   } else {
     checks.push({
       id: "job_title",
       ok: false,
       label: "Intitulé de poste peu identifiable en tête de CV.",
+    });
+  }
+
+  if (hasHeadline) {
+    score += 1;
+    checks.push({
+      id: "job_title_headline",
+      ok: true,
+      label: "Intitulé (headline) sous le nom détecté.",
+    });
+  } else if ((parsed?.roles || []).length > 0) {
+    checks.push({
+      id: "job_title_headline",
+      ok: false,
+      label: "Pas d'intitulé clair sous le nom — ajoutez un titre de poste ciblé.",
+    });
+  } else {
+    checks.push({
+      id: "job_title_headline",
+      ok: false,
+      label: "Pas d'intitulé clair sous le nom — ajoutez un titre de poste ciblé.",
     });
   }
 
@@ -1226,6 +1494,57 @@ function scoreStructure(text, fileMeta = {}) {
       id: "complete_role",
       ok: false,
       label: "Aucun poste complet (intitulé + entreprise + dates) parsable.",
+    });
+  }
+
+  const roles = parsed?.roles || [];
+  const datedRoles = roles.filter((r) => r.startYear != null && (r.endYear != null || r.ongoing));
+  if (roles.length === 0) {
+    checks.push({
+      id: "role_dates",
+      ok: true,
+      label: "Dates de postes : non applicable (aucun rôle détecté).",
+    });
+  } else if (datedRoles.length >= 1) {
+    score += 1;
+    checks.push({
+      id: "role_dates",
+      ok: true,
+      label: `Dates présentes sur ${datedRoles.length}/${roles.length} poste(s).`,
+    });
+  } else {
+    checks.push({
+      id: "role_dates",
+      ok: false,
+      label: "Aucun poste avec dates début/fin (ou « en cours ») parsable.",
+    });
+  }
+
+  const interests = parsed?.interests;
+  if (!interests || interests.status === "absent") {
+    checks.push({
+      id: "interests",
+      ok: true,
+      label: "Centres d'intérêt absents (optionnel).",
+    });
+  } else if (interests.status === "empty") {
+    checks.push({
+      id: "interests",
+      ok: false,
+      label: "Section Centres d'intérêt vide — complétez ou retirez le titre.",
+    });
+  } else if (interests.status === "generic") {
+    checks.push({
+      id: "interests",
+      ok: false,
+      label: "Centres d'intérêt trop génériques — cibler 3–5 intérêts parlants.",
+    });
+  } else {
+    score += 1;
+    checks.push({
+      id: "interests",
+      ok: true,
+      label: "Centres d'intérêt présents et exploitables.",
     });
   }
 
@@ -1391,6 +1710,42 @@ function scoreContent(text, fileMeta = {}) {
       id: "concision",
       ok: false,
       label: `Contenu dense (~${wordCount} mots) — allégez.`,
+    });
+  }
+
+  const spellingIssues = Array.isArray(fileMeta.spelling) ? fileMeta.spelling : [];
+  const typoCount = spellingIssues.filter((s) => s.kind !== "grammar").length;
+  const grammarCount = spellingIssues.filter((s) => s.kind === "grammar").length;
+  const spellPenalty = Math.min(4, typoCount);
+  if (spellPenalty > 0) {
+    score = Math.max(0, score - spellPenalty);
+  }
+  if (typoCount === 0) {
+    checks.push({
+      id: "spelling_quality",
+      ok: true,
+      label: "Orthographe : pas de faute fréquente détectée.",
+    });
+  } else {
+    checks.push({
+      id: "spelling_quality",
+      ok: false,
+      label: `Orthographe : ${typoCount} faute(s) fréquente(s) (−${spellPenalty} pt).`,
+    });
+  }
+
+  if (grammarCount === 0) {
+    checks.push({
+      id: "grammar_quality",
+      ok: true,
+      label: "Grammaire : pas de tournure douteuse détectée.",
+    });
+  } else {
+    score = Math.max(0, score - Math.min(2, grammarCount));
+    checks.push({
+      id: "grammar_quality",
+      ok: false,
+      label: `Grammaire : ${grammarCount} tournure(s) à corriger.`,
     });
   }
 
@@ -1671,8 +2026,24 @@ export function analyzeCv(rawText, fileMeta = {}) {
       tableHint: fileMeta.tableHint,
       headerSparse: fileMeta.headerSparse,
       readingOrderOk: fileMeta.readingOrderOk,
+      profilePhotoHint: fileMeta.profilePhotoHint,
     });
-  const meta = { ...fileMeta, parsed };
+
+  let spelling =
+    fileMeta.spelling ||
+    findSpellingIssues(text, detectedLang, fileMeta.techWhitelist || null);
+  const grammar = findGrammarIssues(text, detectedLang);
+  if (grammar.length) {
+    const seen = new Set(spelling.map((s) => `${s.textStart}:${s.wrong}`.toLowerCase()));
+    for (const g of grammar) {
+      const key = `${g.textStart}:${g.wrong}`.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      spelling = [...spelling, g];
+    }
+  }
+
+  const meta = { ...fileMeta, parsed, spelling };
 
   const readability = scoreReadability(text, meta);
   const structure = scoreStructure(text, meta);
@@ -1684,9 +2055,6 @@ export function analyzeCv(rawText, fileMeta = {}) {
   let label = labelForScore(total);
   const tags = buildTags(text, content, structure);
   const diagnostics = buildDiagnostics(text, { readability, structure, content, keywords });
-  const spelling =
-    fileMeta.spelling ||
-    findSpellingIssues(text, detectedLang, fileMeta.techWhitelist || null);
   const annotations = buildAnnotations(
     text,
     { readability, structure, content, keywords },
@@ -1750,9 +2118,33 @@ export function analyzeCv(rawText, fileMeta = {}) {
         "Coordonnées absentes ou non textuelles.": "Contact details missing or not plain text.",
         "Nom candidat détecté.": "Candidate name detected.",
         "Nom candidat peu identifiable.": "Candidate name not clearly identifiable.",
+        "Prénom et nom clairement identifiés.": "First and last name clearly identified.",
+        "Prénom/nom absents ou peu identifiables (évitez un intitulé de poste à la place).":
+          "First/last name missing or unclear (avoid a job title instead).",
         "Localisation détectée.": "Location detected.",
+        "Adresse ou localisation détectée.": "Address or location detected.",
         "Localisation absente (ville/CP) — utile pour le filtrage ATS.":
           "Location missing (city/ZIP) — useful for ATS filtering.",
+        "Localisation absente (ville/adresse) — utile pour le filtrage ATS.":
+          "Location missing (city/address) — useful for ATS filtering.",
+        "Intitulé (headline) sous le nom détecté.": "Headline job title under the name detected.",
+        "Pas d'intitulé clair sous le nom — ajoutez un titre de poste ciblé.":
+          "No clear headline under the name — add a target job title.",
+        "Centres d'intérêt absents (optionnel).": "Interests section absent (optional).",
+        "Section Centres d'intérêt vide — complétez ou retirez le titre.":
+          "Interests section empty — fill it or remove the heading.",
+        "Centres d'intérêt trop génériques — cibler 3–5 intérêts parlants.":
+          "Interests too generic — aim for 3–5 meaningful items.",
+        "Centres d'intérêt présents et exploitables.": "Interests present and useful.",
+        "Aucun poste avec dates début/fin (ou « en cours ») parsable.":
+          "No role with start/end dates (or “present”) parseable.",
+        "Dates de postes : non applicable (aucun rôle détecté).":
+          "Role dates: not applicable (no roles detected).",
+        "Photo de profil détectée — souvent ignorée ou nuisible aux parseurs ATS ; préférez le texte.":
+          "Profile photo detected — often ignored or harmful to ATS parsers; prefer plain text.",
+        "Pas de photo de profil détectée en en-tête.": "No profile photo detected in the header.",
+        "Orthographe : pas de faute fréquente détectée.": "Spelling: no common issues detected.",
+        "Grammaire : pas de tournure douteuse détectée.": "Grammar: no doubtful wording detected.",
         "Au moins un poste avec intitulé, entreprise et dates.":
           "At least one role with title, company and dates.",
         "Aucun poste complet (intitulé + entreprise + dates) parsable.":
@@ -1853,6 +2245,15 @@ export function analyzeCv(rawText, fileMeta = {}) {
 
       m = s.match(/^Densité de mots-clés moyenne \((\d+)\)\.$/);
       if (m) return `Average keyword density (${m[1]}).`;
+
+      m = s.match(/^Dates présentes sur (\d+)\/(\d+) poste\(s\)\.$/);
+      if (m) return `Dates present on ${m[1]}/${m[2]} role(s).`;
+
+      m = s.match(/^Orthographe : (\d+) faute\(s\) fréquente\(s\) \(−(\d+) pt\)\.$/);
+      if (m) return `Spelling: ${m[1]} common issue(s) (−${m[2]} pt).`;
+
+      m = s.match(/^Grammaire : (\d+) tournure\(s\) à corriger\.$/);
+      if (m) return `Grammar: ${m[1]} wording issue(s) to fix.`;
 
       return s;
     };
@@ -2097,6 +2498,7 @@ export async function analyzeCvAsync(rawText, fileMeta = {}, opts = {}) {
     tableHint: fileMeta.tableHint,
     headerSparse: fileMeta.headerSparse,
     readingOrderOk: fileMeta.readingOrderOk,
+    profilePhotoHint: fileMeta.profilePhotoHint,
   });
   const detectedLang = detectLanguage(normalizeText(rawText));
   const [skillsMatch, verbStats] = await Promise.all([
@@ -2117,6 +2519,16 @@ export async function analyzeCvAsync(rawText, fileMeta = {}, opts = {}) {
     spelling,
     techWhitelist
   );
+  const grammar = findGrammarIssues(normalizeText(rawText), detectedLang);
+  if (grammar.length) {
+    const seen = new Set(spelling.map((s) => `${s.textStart}:${s.wrong}`.toLowerCase()));
+    for (const g of grammar) {
+      const key = `${g.textStart}:${g.wrong}`.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      spelling.push(g);
+    }
+  }
 
   return analyzeCv(rawText, {
     ...fileMeta,
