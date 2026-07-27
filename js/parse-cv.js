@@ -36,7 +36,7 @@ const DATE_RANGE_RE = new RegExp(
 );
 
 const EMAIL_RE = /[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i;
-const PHONE_RE = /(\+?\d[\d\s.\-]{7,}\d)|(\b0[1-9](?:[\s.\-]?\d{2}){4}\b)/;
+const PHONE_RE = /(\+?\d[\d\t .,\-]{7,}\d)|(\b0[1-9](?:[.\-\t ]?\d{2}){4}\b)/;
 const LINKEDIN_RE = /linkedin\.com\/in\/[\w\-]+/i;
 
 /**
@@ -310,10 +310,122 @@ function detectColumnSmell(lines) {
 const LOCATION_RE =
   /\b(?:\d{5}\s+)?(?:Paris|Lyon|Marseille|Lille|Toulouse|Bordeaux|Nantes|Nice|Strasbourg|Montpellier|Rennes|Grenoble|Remote|France|Belgium|Belgique|Suisse|Canada|London|Berlin|Madrid|Bruxelles|Geneva|Genève)(?:\s*,\s*(?:France|Belgique|Suisse|Canada|UK|USA))?\b|\b\d{5}\s+[A-ZÀ-Ü][a-zà-ü' -]{2,40}\b/i;
 
+const ADDRESS_RE =
+  /\b(?:\d{1,4}\s*)?(?:rue|avenue|av\.?|boulevard|bd\.?|chemin|impasse|allée|allee|place|cours|quai|route|street|st\.?|road|rd\.?|lane|drive)\s+[A-Za-zÀ-ü0-9'’\- ]{2,50}/i;
+
+const JOB_TITLE_REJECT =
+  /\b(chargé|chargée|chargee|consultant|consultante|manager|développeur|développeuse|developpeur|developer|ingénieur|ingenieure|ingenieur|engineer|responsable|directeur|directrice|assistant|assistante|commercial|marketing|comptable|designer|analyst|analyste|devops|product\s+owner|full\s*stack|frontend|backend|curriculum|vitae|\bcv\b)\b/i;
+
+const GENERIC_INTERESTS =
+  /^(lecture|cinéma|cinema|sport|voyages?|musique|cuisine|photographie|photo|jeux\s*vidéo|series?|netflix|running|foot|football|tennis|yoga)$/i;
+
+/**
+ * Parse un nom candidat strict (prénom + nom).
+ * @param {string[]} headerLines
+ * @returns {{ name: string|null, firstName: string|null, lastName: string|null, headline: string|null }}
+ */
+export function parsePersonName(headerLines) {
+  const lines = (headerLines || []).map((l) => String(l || "").trim()).filter(Boolean);
+  let name = null;
+  let firstName = null;
+  let lastName = null;
+  let headline = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.length < 3 || l.length > 60) continue;
+    if (EMAIL_RE.test(l) || PHONE_RE.test(l) || LINKEDIN_RE.test(l)) continue;
+    if (LOCATION_RE.test(l) || ADDRESS_RE.test(l)) continue;
+    if (isSectionHeader({ text: l })) continue;
+    if (JOB_TITLE_REJECT.test(l) && !/^[A-ZÀ-Ü][a-zà-ü]+(\s+[A-ZÀ-Ü][a-zà-ü'-]+){1,3}$/.test(l)) {
+      if (!headline && JOB_TITLE_REJECT.test(l)) headline = l;
+      continue;
+    }
+    const tokens = l.split(/\s+/).filter(Boolean);
+    const alphaTokens = tokens.filter((t) => /^[A-Za-zÀ-ü][A-Za-zÀ-ü'-]*$/.test(t));
+    if (alphaTokens.length < 2 || alphaTokens.length > 4) {
+      if (!headline && JOB_TITLE_REJECT.test(l)) headline = l;
+      continue;
+    }
+    if (JOB_TITLE_REJECT.test(l)) {
+      if (!headline) headline = l;
+      continue;
+    }
+    name = alphaTokens.join(" ");
+    firstName = alphaTokens[0];
+    lastName = alphaTokens.slice(1).join(" ");
+    // Next non-contact line can be headline
+    for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+      const h = lines[j];
+      if (EMAIL_RE.test(h) || PHONE_RE.test(h) || LINKEDIN_RE.test(h)) continue;
+      if (LOCATION_RE.test(h) || ADDRESS_RE.test(h)) continue;
+      if (isSectionHeader({ text: h })) break;
+      if (h.length > 2 && h.length < 80) {
+        headline = h;
+        break;
+      }
+    }
+    break;
+  }
+
+  if (!headline) {
+    headline =
+      lines.find(
+        (l) =>
+          l !== name &&
+          JOB_TITLE_REJECT.test(l) &&
+          !EMAIL_RE.test(l) &&
+          !PHONE_RE.test(l) &&
+          l.length < 80
+      ) || null;
+  }
+
+  return { name, firstName, lastName, headline };
+}
+
+/**
+ * @param {string} text
+ * @returns {{ location: string|null, address: string|null }}
+ */
+export function parseLocationAddress(text) {
+  const address = text?.match?.(ADDRESS_RE)?.[0]?.trim() || null;
+  const location = text?.match?.(LOCATION_RE)?.[0]?.trim() || null;
+  return { location, address };
+}
+
+/**
+ * Qualité section centres d'intérêt / other.
+ * @param {Record<string, string[]>} sections
+ * @param {string[]} sectionOrder
+ */
+export function analyzeInterests(sections, sectionOrder) {
+  const ordered = (sectionOrder || []).includes("other");
+  const lines = (sections?.other || []).map((l) => String(l || "").trim()).filter(Boolean);
+  if (!ordered) {
+    return { status: "absent", lines: [], genericCount: 0 };
+  }
+  if (!lines.length) {
+    return { status: "empty", lines: [], genericCount: 0 };
+  }
+  const items = [];
+  for (const line of lines) {
+    const parts = line.split(/[,;|•·]/).map((s) => s.trim()).filter(Boolean);
+    if (parts.length > 1) items.push(...parts);
+    else items.push(line.replace(/^[-•]\s+/, "").trim());
+  }
+  const unique = [...new Set(items.filter(Boolean))];
+  const genericCount = unique.filter((i) => GENERIC_INTERESTS.test(i)).length;
+  let status = "ok";
+  if (unique.length > 8 || (unique.length >= 3 && genericCount / Math.max(unique.length, 1) >= 0.6)) {
+    status = "generic";
+  }
+  return { status, lines: unique, genericCount };
+}
+
 /**
  * Parse un CV depuis texte + géométrie optionnelle.
  * @param {string} text
- * @param {{ pagesGeo?: import('./extract.js').PageGeo[], tableCount?: number, tableHint?: boolean, headerSparse?: boolean, readingOrderOk?: boolean }} [opts]
+ * @param {{ pagesGeo?: import('./extract.js').PageGeo[], tableCount?: number, tableHint?: boolean, headerSparse?: boolean, readingOrderOk?: boolean, profilePhotoHint?: boolean }} [opts]
  * @returns {ParsedCv}
  */
 export function parseCv(text, opts = {}) {
@@ -349,21 +461,13 @@ export function parseCv(text, opts = {}) {
   }
 
   // Contact from header + full text
-  const head = (sections.header || []).join("\n") + "\n" + (text || "").slice(0, 600);
+  const head = (sections.header || []).join("\n") + "\n" + (text || "").slice(0, 800);
   const email = head.match(EMAIL_RE)?.[0] || null;
   const phone = head.match(PHONE_RE)?.[0] || null;
   const linkedin = head.match(LINKEDIN_RE)?.[0] || null;
-  const name =
-    (sections.header || []).find(
-      (l) =>
-        l.length > 2 &&
-        l.length < 60 &&
-        !EMAIL_RE.test(l) &&
-        !PHONE_RE.test(l) &&
-        !LINKEDIN_RE.test(l) &&
-        !LOCATION_RE.test(l)
-    ) || null;
-  const location = head.match(LOCATION_RE)?.[0] || null;
+  const { name, firstName, lastName, headline } = parsePersonName(sections.header || []);
+  const { location, address } = parseLocationAddress(head);
+  const interests = analyzeInterests(sections, sectionOrder);
 
   const roles = parseRoles(sections.experience || []);
   const eduRoles = parseRoles(sections.education || [], "education");
@@ -382,7 +486,18 @@ export function parseCv(text, opts = {}) {
     educationRoles: eduRoles,
     skills,
     graphicSkills,
-    contact: { email, phone, linkedin, name, location },
+    interests,
+    headline,
+    contact: {
+      email,
+      phone,
+      linkedin,
+      name,
+      firstName,
+      lastName,
+      location,
+      address,
+    },
     layout: {
       columnSmell: layoutDetect.columnSmell,
       xBimodality: layoutDetect.xBimodality,
@@ -390,6 +505,7 @@ export function parseCv(text, opts = {}) {
       tableCount: opts.tableCount || 0,
       headerSparse: !!opts.headerSparse,
       readingOrderOk: opts.readingOrderOk !== false,
+      profilePhotoHint: !!opts.profilePhotoHint,
     },
     employmentGaps,
   };

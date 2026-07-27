@@ -423,6 +423,7 @@ async function runRetest(root, session, hooks) {
         tableHint: session.extracted?.tableHint,
         headerSparse: session.extracted?.headerSparse,
         readingOrderOk: session.extracted?.readingOrderOk,
+        profilePhotoHint: session.extracted?.profilePhotoHint,
       },
       { jobDescription: session.jobDescription || "" }
     );
