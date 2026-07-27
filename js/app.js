@@ -177,7 +177,7 @@ function renderResults(report) {
     )
     .join("");
 
-  const failedChecks = (report.checklist || []).filter((c) => !c.ok);
+  const failedChecks = (report.checklist || []).filter((c) => c.ok === false);
   const failedChecklistHtml = failedChecks.length
     ? `<div class="failed-checklist">
         <h2 class="section-title">${t("results.checklist.fail.heading")} (${failedChecks.length})</h2>
