@@ -21,7 +21,7 @@ Ouvrir http://localhost:8080/
 - **Enrichissement Extrait** opt-in : LanguageTool, géocode, classification photo (extrait)
 - **Mode Pro** opt-in : Worker Cloudflare (LLM annotations, ESCO, PDF reflow + Extrait)
 - **Retest automatique** avec delta de score
-- Domaine : `https://www.testmoncv.fr/` — parité Crevia, i18n FR/EN, PWA / RGPD / a11y
+- Domaine : `https://www.testmoncv.fr/` — i18n FR/EN, PWA / RGPD / a11y
 
 ## Normes production (modèle Test / Test2)
 

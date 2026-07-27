@@ -1,51 +1,51 @@
 ---
 name: Test Mon CV
-description: Vérificateur de compatibilité ATS pour CV — analyse locale, score /100
+description: Atelier de contrôle CV pour logiciels de recrutement — analyse locale, score /100
 colors:
-  primary: "#2c2a28"
-  primary-dark: "#1a1918"
-  accent: "#d4a853"
-  accent-terra: "#c45c26"
-  bg: "#faf6f0"
-  bg-2: "#f5f0e8"
-  border: "#ede0cf"
-  text: "#2c2a28"
-  text-muted: "#78716c"
+  primary: "#12161c"
+  primary-dark: "#0a0c10"
+  accent: "#0f766e"
+  accent-bright: "#14b8a6"
+  accent-soft: "#d9f0ed"
+  bg: "#f3f5f7"
+  bg-2: "#e8ecef"
+  border: "#d5dbe3"
+  text: "#12161c"
+  text-muted: "#64748b"
   white: "#ffffff"
   success: "#15803d"
   warning: "#d97706"
   danger: "#991b1b"
 typography:
   display:
-    fontFamily: "Space Grotesk, system-ui, sans-serif"
+    fontFamily: "Syne, system-ui, sans-serif"
     fontSize: "clamp(2rem, 5vw, 3rem)"
     fontWeight: 800
     lineHeight: 1.15
   heading:
-    fontFamily: "Space Grotesk, system-ui, sans-serif"
+    fontFamily: "Syne, system-ui, sans-serif"
     fontSize: "clamp(1.35rem, 2.5vw, 1.75rem)"
     fontWeight: 700
     lineHeight: 1.25
   body:
-    fontFamily: "IBM Plex Sans, system-ui, sans-serif"
+    fontFamily: "Figtree, system-ui, sans-serif"
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.5
   label:
-    fontFamily: "IBM Plex Sans, system-ui, sans-serif"
+    fontFamily: "Figtree, system-ui, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 600
-    letterSpacing: "0.06em"
+    letterSpacing: "0.04em"
   readable-a11y:
     fontFamily: "Verdana, Geneva, sans-serif"
     fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.65
 rounded:
-  sm: "8px"
-  md: "12px"
-  lg: "16px"
-  pill: "999px"
+  sm: "6px"
+  md: "8px"
+  lg: "12px"
 spacing:
   xs: "0.35rem"
   sm: "0.65rem"
@@ -55,63 +55,36 @@ spacing:
   section: "4rem"
 components:
   button-primary:
-    backgroundColor: "{colors.accent-terra}"
+    backgroundColor: "{colors.accent}"
     textColor: "{colors.white}"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.md}"
     padding: "0.75rem 1.5rem"
   button-ghost:
     backgroundColor: "{colors.primary}"
-    textColor: "{colors.accent}"
-    rounded: "{rounded.pill}"
+    textColor: "{colors.white}"
+    rounded: "{rounded.sm}"
     padding: "0.5rem 1rem"
   fab-chat:
-    backgroundColor: "#16a34a"
+    backgroundColor: "{colors.accent}"
     textColor: "{colors.white}"
     size: "52px"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.md}"
   fab-a11y:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.white}"
     size: "52px"
-    rounded: "{rounded.pill}"
+    rounded: "{rounded.md}"
 ---
 
-# DESIGN.md
+# DESIGN.md — Test Mon CV
 
-## Overview
+## Direction
 
-Test Mon CV is a brand-first marketing + tool surface for a free ATS CV checker. Visual system: charcoal + gold + terracotta accents on a warm paper background (product heritage from the reference verifier UX), Space Grotesk for display, IBM Plex Sans for UI. One composition on first viewport: brand, headline, short support, upload CTA.
+Encre ardoise, papier froid, accent teal. Atelier de contrôle de document — pas un template « vérificateur ATS » crème/terracotta, pas de shell agence.
 
-## Colors
+## Principes
 
-- **Charcoal** `#2c2a28` — brand / nav / primary surfaces
-- **Gold** `#d4a853` — brand accent
-- **Terra** `#c45c26` — primary CTA
-- **Warm bg** `#faf6f0` / `#f5f0e8` — intentional paper ground (documented heritage; not generic SaaS cream-by-default)
-- Semantic greens / ambers / reds for score states only
-
-## Typography
-
-- Display / headings: Space Grotesk
-- Body / UI: IBM Plex Sans
-- A11y readable mode: Verdana fallback via `.a11y-readable`
-
-## Layout
-
-- Max content ~56–64rem
-- Hero centered upload dropzone
-- Results: score gauge → pass banner → diagnostic → category grid
-- Floating FABs: a11y (above) + chat (bottom-right); cookie banner bottom
-
-## Motion
-
-- Gauge stroke animation, dropzone hover, panel open/close
-- Always respect `prefers-reduced-motion` / `.a11y-motion`
-
-## Accessibility
-
-Skip link, focus-visible, ARIA on dialogs/CMP/chat, touch targets ≥44px on FABs, contrast targets WCAG AA.
-
-## Quality gate
-
-Impeccable detector hooks apply to HTML/CSS/JS edits. Prefer tokens from this file over one-off hex in new components.
+- Marque **Test Mon CV** hero-level sur la landing
+- Une composition au premier viewport (marque, titre, lead, upload)
+- CTA rectangulaires teal ; pas de pills décoratives
+- Analyse locale mise en avant sans claim marketing inventé
