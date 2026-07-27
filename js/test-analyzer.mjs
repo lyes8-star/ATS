@@ -441,4 +441,28 @@ Lead Frontend — StartupXYZ
   console.log("✓ PDF layout heuristics OK", layout);
 }
 
+// —— Detached ArrayBuffer / cloneBytesForPdf ——
+{
+  const { cloneBytesForPdf } = await import("./extract.js");
+  const source = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52]).buffer; // %PDF-1.4
+  const { keep, forPdf } = cloneBytesForPdf(source);
+  assert.ok(keep instanceof ArrayBuffer);
+  assert.ok(forPdf instanceof Uint8Array);
+  assert.equal(keep.byteLength, source.byteLength);
+  assert.equal(forPdf.byteLength, source.byteLength);
+  // forPdf must not share keep's buffer (pdf.js may transfer forPdf)
+  assert.notEqual(forPdf.buffer, keep);
+  // Simulate worker transfer of the pdf.js copy
+  const transferred = structuredClone(forPdf.buffer, { transfer: [forPdf.buffer] });
+  assert.ok(transferred.byteLength > 0);
+  assert.equal(forPdf.buffer.detached, true);
+  assert.equal(keep.detached, false);
+  // keep remains usable
+  const again = keep.slice(0);
+  assert.equal(again.byteLength, keep.byteLength);
+  const view = new Uint8Array(keep);
+  assert.equal(view[0], 37); // '%'
+  console.log("✓ cloneBytesForPdf survives transfer/detach OK");
+}
+
 console.log("Tous les tests OK");

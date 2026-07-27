@@ -1,5 +1,5 @@
 import { analyzeCvAsync, attachGeometry } from "./analyzer.js";
-import { extractDocument } from "./extract.js";
+import { extractDocument, revokeExtractObjectUrl } from "./extract.js";
 import * as extractApi from "./extract.js";
 import { mountStudio } from "./studio.js";
 import {
@@ -346,6 +346,7 @@ async function openStudio() {
 }
 
 function resetToUpload() {
+  revokeExtractObjectUrl(session?.extracted);
   selectedFile = null;
   session = null;
   els.fileInput.value = "";
@@ -365,6 +366,8 @@ async function runAnalysis() {
   if (!selectedFile) return;
   clearError();
   try {
+    // Drop previous Blob URL before a new extraction
+    revokeExtractObjectUrl(session?.extracted);
     setLoading(true, 0);
     await wait(300);
     setLoading(true, 1);

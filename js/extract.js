@@ -30,9 +30,43 @@
  *   tableHint?: boolean,
  *   headerSparse?: boolean,
  *   readingOrderOk?: boolean,
- *   originalBuffer?: ArrayBuffer|null
+ *   originalBuffer?: ArrayBuffer|null,
+ *   objectUrl?: string|null
  * }} ExtractResult
  */
+
+/**
+ * Clone durable + copie jetable pour pdf.js (transfer/detach).
+ * Invariant: `keep` is never passed to getDocument; only `forPdf` may be transferred.
+ * @param {ArrayBuffer} arrayBuffer
+ * @returns {{ keep: ArrayBuffer, forPdf: Uint8Array }}
+ */
+export function cloneBytesForPdf(arrayBuffer) {
+  if (!arrayBuffer || arrayBuffer.byteLength == null) {
+    throw new Error("ArrayBuffer PDF manquant.");
+  }
+  if (arrayBuffer.detached) {
+    throw new Error("ArrayBuffer PDF déjà détaché — rechargez le fichier.");
+  }
+  const keep = arrayBuffer.slice(0);
+  const forPdf = new Uint8Array(keep.slice(0));
+  return { keep, forPdf };
+}
+
+/**
+ * Révoque l'object URL Blob éventuel d'une extraction PDF.
+ * @param {{ objectUrl?: string|null }|null|undefined} extracted
+ */
+export function revokeExtractObjectUrl(extracted) {
+  if (extracted?.objectUrl) {
+    try {
+      URL.revokeObjectURL(extracted.objectUrl);
+    } catch {
+      /* ignore */
+    }
+    extracted.objectUrl = null;
+  }
+}
 
 function ensurePdfjs() {
   const pdfjs = window.pdfjsLib;
@@ -78,11 +112,33 @@ function clamp01(n) {
  */
 export async function extractFromPdf(file) {
   const pdfjs = ensurePdfjs();
-  // Copy bytes before pdf.js (worker may detach/transfer the ArrayBuffer)
-  const ab = await file.arrayBuffer();
-  const originalBuffer = ab.slice(0);
-  const data = new Uint8Array(ab);
-  const doc = await pdfjs.getDocument({ data }).promise;
+  // Durable bytes for Mode Pro / re-download — NEVER passed to getDocument
+  const source = await file.arrayBuffer();
+  const { keep: originalBuffer, forPdf } = cloneBytesForPdf(source);
+
+  let doc = null;
+  let objectUrl = null;
+
+  try {
+    // Exclusive TypedArray copy — pdf.js 4.x may transfer/detach it
+    doc = await pdfjs.getDocument({ data: forPdf }).promise;
+  } catch (err) {
+    // Fallback without TypedArray transfer: Blob URL
+    console.warn("[extract] getDocument(data) failed, retrying via Blob URL", err);
+    objectUrl = URL.createObjectURL(new Blob([originalBuffer], { type: "application/pdf" }));
+    try {
+      doc = await pdfjs.getDocument({
+        url: objectUrl,
+        disableRange: true,
+        disableStream: true,
+      }).promise;
+    } catch (err2) {
+      revokeExtractObjectUrl({ objectUrl });
+      objectUrl = null;
+      throw err2;
+    }
+  }
+
   const pagesGeo = [];
   let text = "";
   let cursor = 0;
@@ -142,6 +198,7 @@ export async function extractFromPdf(file) {
     headerSparse: layout.headerSparse,
     readingOrderOk: layout.readingOrderOk,
     originalBuffer,
+    objectUrl,
   };
 }
 
