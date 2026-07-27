@@ -1,0 +1,580 @@
+/**
+ * Moteur d'analyse ATS — évaluations côté client
+ */
+
+const ACTION_VERBS = [
+  "dirigé", "dirigée", "dirigé", "piloté", "pilotée", "géré", "gérée", "coordonné", "coordonnée",
+  "développé", "développée", "conçu", "conçue", "créé", "créée", "lancé", "lancée", "mis en place",
+  "amélioré", "améliorée", "optimisé", "optimisée", "augmenté", "augmentée", "réduit", "réduite",
+  "négocié", "négociée", "supervisé", "supervisée", "formé", "formée", "recruté", "recrutée",
+  "analysé", "analysée", "implémenté", "implémentée", "déployé", "déployée", "automatisé",
+  "led", "managed", "developed", "designed", "created", "launched", "improved", "optimized",
+  "increased", "reduced", "negotiated", "supervised", "trained", "recruited", "analyzed",
+  "implemented", "deployed", "automated", "built", "delivered", "achieved", "drove",
+  "assuré", "assurée", "réalisé", "réalisée", "conduit", "conduite", "élaboré", "élaborée",
+  "structuré", "structurée", "renforcé", "renforcée", "accompagné", "accompagnée",
+];
+
+const SECTION_PATTERNS = {
+  experience: /\b(exp[ée]rience|exp[ée]riences?\s+professionnelles?|parcours|emploi|career|work\s+experience|professional\s+experience)\b/i,
+  education: /\b(formation|formations?|education|éducation|dipl[ôo]mes?|études|etudes|academic)\b/i,
+  skills: /\b(comp[ée]tences?|skills?|savoir[-\s]?faire|technologies|outils|hard\s+skills)\b/i,
+  languages: /\b(langues?|languages?)\b/i,
+  summary: /\b(profil|r[ée]sum[ée]|objective|objectif|about|à propos|synth[èe]se)\b/i,
+};
+
+const JOB_TITLE_HINTS =
+  /\b(d[ée]veloppeur|developer|ing[ée]nieur|engineer|manager|chef de projet|consultant|analyst|analyste|responsable|directeur|directrice|assistant|assistante|commercial|marketing|comptable|rh|ressources humaines|designer|product owner|devops|data scientist|architecte|juriste|avocat|infirmier|enseignant)\b/i;
+
+const PROFESSIONAL_KEYWORDS = [
+  "gestion", "projet", "équipe", "client", "stratégie", "budget", "performance",
+  "processus", "qualité", "reporting", "kpi", "agile", "scrum", "management",
+  "communication", "négociation", "analyse", "données", "digital", "innovation",
+  "leadership", "collaboration", "planning", "stakeholder", "roadmap", "crm",
+  "erp", "excel", "powerpoint", "sql", "python", "javascript", "java", "sap",
+  "compliance", "audit", "formation", "recrutement", "vente", "commercial",
+  "marketing", "finance", "comptable", "logistique", "supply chain", "ops",
+  "product", "ux", "ui", "devops", "cloud", "aws", "azure", "api", "saas",
+];
+
+const ACADEMIC_MARKERS = [
+  "thèse", "these", "doctorat", "phd", "publication", "publications", "article scientifique",
+  "colloque", "symposium", "laboratoire", "chercheur", "chercheuse", "mémoire", "memoire",
+  "post-doc", "postdoc", "citation", "revue académique", "université",
+];
+
+const COMMON_TYPOS = [
+  { wrong: /\bacceuil\b/gi, right: "accueil" },
+  { wrong: /\bdèveloppeur\b/gi, right: "développeur" },
+  { wrong: /\bdeveloppeur\b/gi, right: "développeur" },
+  { wrong: /\bprofessionel(le)?\b/gi, right: "professionnel$1" },
+  { wrong: /\bprofessionelle\b/gi, right: "professionnelle" },
+  { wrong: /\bresponable\b/gi, right: "responsable" },
+  { wrong: /\bexpèrience\b/gi, right: "expérience" },
+  { wrong: /\bexperience\b/gi, right: "expérience", skipIfEn: true },
+  { wrong: /\bcompètence(s)?\b/gi, right: "compétence$1" },
+  { wrong: /\bcompétance(s)?\b/gi, right: "compétence$1" },
+  { wrong: /\bmanagment\b/gi, right: "management" },
+  { wrong: /\borganisationel(le)?\b/gi, right: "organisationnel$1" },
+  { wrong: /\bintélligent(e)?\b/gi, right: "intelligent$1" },
+  { wrong: /\binformation(s)?\s+personelle(s)?\b/gi, right: "informations personnelles" },
+  { wrong: /\baddresse\b/gi, right: "adresse" },
+  { wrong: /\bcoordonées\b/gi, right: "coordonnées" },
+  { wrong: /\bcoordonnés\b/gi, right: "coordonnées" },
+  { wrong: /\bconnnaissance(s)?\b/gi, right: "connaissance$1" },
+  { wrong: /\bappplication(s)?\b/gi, right: "application$1" },
+  { wrong: /\breferance(s)?\b/gi, right: "référence$1" },
+  { wrong: /\bréferance(s)?\b/gi, right: "référence$1" },
+  { wrong: /\bavaillable\b/gi, right: "available" },
+  { wrong: /\brecieved\b/gi, right: "received" },
+  { wrong: /\bmanagment\b/gi, right: "management" },
+  { wrong: /\bteh\b/gi, right: "the" },
+  { wrong: /\bseperat(e|ely)\b/gi, right: "separat$1" },
+  { wrong: /\boccurence(s)?\b/gi, right: "occurrence$1" },
+  { wrong: /\bsuccesful(ly)?\b/gi, right: "successful$1" },
+  { wrong: /\benviroment\b/gi, right: "environment" },
+  { wrong: /\blangauge(s)?\b/gi, right: "language$1" },
+  { wrong: /\bdependant\b/gi, right: "dependent", skipIfFr: true },
+  { wrong: /\bappart\b/gi, right: "à part" },
+  { wrong: /\bmalgré\s+que\b/gi, right: "bien que" },
+  { wrong: /\bauparavent\b/gi, right: "auparavant" },
+  { wrong: /\baprés\b/gi, right: "après" },
+  { wrong: /\bparceque\b/gi, right: "parce que" },
+  { wrong: /\bquelque\s+soit\b/gi, right: "quel que soit" },
+  { wrong: /\bai\s+eu\s+l'?occasion\b/gi, right: "j'ai eu l'occasion" },
+];
+
+function normalizeText(text) {
+  return (text || "")
+    .replace(/\u0000/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function countMatches(text, patterns) {
+  let count = 0;
+  for (const p of patterns) {
+    if (typeof p === "string") {
+      const re = new RegExp(`\\b${escapeReg(p)}\\b`, "gi");
+      const m = text.match(re);
+      if (m) count += m.length;
+    } else if (p.test(text)) {
+      count += 1;
+      p.lastIndex = 0;
+    }
+  }
+  return count;
+}
+
+function escapeReg(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function estimatePages(text, fileMeta = {}) {
+  if (fileMeta.pages) return fileMeta.pages;
+  const words = text.split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.round(words / 450));
+}
+
+function detectEmail(text) {
+  return /[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i.test(text);
+}
+
+function detectPhone(text) {
+  return /(\+?\d[\d\s.\-]{7,}\d)|(\b0[1-9](?:[\s.\-]?\d{2}){4}\b)/.test(text);
+}
+
+function detectLinkedIn(text) {
+  return /linkedin\.com\/in\/|linkedin\.com\/pub\/|\blinkedin\b/i.test(text);
+}
+
+function detectDates(text) {
+  const patterns = [
+    /\b(20\d{2}|19\d{2})\s*[-–—/]\s*(20\d{2}|19\d{2}|aujourd'?hui|present|présent|actuel|now|en cours)\b/gi,
+    /\b(janv\.?|févr\.?|mars|avr\.?|mai|juin|juil\.?|août|sept\.?|oct\.?|nov\.?|déc\.?|january|february|march|april|may|june|july|august|september|october|november|december)\s+(20\d{2}|19\d{2})/gi,
+    /\b(20\d{2}|19\d{2})\b/g,
+  ];
+  const years = new Set();
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const nums = m[0].match(/20\d{2}|19\d{2}/g);
+      if (nums) nums.forEach((y) => years.add(Number(y)));
+    }
+  }
+  return [...years].sort((a, b) => a - b);
+}
+
+function findEmploymentGap(years) {
+  if (years.length < 2) return null;
+  let maxGap = 0;
+  let gapStart = null;
+  for (let i = 1; i < years.length; i++) {
+    const gap = years[i] - years[i - 1];
+    if (gap > maxGap) {
+      maxGap = gap;
+      gapStart = years[i - 1];
+    }
+  }
+  if (maxGap >= 2) {
+    return { months: maxGap * 12, years: maxGap, from: gapStart, to: gapStart + maxGap };
+  }
+  return null;
+}
+
+function detectLanguage(text) {
+  const frHits = (text.match(/\b(le|la|les|des|une|pour|avec|dans|expérience|formation|compétences)\b/gi) || []).length;
+  const enHits = (text.match(/\b(the|and|with|for|experience|education|skills|of|to)\b/gi) || []).length;
+  return frHits >= enHits ? "fr" : "en";
+}
+
+function findSpellingIssues(text, lang) {
+  const issues = [];
+  const seen = new Set();
+  for (const tip of COMMON_TYPOS) {
+    if (lang === "en" && tip.skipIfEn) continue;
+    if (lang === "fr" && tip.skipIfFr) continue;
+    tip.wrong.lastIndex = 0;
+    let m;
+    while ((m = tip.wrong.exec(text)) !== null) {
+      const key = m[0].toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const start = Math.max(0, m.index - 30);
+      const end = Math.min(text.length, m.index + m[0].length + 30);
+      let ctx = text.slice(start, end).replace(/\s+/g, " ").trim();
+      if (start > 0) ctx = "…" + ctx;
+      if (end < text.length) ctx = ctx + "…";
+      const right = m[0].replace(tip.wrong, tip.right);
+      tip.wrong.lastIndex = 0;
+      issues.push({ wrong: m[0], right, context: ctx });
+      if (issues.length >= 12) return issues;
+    }
+  }
+  return issues;
+}
+
+function scoreReadability(text, fileMeta) {
+  const checks = [];
+  let score = 0;
+  const len = text.replace(/\s/g, "").length;
+  const extractable = len > 80;
+  if (extractable) {
+    score += 10;
+    checks.push({ ok: true, label: "Texte correctement extractible par les ATS." });
+  } else {
+    checks.push({ ok: false, label: "Texte difficilement extractible — le CV semble scanné ou en image." });
+  }
+
+  const pages = estimatePages(text, fileMeta);
+  if (pages <= 2) {
+    score += 8;
+    checks.push({ ok: true, label: pages === 1 ? "Longueur idéale (1 page)." : `Longueur acceptable (${pages} pages).` });
+  } else if (pages === 3) {
+    score += 4;
+    checks.push({ ok: false, label: "CV un peu long (3 pages) — visez 1 à 2 pages." });
+  } else {
+    checks.push({ ok: false, label: `CV trop long (${pages} pages) — risque de rejet ATS/RH.` });
+  }
+
+  const weirdChars = (text.match(/[□�]|[\uFFFD]/g) || []).length;
+  const hasColumnsSmell = (text.match(/\t{2,}| {6,}/g) || []).length > 8;
+  if (weirdChars === 0 && !hasColumnsSmell) {
+    score += 7;
+    checks.push({ ok: true, label: "Mise en page linéaire, favorable aux ATS." });
+  } else if (weirdChars > 0) {
+    score += 2;
+    checks.push({ ok: false, label: "Caractères illisibles détectés (encodage ou OCR défaillant)." });
+  } else {
+    score += 3;
+    checks.push({ ok: false, label: "Indices de colonnes/tableaux — certains ATS mélangent l'ordre du texte." });
+  }
+
+  return { score: Math.min(25, score), checks, pages };
+}
+
+function scoreStructure(text) {
+  const checks = [];
+  let score = 0;
+
+  if (detectEmail(text)) {
+    score += 5;
+    checks.push({ ok: true, label: "Adresse e-mail présente." });
+  } else {
+    checks.push({ ok: false, label: "Aucune adresse e-mail détectée." });
+  }
+
+  if (detectPhone(text)) {
+    score += 4;
+    checks.push({ ok: true, label: "Numéro de téléphone détecté." });
+  } else {
+    checks.push({ ok: false, label: "Téléphone manquant ou non reconnu." });
+  }
+
+  if (detectLinkedIn(text)) {
+    score += 3;
+    checks.push({ ok: true, label: "Profil LinkedIn mentionné." });
+  } else {
+    checks.push({ ok: false, label: "Lien LinkedIn absent." });
+  }
+
+  if (JOB_TITLE_HINTS.test(text.slice(0, 800))) {
+    score += 5;
+    checks.push({ ok: true, label: "Titre/intitulé de poste présent." });
+  } else {
+    checks.push({ ok: false, label: "Intitulé de poste peu identifiable en tête de CV." });
+  }
+
+  if (SECTION_PATTERNS.experience.test(text)) {
+    score += 4;
+    checks.push({ ok: true, label: "Section Expérience clairement identifiée." });
+  } else {
+    checks.push({ ok: false, label: "Section Expérience non détectée." });
+  }
+
+  if (SECTION_PATTERNS.education.test(text)) {
+    score += 2;
+    checks.push({ ok: true, label: "Section Formation présente." });
+  } else {
+    checks.push({ ok: false, label: "Section Formation absente ou mal intitulée." });
+  }
+
+  if (SECTION_PATTERNS.skills.test(text)) {
+    score += 2;
+    checks.push({ ok: true, label: "Section Compétences présente." });
+  } else {
+    checks.push({ ok: false, label: "Section Compétences manquante." });
+  }
+
+  return { score: Math.min(25, score), checks };
+}
+
+function scoreContent(text) {
+  const checks = [];
+  let score = 0;
+  const lower = text.toLowerCase();
+  const words = text.split(/\s+/).filter(Boolean);
+  const verbHits = ACTION_VERBS.filter((v) => lower.includes(v.toLowerCase())).length;
+
+  if (verbHits >= 6) {
+    score += 9;
+    checks.push({ ok: true, label: `Verbes d'action bien utilisés (${verbHits}).` });
+  } else if (verbHits >= 3) {
+    score += 5;
+    checks.push({ ok: false, label: `Peu de verbes d'action (${verbHits}) — renforcez l'impact.` });
+  } else {
+    score += 1;
+    checks.push({ ok: false, label: "Verbes d'action quasi absents — reformulez en réalisations." });
+  }
+
+  const metrics = (text.match(/\b\d+([.,]\d+)?\s?(%|€|\$|k€|m€|M€)?\b/g) || []).length;
+  if (metrics >= 5) {
+    score += 9;
+    checks.push({ ok: true, label: `Résultats chiffrés présents (${metrics} indicateurs).` });
+  } else if (metrics >= 2) {
+    score += 5;
+    checks.push({ ok: false, label: "Quelques chiffres — ajoutez davantage de métriques." });
+  } else {
+    checks.push({ ok: false, label: "Presque aucun résultat chiffré — les ATS et RH valorisent les preuves." });
+  }
+
+  const wordCount = words.length;
+  if (wordCount >= 250 && wordCount <= 900) {
+    score += 7;
+    checks.push({ ok: true, label: `Concision correcte (~${wordCount} mots).` });
+  } else if (wordCount < 250) {
+    score += 3;
+    checks.push({ ok: false, label: `Contenu trop court (~${wordCount} mots).` });
+  } else {
+    score += 3;
+    checks.push({ ok: false, label: `Contenu dense (~${wordCount} mots) — allégez.` });
+  }
+
+  return { score: Math.min(25, score), checks, hasMetrics: metrics >= 2 };
+}
+
+function scoreKeywords(text) {
+  const checks = [];
+  let score = 0;
+  const lower = text.toLowerCase();
+  const found = PROFESSIONAL_KEYWORDS.filter((k) => lower.includes(k));
+  const unique = new Set(found);
+
+  if (unique.size >= 12) {
+    score += 15;
+    checks.push({ ok: true, label: `Vocabulaire professionnel riche (${unique.size} mots-clés).` });
+  } else if (unique.size >= 6) {
+    score += 10;
+    checks.push({ ok: false, label: `Densité de mots-clés moyenne (${unique.size}).` });
+  } else {
+    score += 4;
+    checks.push({ ok: false, label: "Peu de mots-clés métier — alignez-vous sur les offres cibles." });
+  }
+
+  const diversity = unique.size;
+  if (diversity >= 8) {
+    score += 10;
+    checks.push({ ok: true, label: "Bonne diversité lexicale pour matcher les offres." });
+  } else {
+    score += 4;
+    checks.push({ ok: false, label: "Diversifiez le vocabulaire (outils, soft skills, domaines)." });
+  }
+
+  return {
+    score: Math.min(25, score),
+    checks,
+    keywords: [...unique].slice(0, 20),
+  };
+}
+
+function buildTags(text, content, structure) {
+  const tags = [];
+  const years = detectDates(text);
+  const span = years.length ? years[years.length - 1] - years[0] : 0;
+  if (span <= 3 || years.length <= 2) tags.push("Junior");
+  else if (span >= 10) tags.push("Senior");
+  else tags.push("Confirmé");
+
+  if (/\b(rh|ressources humaines|recrutement|talent)\b/i.test(text)) tags.push("RH");
+  if (/\b(d[ée]veloppeur|developer|devops|software|informatique)\b/i.test(text)) tags.push("Tech");
+  if (/\b(marketing|communication|brand)\b/i.test(text)) tags.push("Marketing");
+  if (/\b(public|fonction publique|administration|collectivit[ée])\b/i.test(text)) tags.push("Secteur public");
+  if (/\b(finance|comptable|audit|contr[ôo]le de gestion)\b/i.test(text)) tags.push("Finance");
+
+  if (!content.hasMetrics) tags.push("Sans métriques");
+  if (ACADEMIC_MARKERS.some((m) => text.toLowerCase().includes(m))) tags.push("Profil académique");
+  if (!structure.checks.find((c) => c.label.includes("LinkedIn") && c.ok)) tags.push("Sans LinkedIn");
+
+  return [...new Set(tags)].slice(0, 5);
+}
+
+function buildDiagnostics(text, scores) {
+  const diagnostics = [];
+  const years = detectDates(text);
+  const gap = findEmploymentGap(years);
+
+  if (gap) {
+    diagnostics.push({
+      severity: "critical",
+      title: "Trou d'emploi non justifié",
+      body: `Un gap d'environ ${gap.months} mois dans votre parcours attirera immédiatement l'attention. Sans explication, les recruteurs imagineront le pire.`,
+      tip: "→ Mentionnez l'activité durant cette période : formation, projet, bénévolat, création d'entreprise.",
+    });
+  }
+
+  const academicCount = ACADEMIC_MARKERS.filter((m) => text.toLowerCase().includes(m)).length;
+  if (academicCount >= 2) {
+    diagnostics.push({
+      severity: "warning",
+      title: "Profil académique non traduit en langage business",
+      body: "Votre CV académique ne parle pas spontanément aux recruteurs du secteur privé. Publications et thèse doivent passer au second plan.",
+      tip: "→ Reformulez vos recherches en termes d'impact, de budget géré et de résultats applicables à l'industrie.",
+    });
+  }
+
+  if (!scores.content.hasMetrics) {
+    diagnostics.push({
+      severity: "warning",
+      title: "Manque de résultats chiffrés",
+      body: "Sans métriques (%, €, volumes, délais), votre impact est difficile à scorer par un ATS et à juger par un RH.",
+      tip: "→ Ajoutez 3 à 5 chiffres concrets par expérience récente.",
+    });
+  }
+
+  const emailOk = detectEmail(text);
+  const phoneOk = detectPhone(text);
+  if (!emailOk || !phoneOk) {
+    diagnostics.push({
+      severity: "critical",
+      title: "Coordonnées incomplètes",
+      body: "Un ATS et un recruteur doivent pouvoir vous contacter immédiatement. Email et téléphone sont indispensables.",
+      tip: "→ Placez email + téléphone en haut du CV, en texte (pas dans une image).",
+    });
+  }
+
+  if (scores.readability.pages > 2) {
+    diagnostics.push({
+      severity: "warning",
+      title: "CV trop long pour les filtres ATS",
+      body: "Au-delà de 2 pages, le signal dilue et certains parseurs tronquent le contenu.",
+      tip: "→ Condenser expériences anciennes et retirer les détails non pertinents.",
+    });
+  }
+
+  const weakVerbs = scores.content.checks.some((c) => !c.ok && c.label.includes("verbe"));
+  if (weakVerbs) {
+    diagnostics.push({
+      severity: "info",
+      title: "Formulations passives ou descriptives",
+      body: "Les listes de tâches (« responsable de… ») scorent moins bien que des verbes d'action.",
+      tip: "→ Remplacez par : piloté, développé, augmenté, réduit, lancé…",
+    });
+  }
+
+  if (diagnostics.length === 0) {
+    diagnostics.push({
+      severity: "info",
+      title: "Quelques ajustements possibles",
+      body: "Votre CV est déjà bien positionné. Affinez les mots-clés selon chaque offre ciblée.",
+      tip: "→ Adaptez 5–8 mots-clés de l'annonce dans vos expériences.",
+    });
+  }
+
+  return diagnostics;
+}
+
+function labelForScore(total) {
+  if (total >= 85) return { text: "Excellent", color: "text-green", stroke: "#22c55e" };
+  if (total >= 70) return { text: "Bon", color: "text-green", stroke: "#22c55e" };
+  if (total >= 50) return { text: "Moyen", color: "text-amber", stroke: "#f59e0b" };
+  return { text: "Faible", color: "text-red", stroke: "#ef4444" };
+}
+
+function barClass(score, max = 25) {
+  const pct = score / max;
+  if (pct >= 0.8) return "bg-green";
+  if (pct >= 0.55) return "bg-amber";
+  return "bg-red";
+}
+
+function scoreColor(score, max = 25) {
+  const pct = score / max;
+  if (pct >= 0.8) return "text-green";
+  if (pct >= 0.55) return "text-amber";
+  return "text-red";
+}
+
+/**
+ * @param {string} rawText
+ * @param {{ fileName?: string, pages?: number, fileType?: string }} fileMeta
+ */
+export function analyzeCv(rawText, fileMeta = {}) {
+  const text = normalizeText(rawText);
+  if (!text || text.replace(/\s/g, "").length < 40) {
+    throw new Error(
+      "Impossible d'extraire suffisamment de texte. Vérifiez que le fichier n'est pas un scan/image protégé."
+    );
+  }
+
+  const lang = detectLanguage(text);
+  const readability = scoreReadability(text, fileMeta);
+  const structure = scoreStructure(text);
+  const content = scoreContent(text);
+  const keywords = scoreKeywords(text);
+
+  const total = readability.score + structure.score + content.score + keywords.score;
+  const label = labelForScore(total);
+  const tags = buildTags(text, content, structure);
+  const diagnostics = buildDiagnostics(text, { readability, structure, content, keywords });
+  const spelling = findSpellingIssues(text, lang);
+
+  const strengths = [
+    ...readability.checks.filter((c) => c.ok).map((c) => ({ category: "Lisibilité ATS", ...c })),
+    ...structure.checks.filter((c) => c.ok).map((c) => ({ category: "Structure", ...c })),
+    ...content.checks.filter((c) => c.ok).map((c) => ({ category: "Qualité du contenu", ...c })),
+    ...keywords.checks.filter((c) => c.ok).map((c) => ({ category: "Mots-clés", ...c })),
+  ];
+
+  const blockers = [
+    ...readability.checks.filter((c) => !c.ok).map((c) => ({ category: "Lisibilité ATS", ...c })),
+    ...structure.checks.filter((c) => !c.ok).map((c) => ({ category: "Structure", ...c })),
+    ...content.checks.filter((c) => !c.ok).map((c) => ({ category: "Qualité du contenu", ...c })),
+    ...keywords.checks.filter((c) => !c.ok).map((c) => ({ category: "Mots-clés", ...c })),
+  ];
+
+  const passes = total >= 70 && readability.score >= 15;
+
+  return {
+    fileName: fileMeta.fileName || "CV",
+    lang,
+    total,
+    label,
+    passes,
+    tags,
+    categories: {
+      readability: {
+        name: "Lisibilité ATS",
+        score: readability.score,
+        max: 25,
+        desc: "Texte extractible, mise en page, encodage — est-ce que votre CV peut être lu par un robot ?",
+        bar: barClass(readability.score),
+        color: scoreColor(readability.score),
+      },
+      structure: {
+        name: "Structure",
+        score: structure.score,
+        max: 25,
+        desc: "Sections clés, titre métier, coordonnées — votre CV est-il bien organisé ?",
+        bar: barClass(structure.score),
+        color: scoreColor(structure.score),
+      },
+      content: {
+        name: "Qualité du contenu",
+        score: content.score,
+        max: 25,
+        desc: "Verbes d'action, résultats chiffrés, concision — votre CV est-il percutant ?",
+        bar: barClass(content.score),
+        color: scoreColor(content.score),
+      },
+      keywords: {
+        name: "Mots-clés",
+        score: keywords.score,
+        max: 25,
+        desc: "Densité et diversité du vocabulaire professionnel pour matcher les offres.",
+        bar: barClass(keywords.score),
+        color: scoreColor(keywords.score),
+        found: keywords.keywords,
+      },
+    },
+    diagnostics,
+    strengths,
+    blockers,
+    spelling,
+    wordCount: text.split(/\s+/).filter(Boolean).length,
+    pages: readability.pages,
+  };
+}
+
+export { labelForScore };
