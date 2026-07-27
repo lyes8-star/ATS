@@ -1,24 +1,63 @@
 # ATS Check
 
-Analyseur de compatibilité ATS pour CV (PDF / DOCX).
+Analyseur de compatibilité ATS pour CV (PDF / DOCX) — site statique aux normes production (PWA, SEO, SEA, RGPD FR, accessibilité, chatbot).
 
 ## Lancer
-
-Ouvrir `index.html` via un serveur local (les modules ES et PDF.js nécessitent HTTP) :
 
 ```bash
 python3 -m http.server 8080
 ```
 
-Puis ouvrir http://localhost:8080/
+Ouvrir http://localhost:8080/
 
-## Fonctionnalités
+> Les modules ES, PDF.js et le service worker nécessitent HTTP (pas `file://`).
 
-- Upload PDF ou DOCX (analyse 100 % dans le navigateur)
-- Score /100 sur 4 axes : Lisibilité ATS, Structure, Qualité, Mots-clés
-- Diagnostic (gaps, métriques, profil académique…)
-- Détection de fautes d'orthographe courantes (FR/EN)
-- Page de résultats inspirée d'un vérificateur ATS professionnel
+## Fonctionnalités produit
+
+- Upload PDF / DOCX — analyse **100 % navigateur** (aucun CV envoyé au serveur)
+- Score /100 + 4 axes /25 (lisibilité, structure, qualité, mots-clés)
+- Diagnostic, points bloquants / forts, fautes d’orthographe courantes
+
+## Normes production (modèle Test / Test2)
+
+| Domaine | Implémentation |
+|---------|----------------|
+| **PWA** | `manifest.webmanifest`, `sw.js`, `offline.html`, icons, bannière install |
+| **SEO** | meta OG/Twitter, `robots.txt`, `sitemap.xml`, JSON-LD (`js/seo.js`) |
+| **SEA** | GA4 + Google Ads via `js/analytics.js` — **uniquement après consentement** |
+| **RGPD / ePrivacy** | CMP `js/consent.js` + Consent Mode v2 (deny by default) |
+| **Pages légales** | Mentions (LCEN), Confidentialité, Cookies, Accessibilité (RGAA/EAA) |
+| **Accessibilité** | skip link, FAB préférences (`js/a11y.js`), ARIA dialogues |
+| **Chatbot** | Assistant FAQ flottant (`js/chat.js`) |
+
+### Brancher GA4 / Google Ads
+
+Éditer [`data/site.json`](data/site.json) :
+
+```json
+"gaId": "G-XXXXXXXXXX",
+"adsId": "AW-XXXXXXXXX"
+```
+
+Les tags ne se chargent qu’après acceptation analytics/ads dans le bandeau cookies.
+
+### Mentions légales
+
+Compléter SIRET, forme juridique, adresse et hébergeur dans `data/site.json` → `legal` et dans `mentions-legales/index.html`.
+
+## Structure
+
+```
+index.html              # Accueil + analyseur
+data/site.json          # Config marque / IDs SEA / légal
+js/analyzer.js          # Moteur de score
+js/app.js               # UI analyse
+js/consent.js           # CMP + Consent Mode v2
+js/analytics.js         # gtag gated
+js/a11y.js / chat.js    # FABs accessibilité & assistant
+sw.js / manifest…       # PWA
+mentions-legales/ …     # Quartet légal
+```
 
 ## Tests
 

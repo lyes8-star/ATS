@@ -34,6 +34,8 @@ function clearError() {
 
 function setLoading(on, step = 0) {
   els.loading.classList.toggle("hidden", !on);
+  els.loading.setAttribute("aria-busy", on ? "true" : "false");
+  document.body.style.overflow = on ? "hidden" : "";
   const items = els.loading.querySelectorAll("[data-step]");
   items.forEach((li) => {
     const n = Number(li.dataset.step);
@@ -362,6 +364,10 @@ async function runAnalysis() {
       fileName: selectedFile.name,
       pages: extracted.pages,
       fileType: selectedFile.type,
+    });
+    window.ATSAnalytics?.track?.("ats_analysis_complete", {
+      score: report.total,
+      passes: report.passes,
     });
     setLoading(true, 3);
     await wait(350);

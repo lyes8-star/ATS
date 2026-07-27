@@ -1,0 +1,30 @@
+{
+  "site": {
+    "name": "ATS Check",
+    "shortName": "ATS Check",
+    "tagline": "Vérificateur de compatibilité ATS pour CV",
+    "description": "85% des CV sont éliminés avant d'atteindre un recruteur. Testez gratuitement votre CV et obtenez votre score ATS en quelques secondes.",
+    "phone": "À compléter",
+    "email": "contact@ats-check.fr",
+    "dpoEmail": "dpo@ats-check.fr",
+    "address": "À compléter",
+    "url": "https://www.ats-check.fr/",
+    "adsId": "",
+    "gaId": "",
+    "themeColor": "#2c2a28",
+    "backgroundColor": "#faf6f0",
+    "ogImage": "icons/og.jpg",
+    "legal": {
+      "raisonSociale": "ATS Check",
+      "forme": "À compléter (ex. SAS, SARL, EI)",
+      "capital": "À compléter",
+      "siret": "À compléter",
+      "responsablePublication": "Responsable de publication ATS Check",
+      "hebergeur": "GitHub Pages (GitHub Inc., 88 Colin P. Kelly Jr Street, San Francisco, CA 94107, USA) et/ou hébergeur statique selon le déploiement."
+    },
+    "social": {
+      "linkedin": "",
+      "twitter": ""
+    }
+  }
+}

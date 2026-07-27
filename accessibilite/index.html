@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Déclaration d’accessibilité — ATS Check</title>
+  <meta name="description" content="Déclaration d’accessibilité ATS Check — WCAG 2.2, RGAA 4.1, EAA.">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#2c2a28">
+  <link rel="canonical" href="https://www.ats-check.fr/accessibilite/">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:title" content="Déclaration d’accessibilité — ATS Check">
+  <meta property="og:description" content="Déclaration d’accessibilité ATS Check — WCAG 2.2, RGAA 4.1, EAA.">
+  <meta property="og:url" content="https://www.ats-check.fr/accessibilite/">
+  <meta property="og:image" content="https://www.ats-check.fr/icons/og.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/styles.css">
+  <script>
+    (function () {
+      try {
+        var p = JSON.parse(localStorage.getItem('ats-a11y') || '{}');
+        var r = document.documentElement;
+        if (p.fontScale && p.fontScale !== 100) r.classList.add('a11y-font-' + p.fontScale);
+        if (p.contrast) r.classList.add('a11y-contrast');
+        if (p.links) r.classList.add('a11y-links');
+        if (p.spacing) r.classList.add('a11y-spacing');
+        if (p.readable) r.classList.add('a11y-readable');
+        if (p.motion || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) r.classList.add('a11y-motion');
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body class="page-legal">
+  <a class="skip-link" href="#contenu">Aller au contenu</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="../" class="logo" aria-label="ATS Check — accueil">
+        <span class="logo-mark">ATS</span>
+        <span>ATS Check</span>
+      </a>
+    </div>
+    <nav class="subnav" aria-label="Navigation légale">
+      <div class="subnav-inner legal-nav">
+        <a href="../mentions-legales/">Mentions légales</a>
+        <a href="../confidentialite/">Confidentialité</a>
+        <a href="../cookies/">Cookies</a>
+        <a href="../accessibilite/">Accessibilité</a>
+      </div>
+    </nav>
+  </header>
+  <main id="contenu" class="legal-main">
+    <div class="legal-wrap">
+      <nav class="breadcrumb" aria-label="Fil d'Ariane">
+        <a href="../">Accueil</a> <span aria-hidden="true">/</span> <span>Accessibilité</span>
+      </nav>
+      <article class="legal-article">
+
+        <h1>Déclaration d’accessibilité</h1>
+        <p class="legal-updated">ATS Check s’engage à rendre son site accessible conformément au RGAA 4.1, aux WCAG 2.2 niveau AA et à la directive européenne EAA (2019/882) / norme EN 301 549.</p>
+
+        <h2>État de conformité</h2>
+        <p><strong>Partiellement conforme</strong> — audit automatique et contrôles manuels partiels. Une audit RGAA humaine complète n’a pas encore été réalisée.</p>
+
+        <h2>Contenus accessibles</h2>
+        <ul>
+          <li>Attribut <code>lang="fr"</code> et lien d’évitement « Aller au contenu ».</li>
+          <li>Navigation clavier sur le dépôt de fichier, la bannière cookies, le chatbot et le panneau d’accessibilité.</li>
+          <li>Préférences utilisateur : contraste, taille du texte, soulignement des liens, espacement, réduction des animations.</li>
+          <li>États ARIA sur les dialogues et zones de chargement.</li>
+        </ul>
+
+        <h2>Améliorations prévues</h2>
+        <ul>
+          <li>Audit RGAA complet avec grille de critères.</li>
+          <li>Tests lecteurs d’écran (NVDA / VoiceOver) sur le parcours d’analyse.</li>
+          <li>Contraste renforcé des éléments décoratifs restants.</li>
+        </ul>
+
+        <h2>Retour d’information</h2>
+        <p>Si vous rencontrez une difficulté d’accès : <a href="mailto:contact@ats-check.fr">contact@ats-check.fr</a>.</p>
+
+        <h2>Voie de recours</h2>
+        <p>Si vous n’obtenez pas de réponse satisfaisante, vous pouvez contacter le Défenseur des droits :</p>
+        <ul>
+          <li>Formulaire en ligne : <a href="https://www.defenseurdesdroits.fr" rel="noopener noreferrer" target="_blank">defenseurdesdroits.fr</a></li>
+          <li>Téléphone : 09 69 39 00 00</li>
+        </ul>
+
+        <h2>Paramètres d’accessibilité</h2>
+        <p>Utilisez le bouton flottant « Paramètres d’accessibilité » présent sur chaque page.</p>
+
+      </article>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <nav class="footer-legal" aria-label="Liens légaux">
+      <a href="../mentions-legales/">Mentions légales</a>
+      <a href="../confidentialite/">Confidentialité</a>
+      <a href="../cookies/">Cookies</a>
+      <a href="../accessibilite/">Accessibilité</a>
+      <button type="button" data-manage-cookies class="footer-manage">Gérer les cookies</button>
+    </nav>
+    <p>© 2026 ATS Check · Analyse locale dans votre navigateur.</p>
+  </footer>
+  <script src="../js/site-config.js"></script>
+  <script src="../js/consent.js"></script>
+  <script src="../js/analytics.js"></script>
+  <script src="../js/a11y.js"></script>
+  <script src="../js/chat.js"></script>
+  <script src="../js/pwa-install.js"></script>
+  <script src="../js/seo.js"></script>
+  <script src="../js/boot.js"></script>
+</body>
+</html>
