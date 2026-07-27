@@ -7,7 +7,7 @@
   <title>Test Mon CV — Contrôlez la lisibilité de votre CV</title>
   <meta name="description" content="Test Mon CV analyse votre CV dans le navigateur : score sur 100, points bloquants et atelier de corrections — sans compte.">
   <meta name="robots" content="index, follow, max-image-preview:large">
-  <meta name="theme-color" content="#12161c">
+  <meta name="theme-color" content="#0e1218">
   <meta name="keywords" content="Test Mon CV, analyse CV, score ATS, lisibilité CV, atelier CV">
   <link rel="canonical" href="https://www.testmoncv.fr/">
   <link rel="alternate" hreflang="fr" href="https://www.testmoncv.fr/">
@@ -40,7 +40,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
 
   <!-- Apply a11y prefs before paint -->
@@ -66,7 +66,16 @@
 <body>
   <a class="skip-link" href="#contenu">Aller au contenu</a>
 
-<header class="site-header">
+  <div class="topbar" role="banner">
+    <div class="topbar__inner">
+      <span class="topbar__item">
+        <span class="topbar__dot" aria-hidden="true"></span>
+        <span id="subnav-title" data-i18n="results.subnav.reset">Contrôle de CV</span>
+      </span>
+    </div>
+  </div>
+
+  <header class="site-header">
     <div class="header-inner">
       <a href="index.html" class="logo" aria-label="Test Mon CV — accueil">
         <span class="logo-mark">TM</span>
@@ -81,30 +90,34 @@
         <button type="button" class="lang-btn" data-lang-btn="en" aria-pressed="false">EN</button>
       </div>
     </div>
-    <nav class="subnav" aria-label="Section">
-      <div class="subnav-inner">
-        <span class="subnav-title" id="subnav-title" data-i18n="results.subnav.reset">Contrôle de CV</span>
-      </div>
-    </nav>
   </header>
 
   <!-- Upload view -->
   <main id="view-upload">
     <div id="contenu">
-      <section id="top" class="hero" aria-labelledby="hero-title">
-        <div class="hero-inner">
-          <p class="hero-brand" aria-hidden="false">Test Mon CV</p>
+      <section id="top" class="hero-brand-section" aria-labelledby="hero-title">
+        <div class="hero-beam" aria-hidden="true"></div>
+        <div class="hero-brand-inner">
           <div class="badge">
             <span class="badge-dot" aria-hidden="true"></span>
             <span data-i18n="hero.badge">Analyse locale — sans compte</span>
           </div>
-          <h1 id="hero-title">
-            <span data-i18n="hero.title.line1">Votre CV est-il lisible</span><br />
-            <span data-i18n="hero.title.line2">par un logiciel de recrutement&nbsp;?</span>
-          </h1>
-          <p class="hero-lead" data-i18n="hero.lead">
-            Déposez votre fichier : score sur 100, points bloquants et atelier de corrections — le fichier reste sur votre appareil.
+          <h1 id="hero-title" class="hero-brand-name" data-i18n="hero.brand">Test Mon CV</h1>
+          <p class="hero-brand-lead" data-i18n="hero.lead">
+            Votre CV est-il lisible par un logiciel de recrutement ? Score sur 100, points bloquants et correctifs — le fichier reste sur votre appareil.
           </p>
+          <div class="hero-cta-row">
+            <a href="#outil" class="btn-primary" data-i18n="hero.cta.upload">Déposer mon CV</a>
+            <a href="#comment" class="btn btn-on-ink" data-i18n="hero.cta.how">Comment ça marche</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="outil" class="tool-section" aria-labelledby="outil-title">
+        <div class="tool-inner">
+          <p class="tool-kicker" data-i18n="tool.kicker">Contrôle</p>
+          <h2 id="outil-title" class="tool-title" data-i18n="tool.title">Déposez votre fichier</h2>
+          <p class="tool-lead" data-i18n="tool.lead">PDF ou DOCX. Analyse locale dans le navigateur — sans compte.</p>
 
           <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Déposer ou choisir un CV PDF ou DOCX">
             <input id="file-input" class="hidden" type="file" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-hidden="true" tabindex="-1">
@@ -153,12 +166,11 @@
             Lancer le contrôle
           </button>
           <div id="error-banner" class="error-banner hidden" role="alert"></div>
-
         </div>
       </section>
 
       
-      <section class="section section-features" aria-label="En bref">
+      <section id="comment" class="section section-features" aria-label="En bref">
         <div class="section-inner">
           <div class="features">
             <div class="feature">
@@ -232,7 +244,7 @@
       <section class="cta-band" aria-label="Appel à l'action">
         <p data-i18n="home.cta.title">Prêt à contrôler votre CV&nbsp;?</p>
         <p data-i18n="home.cta.lead">Sans compte. Fichier analysé localement. Corrections dans l’atelier.</p>
-        <a href="#top" class="btn-ghost" data-scroll-top data-i18n="home.cta.button">Déposer mon CV</a>
+        <a href="#outil" class="btn-primary" data-i18n="home.cta.button">Déposer mon CV</a>
       </section>
     </div>
   </main>

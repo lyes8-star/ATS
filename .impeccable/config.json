@@ -15,12 +15,12 @@
     "ignoreValues": [
       {
         "rule": "overused-font",
-        "value": "Syne",
+        "value": "Space Grotesk",
         "reason": "Intentional display font for Test Mon CV (DESIGN.md)"
       },
       {
         "rule": "overused-font",
-        "value": "Figtree",
+        "value": "IBM Plex Sans",
         "reason": "Intentional UI sans for Test Mon CV (DESIGN.md)"
       },
       {
