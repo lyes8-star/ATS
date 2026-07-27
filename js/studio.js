@@ -8,8 +8,9 @@ import {
   scrollPreviewToAnnotation,
 } from "./annotate.js";
 import { applyAll, updateAnnotation } from "./optimize.js";
-import { downloadAtsHtml, openPrintableCv } from "./export-cv.js";
-import { analyzeCv } from "./analyzer.js";
+import { downloadAtsHtml } from "./export-cv.js";
+import { downloadLayoutFaithful, openFaithfulPrintable } from "./export-reconstruct.js";
+import { analyzeCvAsync } from "./analyzer.js";
 
 /**
  * @typedef {object} StudioSession
@@ -22,6 +23,7 @@ import { analyzeCv } from "./analyzer.js";
  * @property {object|null} retestReport
  * @property {number|null} scoreBefore
  * @property {boolean} [previewOptimized]
+ * @property {string} [jobDescription]
  */
 
 /**
@@ -81,12 +83,14 @@ function studioShell(session) {
       <div class="studio-bar-actions">
         <button type="button" class="btn-secondary" id="btn-accept-all">${escapeHtml(t("studio.acceptAll"))}</button>
         <button type="button" class="btn-secondary" id="btn-generate" disabled>${escapeHtml(t("studio.generate.button"))}</button>
-        <button type="button" class="btn-secondary hidden" id="btn-download">${escapeHtml(t("studio.actions.download"))}</button>
+        <button type="button" class="analyze-btn hidden" id="btn-download">${escapeHtml(t("studio.actions.download"))}</button>
+        <button type="button" class="btn-secondary hidden" id="btn-download-ats">${escapeHtml(t("studio.actions.downloadAts"))}</button>
         <button type="button" class="btn-secondary hidden" id="btn-print">${escapeHtml(t("studio.actions.print"))}</button>
         <button type="button" class="analyze-btn hidden" id="btn-retest">${escapeHtml(t("studio.actions.retest"))}</button>
       </div>
     </div>
     <div id="retest-banner" class="retest-banner hidden" role="status"></div>
+    <p id="studio-jd-overlap" class="studio-jd-overlap hidden" role="status"></p>
   </div>`;
 }
 
@@ -120,6 +124,7 @@ function bindStudio(root, session, hooks) {
     const { text } = applyAll(session.extracted.text, session.annotations);
     session.optimizedText = text;
     root.querySelector("#btn-download")?.classList.remove("hidden");
+    root.querySelector("#btn-download-ats")?.classList.remove("hidden");
     root.querySelector("#btn-print")?.classList.remove("hidden");
     root.querySelector("#btn-retest")?.classList.remove("hidden");
     window.ATSAnalytics?.track?.("ats_cv_generated", {
@@ -130,6 +135,11 @@ function bindStudio(root, session, hooks) {
 
   root.querySelector("#btn-download")?.addEventListener("click", () => {
     if (!session.optimizedText) return;
+    downloadPrimary(session);
+  });
+
+  root.querySelector("#btn-download-ats")?.addEventListener("click", () => {
+    if (!session.optimizedText) return;
     downloadAtsHtml(session.optimizedText, {
       fileName: session.originalFile?.name,
       scoreBefore: session.scoreBefore,
@@ -139,11 +149,7 @@ function bindStudio(root, session, hooks) {
 
   root.querySelector("#btn-print")?.addEventListener("click", () => {
     if (!session.optimizedText) return;
-    openPrintableCv(session.optimizedText, {
-      fileName: session.originalFile?.name,
-      scoreBefore: session.scoreBefore,
-      scoreAfter: session.retestReport?.total,
-    });
+    printPrimary(session);
   });
 
   root.querySelector("#btn-retest")?.addEventListener("click", () => {
@@ -153,6 +159,46 @@ function bindStudio(root, session, hooks) {
     }
     runRetest(root, session, hooks);
   });
+
+  showJdOverlap(root, session);
+}
+
+function downloadPrimary(session) {
+  const meta = {
+    fileName: session.originalFile?.name,
+    scoreBefore: session.scoreBefore,
+    scoreAfter: session.retestReport?.total,
+  };
+  downloadLayoutFaithful(session, meta).catch((err) => {
+    console.error(err);
+    downloadAtsHtml(session.optimizedText, meta);
+  });
+}
+
+function printPrimary(session) {
+  const meta = {
+    fileName: session.originalFile?.name,
+    scoreBefore: session.scoreBefore,
+    scoreAfter: session.retestReport?.total,
+    layoutHostile: session.report?.layoutHostile,
+  };
+  if (session.extracted?.format === "docx") {
+    // In-place DOCX can't print in-browser — open faithful HTML preview
+    openFaithfulPrintable(session.optimizedText, session.report?.parsed, meta);
+  } else {
+    openFaithfulPrintable(session.optimizedText, session.report?.parsed, meta);
+  }
+}
+
+function showJdOverlap(root, session) {
+  const el = root.querySelector("#studio-jd-overlap");
+  if (!el) return;
+  const jd = session.report?.jdOverlap || session.retestReport?.jdOverlap;
+  if (jd && jd.score != null) {
+    el.classList.remove("hidden");
+    const t = window.ATSi18n?.t || ((k) => k);
+    el.textContent = `${t("studio.jd.overlap")}: ${jd.score}% (${(jd.overlap || []).length})`;
+  }
 }
 
 function textToPreviewHtml(text) {
@@ -169,14 +215,20 @@ function textToPreviewHtml(text) {
   return `<div class="cv-html-doc cv-html-optimized">${blocks || "<p></p>"}</div>`;
 }
 
-function runRetest(root, session, hooks) {
+async function runRetest(root, session, hooks) {
   try {
     const t = window.ATSi18n?.t || ((k) => k);
-    const report = analyzeCv(session.optimizedText, {
-      fileName: session.originalFile?.name || "cv-optimise",
-      pages: estimatePagesFromText(session.optimizedText),
-      lang: window.ATSi18n?.getLang?.() || "fr",
-    });
+    const report = await analyzeCvAsync(
+      session.optimizedText,
+      {
+        fileName: session.originalFile?.name || "cv-optimise",
+        pages: estimatePagesFromText(session.optimizedText),
+        lang: window.ATSi18n?.getLang?.() || "fr",
+        pagesGeo: session.extracted?.pagesGeo,
+        tableCount: session.extracted?.tableCount || 0,
+      },
+      { jobDescription: session.jobDescription || "" }
+    );
     session.retestReport = report;
     const before = session.scoreBefore ?? 0;
     const after = report.total;
@@ -203,6 +255,9 @@ function runRetest(root, session, hooks) {
                 ? `<button type="button" class="analyze-btn" id="btn-retest-download">${escapeHtml(
                     t("studio.actions.download")
                   )}</button>
+                   <button type="button" class="btn-secondary" id="btn-retest-ats">${escapeHtml(
+                     t("studio.actions.downloadAts")
+                   )}</button>
                    <button type="button" class="btn-secondary" id="btn-retest-print">${escapeHtml(
                      t("studio.actions.print")
                    )}</button>`
@@ -214,6 +269,9 @@ function runRetest(root, session, hooks) {
           </div>
         </div>`;
       banner.querySelector("#btn-retest-download")?.addEventListener("click", () => {
+        downloadPrimary(session);
+      });
+      banner.querySelector("#btn-retest-ats")?.addEventListener("click", () => {
         downloadAtsHtml(session.optimizedText, {
           fileName: session.originalFile?.name,
           scoreBefore: before,
@@ -221,11 +279,7 @@ function runRetest(root, session, hooks) {
         });
       });
       banner.querySelector("#btn-retest-print")?.addEventListener("click", () => {
-        openPrintableCv(session.optimizedText, {
-          fileName: session.originalFile?.name,
-          scoreBefore: before,
-          scoreAfter: after,
-        });
+        printPrimary(session);
       });
       banner.querySelector("#btn-continue-opt")?.addEventListener("click", () => {
         banner.classList.add("hidden");
@@ -246,7 +300,7 @@ function runRetest(root, session, hooks) {
           ...session.extracted,
           text: session.optimizedText,
           html: textToPreviewHtml(session.optimizedText),
-          format: "html",
+          format: session.extracted?.format === "docx" ? "docx" : "html",
           pdfDoc: null,
           pagesGeo: [],
           approximate: true,
@@ -257,11 +311,13 @@ function runRetest(root, session, hooks) {
         renderList(root, session);
         renderDetail(root, session);
         updateBar(root, session);
+        showJdOverlap(root, session);
       });
     }
-    // Mettre en avant download/print après retest
     root.querySelector("#btn-download")?.classList.remove("hidden");
+    root.querySelector("#btn-download-ats")?.classList.remove("hidden");
     root.querySelector("#btn-print")?.classList.remove("hidden");
+    showJdOverlap(root, session);
     window.ATSAnalytics?.track?.("ats_retest", { before, after, delta });
     hooks.onRetest?.(report, session.optimizedText);
   } catch (err) {

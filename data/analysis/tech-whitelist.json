@@ -1,0 +1,14 @@
+{
+  "terms": [
+    "aws", "azure", "gcp", "kubernetes", "docker", "terraform", "ansible", "jenkins",
+    "react", "angular", "vue", "nodejs", "typescript", "javascript", "python", "django",
+    "flask", "spring", "graphql", "mongodb", "postgresql", "mysql", "redis", "kafka",
+    "spark", "hadoop", "tensorflow", "pytorch", "scrum", "kanban", "jira", "confluence",
+    "salesforce", "hubspot", "sap", "erp", "crm", "kpi", "okr", "seo", "sea", "sem",
+    "figma", "sketch", "photoshop", "illustrator", "indesign", "notion", "slack",
+    "github", "gitlab", "bitbucket", "linux", "macos", "ios", "android", "swift",
+    "kotlin", "flutter", "saas", "paas", "iaas", "api", "rest", "oauth", "jwt",
+    "ci/cd", "devops", "sre", "mlops", "nlp", "llm", "gpt", "rgpd", "gdpr", "wcag",
+    "rgaa", "a11y", "ux", "ui", "css", "html", "sass", "tailwind", "bootstrap"
+  ]
+}

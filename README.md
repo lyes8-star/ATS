@@ -17,8 +17,9 @@ Ouvrir http://localhost:8080/
 - Upload PDF / DOCX — analyse **100 % navigateur** (aucun CV envoyé au serveur)
 - **Atelier annoté = expérience principale** après analyse : prévisualisation CV + surcouches localisées + accept / ignore
 - Score /100 + 4 axes /25 (lisibilité, structure, qualité, mots-clés) — rapport détaillé en lien secondaire
-- Diagnostic, points bloquants / forts, fautes d’orthographe courantes
-- Acceptation / ignore / édition des suggestions, puis **génération d’un CV ATS 1 colonne**
+- Analyse approfondie : parse structuré, lexiques ESCO/ROME (statique), verbes, overlap offre optionnelle
+- Diagnostic, points bloquants / forts, orthographe (typos + whitelist tech, nspell optionnel)
+- Acceptation / ignore / édition, puis export **layout-fidèle** (DOCX in-place ou reconstruction) + **version ATS linéaire** secondaire
 - **Retest automatique** avec delta de score avant / après
 - **Parité Crevia** : barre contact avec adresse + popup Google Maps **chargée après consentement** (CMP)
 - **Bascule FR/EN** (i18n) de l’interface, du studio et des contenus UI
@@ -57,12 +58,17 @@ Compléter SIRET, forme juridique, adresse et hébergeur dans `data/site.json` �
 ```
 index.html              # Accueil + analyseur + atelier
 data/site.json          # Config marque / IDs SEA / légal
-js/analyzer.js          # Moteur de score + annotations localisées
-js/extract.js           # Extraction PDF (géométrie) / DOCX (HTML)
+data/analysis/          # Lexiques compétences / verbes / règles ATS (offline)
+js/analyzer.js          # Moteur de score approfondi + annotations
+js/parse-cv.js          # Parse structuré (sections, rôles, dates)
+js/skills-match.js      # Aho–Corasick + lexiques lazy
+js/extract.js           # Extraction PDF (géométrie) / DOCX (HTML + tables)
 js/annotate.js          # Overlays preview
-js/studio.js            # UI atelier split + accept/ignore
+js/studio.js            # UI atelier split + accept/ignore + exports
 js/optimize.js          # Application des suggestions
-js/export-cv.js         # Export CV ATS HTML / impression
+js/export-docx.js       # DOCX in-place (PizZip)
+js/export-reconstruct.js# Reconstruction HTML/DOCX fidèle structure
+js/export-cv.js         # Export ATS linéaire (secondaire)
 js/app.js               # Orchestration upload → studio → retest
 js/consent.js           # CMP + Consent Mode v2
 js/i18n.js              # dictionnaire FR/EN + switcher (pas de /en routes)

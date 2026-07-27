@@ -1,4 +1,4 @@
-import { analyzeCv, attachGeometry } from "./analyzer.js";
+import { analyzeCvAsync, attachGeometry } from "./analyzer.js";
 import { extractDocument } from "./extract.js";
 import * as extractApi from "./extract.js";
 import { mountStudio } from "./studio.js";
@@ -16,6 +16,7 @@ const els = {
   fileName: document.getElementById("file-name"),
   analyzeBtn: document.getElementById("analyze-btn"),
   emailInput: document.getElementById("email-input"),
+  jdInput: document.getElementById("jd-input"),
   errorBanner: document.getElementById("error-banner"),
   loading: document.getElementById("loading"),
   loadingStep: document.getElementById("loading-step"),
@@ -375,12 +376,18 @@ async function runAnalysis() {
     await wait(250);
     setLoading(true, 2);
     await wait(400);
-    const report = analyzeCv(extracted.text, {
-      fileName: selectedFile.name,
-      pages: extracted.pages,
-      fileType: selectedFile.type,
-      lang: window.ATSi18n?.getLang?.() || "fr",
-    });
+    const report = await analyzeCvAsync(
+      extracted.text,
+      {
+        fileName: selectedFile.name,
+        pages: extracted.pages,
+        fileType: selectedFile.type,
+        lang: window.ATSi18n?.getLang?.() || "fr",
+        pagesGeo: extracted.pagesGeo,
+        tableCount: extracted.tableCount || 0,
+      },
+      { jobDescription: els.jdInput?.value || "" }
+    );
     // Même string pour annotations, géométrie et applyAll
     extracted.text = report.text;
     const annotations = attachGeometry(
@@ -399,6 +406,7 @@ async function runAnalysis() {
       optimizedText: null,
       retestReport: null,
       scoreBefore: report.total,
+      jobDescription: els.jdInput?.value || "",
     };
 
     window.ATSAnalytics?.track?.("ats_analysis_complete", {
