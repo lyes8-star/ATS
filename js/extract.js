@@ -75,7 +75,10 @@ function clamp01(n) {
  */
 export async function extractFromPdf(file) {
   const pdfjs = ensurePdfjs();
-  const data = new Uint8Array(await file.arrayBuffer());
+  // Copy bytes before pdf.js (worker may detach/transfer the ArrayBuffer)
+  const ab = await file.arrayBuffer();
+  const originalBuffer = ab.slice(0);
+  const data = new Uint8Array(ab);
   const doc = await pdfjs.getDocument({ data }).promise;
   const pagesGeo = [];
   let text = "";
@@ -121,11 +124,6 @@ export async function extractFromPdf(file) {
   }
 
   const approximate = itemCount < 8 || text.replace(/\s/g, "").length < 40;
-  // Keep original bytes for Mode Pro PDF rewrite / local re-download
-  const originalBuffer = data.buffer.slice(
-    data.byteOffset,
-    data.byteOffset + data.byteLength
-  );
 
   return {
     text,
