@@ -17,6 +17,7 @@ import {
   proAnalyze,
   proPdfPatch,
   arrayBufferToBase64,
+  resolveUsableArrayBuffer,
   downloadBlob,
 } from "./pro-client.js";
 import * as extractApi from "./extract.js";
@@ -372,7 +373,13 @@ async function runProPdf(session) {
     return;
   }
   try {
-    const buf = session.extracted?.originalBuffer;
+    const buf = await resolveUsableArrayBuffer(
+      session.extracted?.originalBuffer,
+      session.originalFile
+    );
+    if (buf && session.extracted && session.extracted.originalBuffer?.detached) {
+      session.extracted.originalBuffer = buf;
+    }
     const optimizedText = session.optimizedText || session.extracted?.text || "";
     const blob = await proPdfPatch({
       pdfBase64: buf ? arrayBufferToBase64(buf) : "",

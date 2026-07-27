@@ -148,6 +148,9 @@ function appendParagraphBeforeBodyEnd(xml, text) {
  * @returns {Promise<{ blob: Blob, failed: object[], usedFallback: boolean }>}
  */
 export async function patchDocxInPlace(arrayBuffer, annotations) {
+  if (!arrayBuffer || arrayBuffer.detached) {
+    throw new Error("ArrayBuffer DOCX détaché ou manquant.");
+  }
   const PizZip = ensurePizZip();
   const zip = new PizZip(arrayBuffer);
   const file = zip.file("word/document.xml");
@@ -193,10 +196,16 @@ export async function patchDocxInPlace(arrayBuffer, annotations) {
  * @param {object} [meta]
  */
 export async function downloadOptimizedDocx(session, meta = {}) {
-  const buffer =
-    session.extracted?.originalBuffer ||
-    (session.originalFile ? await session.originalFile.arrayBuffer() : null);
-  if (!buffer) throw new Error("Fichier DOCX original indisponible.");
+  let buffer = session.extracted?.originalBuffer;
+  if (!buffer || buffer.detached) {
+    buffer = session.originalFile ? await session.originalFile.arrayBuffer() : null;
+    if (buffer && session.extracted) {
+      session.extracted.originalBuffer = buffer;
+    }
+  }
+  if (!buffer || buffer.detached) {
+    throw new Error("Fichier DOCX original indisponible ou buffer détaché.");
+  }
 
   try {
     await ensurePizZipScript();

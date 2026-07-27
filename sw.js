@@ -1,5 +1,5 @@
 /* Service worker ATS Check — cache app shell (chemins relatifs) */
-const CACHE = "ats-shell-v1";
+const CACHE = "ats-shell-v2";
 
 function shellUrls() {
   const base = self.registration.scope;
@@ -18,6 +18,8 @@ function shellUrls() {
     "js/boot.js",
     "js/analyzer.js",
     "js/app.js",
+    "js/extract.js",
+    "js/studio.js",
     "data/site.json",
     "manifest.webmanifest",
     "favicon.svg",

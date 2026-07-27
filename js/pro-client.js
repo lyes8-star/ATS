@@ -126,6 +126,12 @@ export async function proPdfPatch(payload) {
 }
 
 export function arrayBufferToBase64(buffer) {
+  if (!buffer) {
+    throw new Error("ArrayBuffer manquant.");
+  }
+  if (buffer.detached) {
+    throw new Error("ArrayBuffer détaché — rechargez le fichier source.");
+  }
   const bytes = new Uint8Array(buffer);
   let binary = "";
   const chunk = 0x8000;
@@ -133,6 +139,24 @@ export function arrayBufferToBase64(buffer) {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
   }
   return btoa(binary);
+}
+
+/**
+ * Résout un buffer utilisable (non détaché) depuis la session / fichier.
+ * @param {ArrayBuffer|null|undefined} preferred
+ * @param {File|null|undefined} file
+ * @returns {Promise<ArrayBuffer|null>}
+ */
+export async function resolveUsableArrayBuffer(preferred, file) {
+  if (preferred && !preferred.detached) return preferred;
+  if (file && typeof file.arrayBuffer === "function") {
+    try {
+      return await file.arrayBuffer();
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export function downloadBlob(blob, filename) {
