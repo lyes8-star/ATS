@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node js/test-analyzer.mjs",
+    "lexicons": "node scripts/build-lexicons.mjs",
     "audit:static": "node scripts/audit-static.mjs",
     "audit": "npm run test && npm run audit:static",
     "detect": "node .cursor/skills/impeccable/scripts/detect.mjs .",

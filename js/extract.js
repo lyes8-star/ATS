@@ -25,7 +25,9 @@
  *   pdfDoc: any|null,
  *   pagesGeo: PageGeo[],
  *   html: string|null,
- *   approximate: boolean
+ *   approximate: boolean,
+ *   tableCount?: number,
+ *   originalBuffer?: ArrayBuffer|null
  * }} ExtractResult
  */
 
@@ -128,6 +130,8 @@ export async function extractFromPdf(file) {
     pagesGeo,
     html: null,
     approximate,
+    tableCount: 0,
+    originalBuffer: null,
   };
 }
 
@@ -135,6 +139,26 @@ export async function extractFromPdf(file) {
  * @param {File} file
  * @returns {Promise<ExtractResult>}
  */
+/**
+ * Compte les tableaux Word (`w:tbl`) via PizZip si dispo, sinon approx HTML Mammoth.
+ * @param {ArrayBuffer} arrayBuffer
+ * @param {string} html
+ */
+function countDocxTables(arrayBuffer, html) {
+  try {
+    const PizZip = window.PizZip || window.JSZip;
+    if (PizZip) {
+      const zip = new PizZip(arrayBuffer);
+      const docXml = zip.file("word/document.xml")?.asText?.() || "";
+      const n = (docXml.match(/<w:tbl[\s>]/g) || []).length;
+      if (n >= 0) return n;
+    }
+  } catch {
+    /* fall through */
+  }
+  return (html.match(/<table[\s>]/gi) || []).length;
+}
+
 export async function extractFromDocx(file) {
   if (!window.mammoth) throw new Error("Bibliothèque DOCX non chargée.");
   const arrayBuffer = await file.arrayBuffer();
@@ -144,6 +168,7 @@ export async function extractFromDocx(file) {
   ]);
   const text = raw.value || "";
   const html = htmlResult.value || "<p></p>";
+  const tableCount = countDocxTables(arrayBuffer, html);
   return {
     text,
     pages: null,
@@ -152,6 +177,8 @@ export async function extractFromDocx(file) {
     pagesGeo: [],
     html,
     approximate: true,
+    tableCount,
+    originalBuffer: arrayBuffer,
   };
 }
 
@@ -170,6 +197,8 @@ export async function extractFromTxt(file) {
     pagesGeo: [],
     html,
     approximate: true,
+    tableCount: 0,
+    originalBuffer: null,
   };
 }
 

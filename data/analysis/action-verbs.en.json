@@ -1,0 +1,21 @@
+{
+  "strong": [
+    "led", "managed", "developed", "designed", "created", "launched", "improved",
+    "optimized", "increased", "reduced", "negotiated", "supervised", "trained",
+    "recruited", "analyzed", "implemented", "deployed", "automated", "built",
+    "delivered", "achieved", "drove", "owned", "scaled", "migrated", "secured",
+    "refactored", "orchestrated", "spearheaded", "streamlined"
+  ],
+  "weak": [
+    "helped", "assisted", "worked on", "responsible for", "participated in",
+    "involved in", "tasked with", "contributed to", "handled"
+  ],
+  "replacements": {
+    "responsible for": ["Led", "Owned", "Managed"],
+    "helped": ["Supported", "Enabled", "Facilitated"],
+    "assisted": ["Supported", "Partnered with", "Enabled"],
+    "worked on": ["Built", "Delivered", "Developed"],
+    "participated in": ["Contributed to", "Collaborated on", "Drove"],
+    "involved in": ["Led", "Owned", "Delivered"]
+  }
+}

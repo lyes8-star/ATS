@@ -1,0 +1,10 @@
+{
+  "rules": [
+    { "id": "single_column", "severity": "warning", "label_fr": "Mise en page multi-colonnes détectée", "label_en": "Multi-column layout detected" },
+    { "id": "no_tables", "severity": "warning", "label_fr": "Tableaux détectés (certains ATS mélangent les cellules)", "label_en": "Tables detected (some ATS scramble cells)" },
+    { "id": "extractable_text", "severity": "critical", "label_fr": "Texte peu extractible", "label_en": "Text hard to extract" },
+    { "id": "standard_headings", "severity": "info", "label_fr": "Titres de sections standards recommandés", "label_en": "Standard section headings recommended" },
+    { "id": "contact_plaintext", "severity": "critical", "label_fr": "Coordonnées absentes ou non textuelles", "label_en": "Contact details missing or not plain text" }
+  ],
+  "version": 1
+}

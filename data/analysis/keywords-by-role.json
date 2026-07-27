@@ -1,0 +1,12 @@
+{
+  "roles": {
+    "developer": ["javascript", "typescript", "react", "node", "api", "git", "agile", "testing", "ci/cd", "sql"],
+    "data": ["python", "sql", "excel", "tableau", "power bi", "etl", "statistics", "machine learning", "dashboard"],
+    "product": ["roadmap", "backlog", "user stories", "agile", "stakeholders", "kpi", "discovery", "prioritization"],
+    "marketing": ["seo", "sea", "content", "analytics", "crm", "emailing", "social media", "brand"],
+    "hr": ["recrutement", "talent", "sirh", "paie", "formation", "entretien", "onboarding"],
+    "finance": ["excel", "budget", "forecast", "audit", "reporting", "erp", "contrôle de gestion"],
+    "sales": ["crm", "prospection", "négociation", "pipeline", "closing", "account management"]
+  },
+  "source": "Inspired by open ATS keyword role datasets (static subset)"
+}

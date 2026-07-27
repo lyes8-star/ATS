@@ -19,6 +19,8 @@
       "upload.dropzone.hint": "PDF ou DOCX — max 10 Mo · analyse 100 % locale",
       "upload.dropzone.button": "Choisir mon CV",
       "upload.email.label": "E-mail (optionnel)",
+      "upload.jd.label": "Offre d'emploi (optionnel)",
+      "upload.jd.placeholder": "Collez l'annonce pour mesurer l'alignement mots-clés CV ↔ offre",
       "upload.analyze.button": "Analyser mon CV",
 
       "header.newTest": "Nouveau test",
@@ -77,7 +79,7 @@
       "studio.retest.pass": "Le CV optimisé passe mieux les filtres ATS.",
       "studio.retest.continue": "Continuez l'optimisation pour viser 70+.",
       "studio.retest.continueButton": "Continuer l'optimisation",
-      "studio.retest.ready": "CV prêt à envoyer — téléchargez ou imprimez votre version ATS.",
+      "studio.retest.ready": "CV prêt à envoyer — téléchargez votre version (mise en page préservée) ou la version ATS linéaire.",
       "studio.link.report": "Voir le rapport détaillé",
       "studio.acceptAll": "Accepter tout (remplacements sûrs)",
       "studio.insertProposed": "Emplacement proposé (insertion)",
@@ -95,9 +97,11 @@
       "studio.actions.ignore": "Ignorer",
       "studio.actions.editAccept": "Modifier puis accepter",
 
-      "studio.actions.download": "Télécharger HTML",
+      "studio.actions.download": "Télécharger le CV modifié",
+      "studio.actions.downloadAts": "Version ATS linéaire",
       "studio.actions.print": "Imprimer / PDF",
       "studio.actions.retest": "Retester",
+      "studio.jd.overlap": "Alignement offre ↔ CV",
 
       "chat.title": "Assistant ATS",
       "chat.subtitle": "Questions fréquentes sur le vérificateur",
@@ -164,6 +168,8 @@
       "upload.dropzone.hint": "PDF or DOCX — up to 10 MB · 100% local analysis",
       "upload.dropzone.button": "Choose my CV",
       "upload.email.label": "Email (optional)",
+      "upload.jd.label": "Job description (optional)",
+      "upload.jd.placeholder": "Paste the job posting to measure CV ↔ JD keyword alignment",
       "upload.analyze.button": "Analyze my CV",
 
       "header.newTest": "New test",
@@ -212,7 +218,7 @@
       "studio.retest.pass": "The optimized CV passes ATS filters better.",
       "studio.retest.continue": "Continue optimizing to aim for 70+.",
       "studio.retest.continueButton": "Continue optimizing",
-      "studio.retest.ready": "CV ready to send — download or print your ATS version.",
+      "studio.retest.ready": "CV ready to send — download your layout-preserving version or the linear ATS version.",
       "studio.link.report": "View detailed report",
       "studio.acceptAll": "Accept all (safe replacements)",
       "studio.insertProposed": "Proposed placement (insertion)",
@@ -230,9 +236,11 @@
       "studio.actions.ignore": "Ignore",
       "studio.actions.editAccept": "Edit then accept",
 
-      "studio.actions.download": "Download HTML",
+      "studio.actions.download": "Download modified CV",
+      "studio.actions.downloadAts": "Linear ATS version",
       "studio.actions.print": "Print / PDF",
       "studio.actions.retest": "Retest",
+      "studio.jd.overlap": "Job ↔ CV alignment",
 
       "chat.title": "ATS Assistant",
       "chat.subtitle": "Common questions about the checker",

@@ -1,0 +1,22 @@
+{
+  "strong": [
+    "dirigé", "piloté", "géré", "coordonné", "développé", "conçu", "créé", "lancé",
+    "amélioré", "optimisé", "augmenté", "réduit", "négocié", "supervisé", "formé",
+    "recruté", "analysé", "implémenté", "déployé", "automatisé", "structuré", "renforcé",
+    "élaboré", "conduit", "réalisé", "assuré", "accompagné", "initié", "transformé",
+    "industrialisé", "sécurisé", "migré", "refactorisé", "scalé"
+  ],
+  "weak": [
+    "aidé", "participé", "assisté", "chargé de", "responsable de", "travaillé sur",
+    "travaillé à", "impliqué dans", "contribue à", "contribué à", "occupé à",
+    "en charge de", "missionné sur"
+  ],
+  "replacements": {
+    "responsable de": ["Piloté", "Pilotonné", "Supervisé"],
+    "chargé de": ["Piloté", "Piloté", "Assuré"],
+    "aidé": ["Accompagné", "Soutenu", "Facilité"],
+    "participé": ["Contribué à", "Collaboré sur", "Intervenu sur"],
+    "travaillé sur": ["Développé", "Livré", "Construit"],
+    "impliqué dans": ["Piloté", "Piloté", "Contribué à"]
+  }
+}

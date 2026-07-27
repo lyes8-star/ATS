@@ -4,7 +4,14 @@
 import { analyzeCv, attachGeometry } from "./analyzer.js";
 import { applyAll } from "./optimize.js";
 import { rectsForRange } from "./extract.js";
+import { parseCv, parseDateRange, findEmploymentGaps } from "./parse-cv.js";
+import { buildAho, ahoFind } from "./skills-match.js";
+import { buildFaithfulHtml } from "./export-reconstruct.js";
+import { mergeAdjacentWt, replaceInDocumentXml } from "./export-docx.js";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const goodCv = `
 Marie Dupont
@@ -203,5 +210,81 @@ const { text: improved } = applyAll(before.text, toAccept);
 const after = analyzeCv(improved, { pages: 1 });
 assert.ok(after.total >= before.total - 5, `retest should not collapse (${before.total} → ${after.total})`);
 console.log("✓ Retest delta", before.total, "→", after.total);
+
+// —— Parse structuré / skills / layout / JD ——
+const sampleParsed = parseCv(goodCv);
+assert.ok(sampleParsed.sections.experience?.length > 0, "experience section");
+assert.ok(sampleParsed.roles.length >= 2, "roles detected");
+assert.ok(sampleParsed.contact.email, "email from parse");
+assert.ok(sampleParsed.skills.length >= 3, "skills list");
+const dr = parseDateRange("Développeuse — Tech (2021 - aujourd'hui)");
+assert.equal(dr.startYear, 2021);
+assert.equal(dr.ongoing, true);
+console.log("✓ parse-cv sections/roles/dates OK");
+
+const gapRoles = [
+  { startYear: 2015, endYear: 2016, ongoing: false, section: "experience" },
+  { startYear: 2019, endYear: 2021, ongoing: false, section: "experience" },
+];
+const gaps = findEmploymentGaps(gapRoles);
+assert.ok(gaps.length >= 1 && gaps[0].months >= 24, "employment gap");
+const noMix = findEmploymentGaps([
+  ...gapRoles,
+  { startYear: 2017, endYear: 2018, ongoing: false, section: "education" },
+]);
+assert.ok(noMix.length >= 1, "education ignored in employment gaps");
+console.log("✓ employment gaps OK");
+
+const skillsPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data/analysis/skills-fr-en.min.json");
+const skillsData = JSON.parse(fs.readFileSync(skillsPath, "utf8"));
+const auto = buildAho(skillsData.skills.slice(0, 200));
+const hits = ahoFind(auto, goodCv);
+assert.ok(hits.size >= 3, `expected skill hits, got ${hits.size}`);
+console.log("✓ Aho–Corasick skills hit", hits.size);
+
+// Column smell: bimodal x lines
+const colCv = parseCv("Titre\n", {
+  pagesGeo: [
+    {
+      page: 1,
+      width: 600,
+      height: 800,
+      items: [
+        { str: "Left A", page: 1, rect: { x: 0.08, y: 0.1, w: 0.2, h: 0.02 }, textStart: 0, textEnd: 6 },
+        { str: "Right A", page: 1, rect: { x: 0.55, y: 0.1, w: 0.2, h: 0.02 }, textStart: 7, textEnd: 14 },
+        { str: "Left B", page: 1, rect: { x: 0.09, y: 0.15, w: 0.2, h: 0.02 }, textStart: 15, textEnd: 21 },
+        { str: "Right B", page: 1, rect: { x: 0.56, y: 0.15, w: 0.2, h: 0.02 }, textStart: 22, textEnd: 29 },
+        { str: "Left C", page: 1, rect: { x: 0.08, y: 0.2, w: 0.2, h: 0.02 }, textStart: 30, textEnd: 36 },
+        { str: "Right C", page: 1, rect: { x: 0.55, y: 0.2, w: 0.2, h: 0.02 }, textStart: 37, textEnd: 44 },
+        { str: "Left D", page: 1, rect: { x: 0.1, y: 0.25, w: 0.2, h: 0.02 }, textStart: 45, textEnd: 51 },
+        { str: "Right D", page: 1, rect: { x: 0.58, y: 0.25, w: 0.2, h: 0.02 }, textStart: 52, textEnd: 59 },
+      ],
+    },
+  ],
+});
+assert.ok(typeof colCv.layout.columnSmell === "boolean");
+console.log("✓ layout column detect", colCv.layout);
+
+const withJd = analyzeCv(goodCv, {
+  pages: 1,
+  jdOverlap: { overlap: ["javascript", "react", "aws"], score: 75, jdTerms: ["javascript", "react", "aws", "java"] },
+  skillsMatch: { hits: ["javascript", "react", "aws", "docker", "agile", "python", "sql", "typescript", "node.js", "scrum", "management", "reporting"] },
+});
+assert.ok(withJd.categories.keywords.score >= 15);
+assert.ok(withJd.jdOverlap?.score === 75);
+console.log("✓ JD overlap scoring OK", withJd.categories.keywords.score);
+
+const htmlFaithful = buildFaithfulHtml(goodCv, sampleParsed, { fileName: "marie.pdf" });
+assert.ok(htmlFaithful.includes("Expérience") || htmlFaithful.includes("expérience") || htmlFaithful.includes("Work"));
+assert.ok(htmlFaithful.indexOf("Expérience") < htmlFaithful.indexOf("Formation") || htmlFaithful.includes("Formation"));
+console.log("✓ faithful reconstruct order OK");
+
+const xml = `<w:document><w:body><w:p><w:r><w:t>Hello</w:t></w:r><w:r><w:t> World</w:t></w:r></w:p><w:p><w:r><w:t>acceuil client</w:t></w:r></w:p></w:body></w:document>`;
+const merged = mergeAdjacentWt(xml);
+assert.ok(merged.includes("Hello World") || merged.includes("Hello") && merged.includes("World"));
+const { xml: fixed, ok } = replaceInDocumentXml(merged, "acceuil", "accueil");
+assert.ok(ok);
+assert.ok(fixed.includes("accueil"));
+console.log("✓ DOCX merge/replace OK");
 
 console.log("Tous les tests OK");

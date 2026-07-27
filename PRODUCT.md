@@ -18,9 +18,9 @@ Contexte typique : mobile ou desktop, première visite, besoin d’un score clai
 
 ## Product Purpose
 
-Outil gratuit **ATS Check** : analyser un CV (PDF/DOCX) **localement dans le navigateur**, produire un score de compatibilité ATS /100, un **atelier annoté** (surcouches précises + acceptation clic par clic), générer un **CV ATS 1 colonne**, puis **retester** automatiquement.
+Outil gratuit **ATS Check** : analyser un CV (PDF/DOCX) **localement dans le navigateur**, produire un score de compatibilité ATS /100 (analyse approfondie : géométrie, chronologie emploi, lexiques compétences, alignement offre), un **atelier annoté** (surcouches précises + acceptation clic par clic), générer un **CV optimisé fidèle à la mise en page** (DOCX in-place ou reconstruction structurée), avec une **version ATS linéaire** en option, puis **retester** automatiquement.
 
-Succès = le visiteur dépose un CV, **atterrit directement dans l’atelier annoté** (prévisualisation + zones précises + accept/ignore), génère un CV ATS 1 colonne, reteste le score, et fait confiance à la confidentialité (pas d’upload serveur).
+Succès = le visiteur dépose un CV, **atterrit directement dans l’atelier annoté**, accepte des corrections, télécharge un fichier **layout-fidèle**, reteste le score, et fait confiance à la confidentialité (pas d’upload serveur).
 
 ## Positioning
 
@@ -29,13 +29,13 @@ Vérificateur ATS gratuit, immédiat, respectueux de la vie privée — analyse 
 ## Conversion & proof
 
 - **Primary CTA:** déposer / analyser mon CV → **ouvrir l’atelier annoté**.
-- **Secondary CTAs:** voir le rapport détaillé ; générer le CV ATS ; retester ; assistant FAQ ; pages légales / accessibilité.
+- **Secondary CTAs:** voir le rapport détaillé ; télécharger le CV modifié ; version ATS linéaire ; retester ; assistant FAQ ; pages légales / accessibilité.
 - **Line a visitor remembers after 10 seconds:** Votre CV à côté des zones à corriger — acceptez, générez, retestez. Sans envoyer le fichier.
 - **Belief ladder:**
   1. L’outil est gratuit et immédiat.
   2. Mon CV ne quitte pas mon appareil.
   3. Je vois **où** corriger sur mon CV (pas seulement un rapport).
-  4. J’accepte les suggestions, génère un CV ATS, et compare le score avant / après.
+  4. J’accepte les suggestions, télécharge un CV **fidèle à ma mise en page**, et compare le score avant / après.
 - **Proof on hand:** score jauge, atelier split-view, delta de score, export HTML/PDF — compléter `.impeccable/assets/proof/` si témoignages.
 
 ## Brand Personality

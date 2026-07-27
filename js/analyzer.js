@@ -167,9 +167,10 @@ function detectLanguage(text) {
   return frHits >= enHits ? "fr" : "en";
 }
 
-function findSpellingIssues(text, lang) {
+function findSpellingIssues(text, lang, whitelist = null) {
   const issues = [];
   const seen = new Set();
+  const wl = whitelist instanceof Set ? whitelist : null;
   for (const tip of COMMON_TYPOS) {
     if (lang === "en" && tip.skipIfEn) continue;
     if (lang === "fr" && tip.skipIfFr) continue;
@@ -178,6 +179,7 @@ function findSpellingIssues(text, lang) {
     while ((m = tip.wrong.exec(text)) !== null) {
       const key = m[0].toLowerCase();
       if (seen.has(key)) continue;
+      if (wl && wl.has(key)) continue;
       seen.add(key);
       const start = Math.max(0, m.index - 30);
       const end = Math.min(text.length, m.index + m[0].length + 30);
@@ -197,6 +199,42 @@ function findSpellingIssues(text, lang) {
       });
       if (issues.length >= 12) return issues;
     }
+  }
+  return issues;
+}
+
+/** Optional nspell enrichment (lazy CDN). No-ops if unavailable. */
+async function enrichSpellingWithNspell(text, lang, issues, whitelist) {
+  try {
+    if (typeof window === "undefined") return issues;
+    const load = window.__atsLoadNspell;
+    if (typeof load !== "function") return issues;
+    const spell = await load(lang);
+    if (!spell?.correct) return issues;
+    const seen = new Set(issues.map((i) => i.wrong.toLowerCase()));
+    const words = text.match(/[A-Za-zÀ-ü]{5,}/g) || [];
+    for (const w of words) {
+      const low = w.toLowerCase();
+      if (seen.has(low)) continue;
+      if (whitelist?.has(low)) continue;
+      if (/^\d/.test(w) || /[A-Z]{2,}/.test(w)) continue; // acronyms / codes
+      if (spell.correct(w)) continue;
+      const suggestions = spell.suggest?.(w) || [];
+      if (!suggestions.length) continue;
+      const idx = text.indexOf(w);
+      if (idx < 0) continue;
+      seen.add(low);
+      issues.push({
+        wrong: w,
+        right: suggestions[0],
+        context: text.slice(Math.max(0, idx - 20), idx + w.length + 20).replace(/\s+/g, " "),
+        textStart: idx,
+        textEnd: idx + w.length,
+      });
+      if (issues.length >= 12) break;
+    }
+  } catch {
+    /* nspell optional */
   }
   return issues;
 }
@@ -563,83 +601,111 @@ function scoreReadability(text, fileMeta) {
   }
 
   const weirdChars = (text.match(/[□�]|[\uFFFD]/g) || []).length;
-  const hasColumnsSmell = (text.match(/\t{2,}| {6,}/g) || []).length > 8;
-  if (weirdChars === 0 && !hasColumnsSmell) {
+  const layout = fileMeta.parsed?.layout;
+  // Prefer geometry-based column detection; fall back to whitespace heuristic (stricter threshold)
+  const hasColumnsSmell = layout
+    ? !!layout.columnSmell
+    : (text.match(/\t{2,}| {8,}/g) || []).length > 12;
+  const hasTables = !!(layout?.tableHint || (fileMeta.tableCount || 0) > 0);
+
+  if (weirdChars === 0 && !hasColumnsSmell && !hasTables) {
     score += 7;
     checks.push({ ok: true, label: "Mise en page linéaire, favorable aux ATS." });
   } else if (weirdChars > 0) {
     score += 2;
     checks.push({ ok: false, label: "Caractères illisibles détectés (encodage ou OCR défaillant)." });
+  } else if (hasTables) {
+    score += 3;
+    checks.push({ ok: false, label: "Tableaux détectés — certains ATS mélangent l'ordre des cellules." });
   } else {
     score += 3;
     checks.push({ ok: false, label: "Indices de colonnes/tableaux — certains ATS mélangent l'ordre du texte." });
   }
 
-  return { score: Math.min(25, score), checks, pages };
+  return { score: Math.min(25, score), checks, pages, hasColumnsSmell, hasTables };
 }
 
-function scoreStructure(text) {
+function scoreStructure(text, fileMeta = {}) {
   const checks = [];
   let score = 0;
+  const parsed = fileMeta.parsed;
+  const contact = parsed?.contact;
 
-  if (detectEmail(text)) {
+  if (contact?.email || detectEmail(text)) {
     score += 5;
     checks.push({ ok: true, label: "Adresse e-mail présente." });
   } else {
     checks.push({ ok: false, label: "Aucune adresse e-mail détectée." });
   }
 
-  if (detectPhone(text)) {
+  if (contact?.phone || detectPhone(text)) {
     score += 4;
     checks.push({ ok: true, label: "Numéro de téléphone détecté." });
   } else {
     checks.push({ ok: false, label: "Téléphone manquant ou non reconnu." });
   }
 
-  if (detectLinkedIn(text)) {
+  if (contact?.linkedin || detectLinkedIn(text)) {
     score += 3;
     checks.push({ ok: true, label: "Profil LinkedIn mentionné." });
   } else {
     checks.push({ ok: false, label: "Lien LinkedIn absent." });
   }
 
-  if (JOB_TITLE_HINTS.test(text.slice(0, 800))) {
+  const hasTitle =
+    (parsed?.roles?.[0]?.title && parsed.roles[0].title.length > 2) ||
+    JOB_TITLE_HINTS.test(text.slice(0, 800));
+  if (hasTitle) {
     score += 5;
     checks.push({ ok: true, label: "Titre/intitulé de poste présent." });
   } else {
     checks.push({ ok: false, label: "Intitulé de poste peu identifiable en tête de CV." });
   }
 
-  if (SECTION_PATTERNS.experience.test(text)) {
+  const hasExp =
+    (parsed?.sections?.experience?.length > 0) || SECTION_PATTERNS.experience.test(text);
+  if (hasExp) {
     score += 4;
     checks.push({ ok: true, label: "Section Expérience clairement identifiée." });
   } else {
     checks.push({ ok: false, label: "Section Expérience non détectée." });
   }
 
-  if (SECTION_PATTERNS.education.test(text)) {
+  const hasEdu =
+    (parsed?.sections?.education?.length > 0) || SECTION_PATTERNS.education.test(text);
+  if (hasEdu) {
     score += 2;
     checks.push({ ok: true, label: "Section Formation présente." });
   } else {
     checks.push({ ok: false, label: "Section Formation absente ou mal intitulée." });
   }
 
-  if (SECTION_PATTERNS.skills.test(text)) {
+  const hasSkills =
+    (parsed?.sections?.skills?.length > 0) || SECTION_PATTERNS.skills.test(text);
+  if (hasSkills) {
     score += 2;
     checks.push({ ok: true, label: "Section Compétences présente." });
   } else {
     checks.push({ ok: false, label: "Section Compétences manquante." });
   }
 
-  return { score: Math.min(25, score), checks };
+  return {
+    score: Math.min(25, score),
+    checks,
+    roleCount: parsed?.roles?.length || 0,
+    employmentGaps: parsed?.employmentGaps || [],
+  };
 }
 
-function scoreContent(text) {
+function scoreContent(text, fileMeta = {}) {
   const checks = [];
   let score = 0;
-  const lower = text.toLowerCase();
   const words = text.split(/\s+/).filter(Boolean);
-  const verbHits = ACTION_VERBS.filter((v) => lower.includes(v.toLowerCase())).length;
+  const verbInfo = fileMeta.verbStats;
+  const verbHits = verbInfo
+    ? verbInfo.strong
+    : ACTION_VERBS.filter((v) => text.toLowerCase().includes(v.toLowerCase())).length;
+  const weakHits = verbInfo?.weak || 0;
 
   if (verbHits >= 6) {
     score += 9;
@@ -652,15 +718,55 @@ function scoreContent(text) {
     checks.push({ ok: false, label: "Verbes d'action quasi absents — reformulez en réalisations." });
   }
 
+  if (weakHits >= 3) {
+    score = Math.max(0, score - 2);
+    checks.push({
+      ok: false,
+      label: `Formulations faibles détectées (${weakHits}) — préférez des verbes d'action.`,
+    });
+  }
+
+  // Metrics per bullet when roles available
+  const roles = fileMeta.parsed?.roles || [];
+  let bullets = 0;
+  let bulletsWithMetrics = 0;
+  if (roles.length) {
+    for (const r of roles) {
+      for (const b of r.bullets || []) {
+        bullets += 1;
+        if (/\d/.test(b)) bulletsWithMetrics += 1;
+      }
+    }
+  }
   const metrics = (text.match(/\b\d+([.,]\d+)?\s?(%|€|\$|k€|m€|M€)?\b/g) || []).length;
-  if (metrics >= 5) {
+  if (bullets >= 3) {
+    const ratio = bulletsWithMetrics / bullets;
+    if (ratio >= 0.4) {
+      score += 9;
+      checks.push({
+        ok: true,
+        label: `Résultats chiffrés présents (${bulletsWithMetrics}/${bullets} puces).`,
+      });
+    } else if (ratio >= 0.15) {
+      score += 5;
+      checks.push({ ok: false, label: "Quelques chiffres — ajoutez davantage de métriques." });
+    } else {
+      checks.push({
+        ok: false,
+        label: "Presque aucun résultat chiffré — les ATS et RH valorisent les preuves.",
+      });
+    }
+  } else if (metrics >= 5) {
     score += 9;
     checks.push({ ok: true, label: `Résultats chiffrés présents (${metrics} indicateurs).` });
   } else if (metrics >= 2) {
     score += 5;
     checks.push({ ok: false, label: "Quelques chiffres — ajoutez davantage de métriques." });
   } else {
-    checks.push({ ok: false, label: "Presque aucun résultat chiffré — les ATS et RH valorisent les preuves." });
+    checks.push({
+      ok: false,
+      label: "Presque aucun résultat chiffré — les ATS et RH valorisent les preuves.",
+    });
   }
 
   const wordCount = words.length;
@@ -675,40 +781,67 @@ function scoreContent(text) {
     checks.push({ ok: false, label: `Contenu dense (~${wordCount} mots) — allégez.` });
   }
 
-  return { score: Math.min(25, score), checks, hasMetrics: metrics >= 2 };
+  return {
+    score: Math.min(25, score),
+    checks,
+    hasMetrics: metrics >= 2 || bulletsWithMetrics >= 2,
+    weakHits,
+  };
 }
 
-function scoreKeywords(text) {
+function scoreKeywords(text, fileMeta = {}) {
   const checks = [];
   let score = 0;
+  const skillsMatch = fileMeta.skillsMatch;
   const lower = text.toLowerCase();
-  const found = PROFESSIONAL_KEYWORDS.filter((k) => lower.includes(k));
+  const found = skillsMatch?.hits?.length
+    ? skillsMatch.hits
+    : PROFESSIONAL_KEYWORDS.filter((k) => lower.includes(k));
   const unique = new Set(found);
 
   if (unique.size >= 12) {
-    score += 15;
+    score += 12;
     checks.push({ ok: true, label: `Vocabulaire professionnel riche (${unique.size} mots-clés).` });
   } else if (unique.size >= 6) {
-    score += 10;
+    score += 8;
     checks.push({ ok: false, label: `Densité de mots-clés moyenne (${unique.size}).` });
   } else {
-    score += 4;
+    score += 3;
     checks.push({ ok: false, label: "Peu de mots-clés métier — alignez-vous sur les offres cibles." });
   }
 
   const diversity = unique.size;
   if (diversity >= 8) {
-    score += 10;
+    score += 8;
     checks.push({ ok: true, label: "Bonne diversité lexicale pour matcher les offres." });
   } else {
-    score += 4;
+    score += 3;
     checks.push({ ok: false, label: "Diversifiez le vocabulaire (outils, soft skills, domaines)." });
+  }
+
+  // JD overlap bonus / penalty
+  const jd = fileMeta.jdOverlap;
+  if (jd && jd.score != null) {
+    if (jd.score >= 50) {
+      score += 5;
+      checks.push({
+        ok: true,
+        label: `Alignement offre ↔ CV : ${jd.score}% (${jd.overlap.length} termes communs).`,
+      });
+    } else {
+      score += 1;
+      checks.push({
+        ok: false,
+        label: `Faible alignement avec l'offre (${jd.score}%) — reprenez les termes clés.`,
+      });
+    }
   }
 
   return {
     score: Math.min(25, score),
     checks,
-    keywords: [...unique].slice(0, 20),
+    keywords: [...unique].slice(0, 24),
+    jdOverlap: jd || null,
   };
 }
 
@@ -735,25 +868,26 @@ function buildTags(text, content, structure) {
 
 function buildDiagnostics(text, scores) {
   const diagnostics = [];
-  const years = detectDates(text);
-  const gap = findEmploymentGap(years);
-
-  if (gap) {
+  // Prefer employment-only gaps from structured parse
+  const empGaps = scores.structure?.employmentGaps || [];
+  if (empGaps.length) {
+    const gap = empGaps[0];
     diagnostics.push({
-      severity: "critical",
+      severity: gap.months >= 24 ? "warning" : "info",
       title: "Trou d'emploi non justifié",
-      body: `Un gap d'environ ${gap.months} mois dans votre parcours attirera immédiatement l'attention. Sans explication, les recruteurs imagineront le pire.`,
+      body: `Un écart d'environ ${gap.months} mois entre deux expériences (${gap.from}–${gap.to}) peut interroger. Expliquez-le brièvement si pertinent.`,
       tip: "→ Mentionnez l'activité durant cette période : formation, projet, bénévolat, création d'entreprise.",
     });
   }
 
   const academicCount = ACADEMIC_MARKERS.filter((m) => text.toLowerCase().includes(m)).length;
-  if (academicCount >= 2) {
+  // Soft signal only — not a penalty without a target JD
+  if (academicCount >= 3 && !scores.keywords?.jdOverlap) {
     diagnostics.push({
-      severity: "warning",
-      title: "Profil académique non traduit en langage business",
-      body: "Votre CV académique ne parle pas spontanément aux recruteurs du secteur privé. Publications et thèse doivent passer au second plan.",
-      tip: "→ Reformulez vos recherches en termes d'impact, de budget géré et de résultats applicables à l'industrie.",
+      severity: "info",
+      title: "Profil académique — adapter le langage si besoin",
+      body: "Si vous ciblez le privé, reformulez publications/thèse en impact et résultats applicables.",
+      tip: "→ Mettez en avant budgets, livrables, collaborations et résultats mesurables.",
     });
   }
 
@@ -786,7 +920,16 @@ function buildDiagnostics(text, scores) {
     });
   }
 
-  const weakVerbs = scores.content.checks.some((c) => !c.ok && c.label.includes("verbe"));
+  if (scores.readability.hasColumnsSmell || scores.readability.hasTables) {
+    diagnostics.push({
+      severity: "warning",
+      title: "Mise en page potentiellement hostile ATS",
+      body: "Colonnes ou tableaux peuvent faire lire le texte dans le désordre par certains robots.",
+      tip: "→ Préférez une lecture linéaire ; gardez le design si vous exportez aussi une version ATS linéaire.",
+    });
+  }
+
+  const weakVerbs = scores.content.checks.some((c) => !c.ok && /verbe|faible/i.test(c.label));
   if (weakVerbs) {
     diagnostics.push({
       severity: "info",
@@ -831,7 +974,18 @@ function scoreColor(score, max = 25) {
 
 /**
  * @param {string} rawText
- * @param {{ fileName?: string, pages?: number, fileType?: string, lang?: 'fr'|'en' }} fileMeta
+ * @param {{
+ *   fileName?: string,
+ *   pages?: number,
+ *   fileType?: string,
+ *   lang?: 'fr'|'en',
+ *   parsed?: object,
+ *   skillsMatch?: object,
+ *   verbStats?: object,
+ *   jdOverlap?: object,
+ *   tableCount?: number,
+ *   jobDescription?: string
+ * }} fileMeta
  */
 export function analyzeCv(rawText, fileMeta = {}) {
   const text = normalizeText(rawText);
@@ -844,15 +998,17 @@ export function analyzeCv(rawText, fileMeta = {}) {
   const uiLang = fileMeta.lang === "en" ? "en" : "fr";
   const detectedLang = detectLanguage(text);
   const readability = scoreReadability(text, fileMeta);
-  const structure = scoreStructure(text);
-  const content = scoreContent(text);
-  const keywords = scoreKeywords(text);
+  const structure = scoreStructure(text, fileMeta);
+  const content = scoreContent(text, fileMeta);
+  const keywords = scoreKeywords(text, fileMeta);
 
   const total = readability.score + structure.score + content.score + keywords.score;
   let label = labelForScore(total);
   const tags = buildTags(text, content, structure);
   const diagnostics = buildDiagnostics(text, { readability, structure, content, keywords });
-  const spelling = findSpellingIssues(text, detectedLang);
+  const spelling =
+    fileMeta.spelling ||
+    findSpellingIssues(text, detectedLang, fileMeta.techWhitelist || null);
   const annotations = buildAnnotations(
     text,
     { readability, structure, content, keywords },
@@ -900,6 +1056,8 @@ export function analyzeCv(rawText, fileMeta = {}) {
           "Unreadable characters detected (encoding/OCR issue).",
         "Indices de colonnes/tableaux — certains ATS mélangent l'ordre du texte.":
           "Column/table layout clues — some ATS may mix text order.",
+        "Tableaux détectés — certains ATS mélangent l'ordre des cellules.":
+          "Tables detected — some ATS mix cell reading order.",
         "Longueur idéale (1 page).": "Ideal length (1 page).",
         "CV un peu long (3 pages) — visez 1 à 2 pages.":
           "A bit long (3 pages) — aim for 1 to 2 pages.",
@@ -954,6 +1112,18 @@ export function analyzeCv(rawText, fileMeta = {}) {
       m = s.match(/^Résultats chiffrés présents \((\d+) indicateurs\)\.$/);
       if (m) return `Quantified results present (${m[1]} indicators).`;
 
+      m = s.match(/^Résultats chiffrés présents \((\d+)\/(\d+) puces\)\.$/);
+      if (m) return `Quantified results present (${m[1]}/${m[2]} bullets).`;
+
+      m = s.match(/^Formulations faibles détectées \((\d+)\) — préférez des verbes d'action\.$/);
+      if (m) return `Weak wording detected (${m[1]}) — prefer action verbs.`;
+
+      m = s.match(/^Alignement offre ↔ CV : (\d+)% \((\d+) termes communs\)\.$/);
+      if (m) return `Job ↔ CV alignment: ${m[1]}% (${m[2]} shared terms).`;
+
+      m = s.match(/^Faible alignement avec l'offre \((\d+)%\) — reprenez les termes clés\.$/);
+      if (m) return `Weak job alignment (${m[1]}%) — reuse key terms.`;
+
       m = s.match(/^Concision correcte \(~(\d+) mots\)\.$/);
       if (m) return `Proper concision (~${m[1]} words).`;
 
@@ -993,9 +1163,15 @@ export function analyzeCv(rawText, fileMeta = {}) {
       const map = {
         "Trou d'emploi non justifié": {
           title: "Unexplained employment gap",
-          body: `An unexplained employment gap of about ${months || "—"} months will immediately catch recruiters' attention. Without context, they will assume the worst.`,
+          body: `An unexplained employment gap of about ${months || "—"} months between roles (${from || "—"}–${to || "—"}) may raise questions. Explain it briefly if relevant.`,
           tip:
             "→ Mention what you did during that period: training, project, volunteering, or starting a business.",
+        },
+        "Profil académique — adapter le langage si besoin": {
+          title: "Academic profile — adapt the language if needed",
+          body:
+            "If you target the private sector, reframe publications/thesis as impact and applicable results.",
+          tip: "→ Highlight budgets, deliverables, collaborations and measurable outcomes.",
         },
         "Profil académique non traduit en langage business": {
           title: "Academic profile not translated into business language",
@@ -1003,6 +1179,11 @@ export function analyzeCv(rawText, fileMeta = {}) {
             "Your academic profile does not speak naturally to recruiters in the private sector. Publications and your thesis should take a back seat.",
           tip:
             "→ Reframe your research in terms of impact, budget you managed, and results applicable to the industry.",
+        },
+        "Mise en page potentiellement hostile ATS": {
+          title: "Layout may be ATS-hostile",
+          body: "Columns or tables can make some parsers read text out of order.",
+          tip: "→ Prefer linear reading order; keep the design if you also export a linear ATS version.",
         },
         "Manque de résultats chiffrés": {
           title: "Missing quantified results",
@@ -1233,7 +1414,70 @@ export function analyzeCv(rawText, fileMeta = {}) {
     text,
     wordCount: text.split(/\s+/).filter(Boolean).length,
     pages: readability.pages,
+    parsed: fileMeta.parsed || null,
+    skillsMatch: fileMeta.skillsMatch || null,
+    jdOverlap: fileMeta.jdOverlap || keywords.jdOverlap || null,
+    layoutHostile: !!(readability.hasColumnsSmell || readability.hasTables),
   };
 }
 
-export { labelForScore, buildAnnotations };
+/**
+ * Async analyze: structured parse + lazy lexicons + optional JD overlap + spelling whitelist.
+ * @param {string} rawText
+ * @param {object} [fileMeta]
+ * @param {{ jobDescription?: string }} [opts]
+ */
+export async function analyzeCvAsync(rawText, fileMeta = {}, opts = {}) {
+  const { parseCv } = await import("./parse-cv.js");
+  const {
+    preloadAnalysisData,
+    matchSkills,
+    matchJdOverlap,
+    countVerbs,
+    loadTechWhitelist,
+  } = await import("./skills-match.js");
+
+  await preloadAnalysisData();
+  let techWhitelist = null;
+  try {
+    techWhitelist = await loadTechWhitelist();
+  } catch {
+    techWhitelist = null;
+  }
+
+  const parsed = parseCv(rawText, {
+    pagesGeo: fileMeta.pagesGeo || null,
+    tableCount: fileMeta.tableCount || 0,
+  });
+  const detectedLang = detectLanguage(normalizeText(rawText));
+  const [skillsMatch, verbStats] = await Promise.all([
+    matchSkills(rawText),
+    countVerbs(rawText, detectedLang === "en" ? "en" : "fr"),
+  ]);
+
+  let jdOverlap = null;
+  const jd = (opts.jobDescription || fileMeta.jobDescription || "").trim();
+  if (jd) {
+    jdOverlap = await matchJdOverlap(rawText, jd);
+  }
+
+  let spelling = findSpellingIssues(normalizeText(rawText), detectedLang, techWhitelist);
+  spelling = await enrichSpellingWithNspell(
+    normalizeText(rawText),
+    detectedLang,
+    spelling,
+    techWhitelist
+  );
+
+  return analyzeCv(rawText, {
+    ...fileMeta,
+    parsed,
+    skillsMatch,
+    verbStats,
+    jdOverlap,
+    techWhitelist,
+    spelling,
+  });
+}
+
+export { labelForScore, buildAnnotations, findSpellingIssues };
