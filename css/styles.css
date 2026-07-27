@@ -2671,3 +2671,30 @@ html.a11y-motion .hero-brand {
     transform: none !important;
   }
 }
+
+
+.studio-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 5.5rem;
+  transform: translateX(-50%);
+  z-index: 40;
+  max-width: min(28rem, 92vw);
+  padding: 0.65rem 1rem;
+  border-radius: 0.35rem;
+  background: var(--ink);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(18, 22, 28, 0.25);
+}
+.ann-item.status-noted .ann-status-pill,
+.ann-item.status-accepted .ann-status-pill {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.ann-self-edit {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.85rem;
+  color: var(--stone-500);
+}

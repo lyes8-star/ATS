@@ -1,46 +1,19 @@
 /**
- * Studio CV annoté — split view, accept/ignore/edit, barre d'actions.
- * Expérience principale après analyse.
+ * Studio CV annoté — suggestions à appliquer soi-même (sans export CV).
  */
 import {
   renderPdfPreview,
   renderHtmlPreview,
   scrollPreviewToAnnotation,
 } from "./annotate.js";
-import { applyAll, updateAnnotation } from "./optimize.js";
-import { downloadAtsHtml } from "./export-cv.js";
-import { downloadLayoutFaithful, openFaithfulPrintable } from "./export-reconstruct.js";
-import { analyzeCvAsync, attachGeometry } from "./analyzer.js";
-import { parseCv } from "./parse-cv.js";
+import { updateAnnotation } from "./optimize.js";
+import { attachGeometry } from "./analyzer.js";
 import {
   hasProConsent,
   isProConfigured,
   proAnalyze,
-  proPdfPatch,
-  arrayBufferToBase64,
-  resolveUsableArrayBuffer,
-  downloadBlob,
 } from "./pro-client.js";
 import * as extractApi from "./extract.js";
-import { patchDocxInPlace, ensurePizZipScript, cloneArrayBuffer } from "./export-docx.js";
-
-function freshParsed(session) {
-  const text = session.workingText || session.optimizedText || session.extracted?.text || "";
-  try {
-    return parseCv(text);
-  } catch {
-    return session.report?.parsed || null;
-  }
-}
-
-function exportMeta(session, extra = {}) {
-  return {
-    fileName: session.originalFile?.name,
-    lang: window.ATSi18n?.getLang?.() || "fr",
-    parsed: freshParsed(session),
-    ...extra,
-  };
-}
 
 /**
  * @typedef {object} StudioSession
@@ -49,13 +22,8 @@ function exportMeta(session, extra = {}) {
  * @property {object} report
  * @property {object[]} annotations
  * @property {string|null} selectedId
- * @property {string|null} optimizedText
- * @property {string|null} [workingText]
- * @property {ArrayBuffer|null} [workingDocxBuffer]
- * @property {boolean} [previewShowsWorking]
  * @property {object|null} retestReport
  * @property {number|null} scoreBefore
- * @property {boolean} [previewOptimized]
  * @property {string} [jobDescription]
  */
 
@@ -63,7 +31,7 @@ function exportMeta(session, extra = {}) {
  * Monte le studio dans un conteneur.
  * @param {HTMLElement} root
  * @param {StudioSession} session
- * @param {{ onReset?: () => void, onRetest?: (report: object, optimized: string) => void }} hooks
+ * @param {{ onReset?: () => void }} hooks
  */
 export async function mountStudio(root, session, hooks = {}) {
   session.annotations = (session.annotations || []).map((a) => ({
@@ -72,20 +40,8 @@ export async function mountStudio(root, session, hooks = {}) {
   }));
   session.selectedId = session.selectedId || session.annotations[0]?.id || null;
   session.scoreBefore = session.report?.total ?? null;
-  session.previewOptimized = !!session.previewOptimized;
-  session.workingText = session.workingText || session.extracted?.text || "";
-  session.previewShowsWorking = !!session.previewShowsWorking;
-  if (
-    session.extracted?.format === "docx" &&
-    session.extracted?.originalBuffer &&
-    !session.workingDocxBuffer
-  ) {
-    try {
-      session.workingDocxBuffer = cloneArrayBuffer(session.extracted.originalBuffer);
-    } catch {
-      session.workingDocxBuffer = session.extracted.originalBuffer;
-    }
-  }
+  session.previewOptimized = false;
+  session.previewShowsWorking = false;
 
   root.innerHTML = studioShell(session);
   bindStudio(root, session, hooks);
@@ -189,20 +145,14 @@ function studioShell(session) {
         <div id="ann-detail" class="ann-detail"></div>
       </aside>
     </div>
-    <div class="studio-bar" role="region" aria-label="Actions d'optimisation">
+    <div class="studio-bar" role="region" aria-label="Actions">
       <p id="studio-bar-count" class="studio-bar-count"></p>
       <div class="studio-bar-actions">
-        <button type="button" class="btn-secondary" id="btn-accept-all">${escapeHtml(t("studio.acceptAll"))}</button>
-        <button type="button" class="analyze-btn" id="btn-download">${escapeHtml(t("studio.actions.downloadWorking"))}</button>
-        <button type="button" class="btn-secondary" id="btn-download-ats">${escapeHtml(t("studio.actions.downloadAts"))}</button>
-        <button type="button" class="btn-secondary" id="btn-generate">${escapeHtml(t("studio.generate.button"))}</button>
-        <button type="button" class="btn-secondary" id="btn-print">${escapeHtml(t("studio.actions.print"))}</button>
+        <button type="button" class="btn-secondary" id="btn-back-report">${escapeHtml(t("studio.actions.backReport"))}</button>
         <button type="button" class="btn-secondary hidden" id="btn-pro-analyze">${escapeHtml(t("studio.actions.proAnalyze"))}</button>
-        <button type="button" class="btn-secondary hidden" id="btn-pro-pdf">${escapeHtml(t("studio.actions.proPdf"))}</button>
-        <button type="button" class="analyze-btn" id="btn-retest">${escapeHtml(t("studio.actions.retest"))}</button>
       </div>
     </div>
-    <div id="retest-banner" class="retest-banner hidden" role="status"></div>
+    <div id="studio-toast" class="studio-toast hidden" role="status" aria-live="polite"></div>
     <p id="studio-jd-overlap" class="studio-jd-overlap hidden" role="status"></p>
   </div>`;
 }
@@ -262,49 +212,6 @@ function focusFailedChecklist(root, session, preferredCheckId = null) {
   root.querySelector("#ann-list")?.focus?.();
 }
 
-/**
- * Applique toutes les annotations acceptées sur workingText (+ DOCX buffer).
- */
-async function applyAcceptedInPlace(session) {
-  const source = session.extracted?.text || "";
-  const { text } = applyAll(source, session.annotations);
-  session.workingText = text;
-  session.optimizedText = text;
-  session.previewShowsWorking = true;
-  try {
-    session.report = session.report || {};
-    session.report.parsed = parseCv(text);
-  } catch {
-    /* ignore */
-  }
-
-  if (session.extracted?.format === "docx") {
-    try {
-      await ensurePizZipScript();
-      let base =
-        session.extracted?.originalBuffer && !session.extracted.originalBuffer.detached
-          ? cloneArrayBuffer(session.extracted.originalBuffer)
-          : null;
-      if (!base && session.originalFile) {
-        base = await session.originalFile.arrayBuffer();
-        if (session.extracted) session.extracted.originalBuffer = cloneArrayBuffer(base);
-      }
-      if (base) {
-        const accepted = (session.annotations || []).filter((a) => a.status === "accepted");
-        const { blob } = await patchDocxInPlace(base, accepted);
-        const buf = await blob.arrayBuffer();
-        session.workingDocxBuffer = buf;
-        if (window.mammoth) {
-          const htmlResult = await window.mammoth.convertToHtml({ arrayBuffer: cloneArrayBuffer(buf) });
-          session.extracted.html = htmlResult.value || session.extracted.html;
-        }
-      }
-    } catch (err) {
-      console.warn("DOCX in-place patch failed", err);
-    }
-  }
-}
-
 function bindStudio(root, session, hooks) {
   root.querySelector("#studio-checklist-recap")?.addEventListener("click", () => {
     focusFailedChecklist(root, session);
@@ -315,117 +222,32 @@ function bindStudio(root, session, hooks) {
     focusFailedChecklist(root, session, btn.getAttribute("data-check-id"));
   });
 
-  root.querySelector("#btn-accept-all")?.addEventListener("click", async () => {
-    // Remplacements sûrs uniquement (typos / passifs / métriques replace)
-    const safeKinds = new Set(["typo", "passive_verb", "missing_metric"]);
-    let changed = 0;
-    session.annotations = session.annotations.map((a) => {
-      if (
-        a.status === "pending" &&
-        a.applyMode === "replace" &&
-        (safeKinds.has(a.kind) || a.kind === "typo")
-      ) {
-        changed += 1;
-        return { ...a, status: "accepted" };
-      }
-      return a;
-    });
-    if (changed) {
-      window.ATSAnalytics?.track?.("ats_accept_all", { count: changed });
-      await applyAcceptedInPlace(session);
-      afterDecision(root, session);
+  root.querySelector("#btn-back-report")?.addEventListener("click", () => {
+    // Return to detailed report without destroying session
+    const upload = document.getElementById("view-upload");
+    const results = document.getElementById("view-results");
+    const studio = document.getElementById("view-studio");
+    studio?.classList.add("hidden");
+    upload?.classList.add("hidden");
+    results?.classList.remove("hidden");
+    const sub = document.getElementById("subnav-title");
+    if (sub) {
+      sub.textContent =
+        window.ATSi18n?.t?.("results.subnav") || "Résultat du contrôle";
     }
-  });
-
-  root.querySelector("#btn-generate")?.addEventListener("click", () => {
-    // Secondaire : export ATS linéaire à partir du working text
-    const text =
-      session.workingText ||
-      applyAll(session.extracted.text, session.annotations).text;
-    session.workingText = text;
-    session.optimizedText = text;
-    try {
-      session.report = session.report || {};
-      session.report.parsed = parseCv(text);
-    } catch (e) {
-      console.warn("reparse after generate failed", e);
-    }
-    downloadAtsHtml(text, exportMeta(session));
-    window.ATSAnalytics?.track?.("ats_cv_generated", {
-      accepted: session.annotations.filter((a) => a.status === "accepted").length,
-      mode: "ats_linear_export",
-    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.ATSAnalytics?.track?.("ats_studio_back_report");
   });
 
   root.querySelector("#btn-pro-analyze")?.addEventListener("click", () => {
     runProAnalyze(root, session);
   });
 
-  root.querySelector("#btn-pro-pdf")?.addEventListener("click", () => {
-    runProPdf(session);
-  });
-
-  root.querySelector("#btn-download")?.addEventListener("click", () => {
-    ensureWorkingText(session);
-    downloadPrimary(session);
-  });
-
-  root.querySelector("#btn-download-ats")?.addEventListener("click", () => {
-    ensureWorkingText(session);
-    downloadAtsHtml(session.workingText || session.optimizedText, exportMeta(session));
-  });
-
-  root.querySelector("#btn-print")?.addEventListener("click", () => {
-    ensureWorkingText(session);
-    printPrimary(session);
-  });
-
-  root.querySelector("#btn-retest")?.addEventListener("click", () => {
-    ensureWorkingText(session);
-    runRetest(root, session, hooks);
-  });
-
   if (session.proEnabled || (hasProConsent() && isProConfigured())) {
     root.querySelector("#btn-pro-analyze")?.classList.remove("hidden");
-    if (session.extracted?.format === "pdf" || session.extracted?.originalBuffer) {
-      root.querySelector("#btn-pro-pdf")?.classList.remove("hidden");
-    }
   }
 
   showJdOverlap(root, session);
-}
-
-function ensureWorkingText(session) {
-  if (session.workingText) {
-    session.optimizedText = session.workingText;
-    return;
-  }
-  const { text } = applyAll(session.extracted?.text || "", session.annotations);
-  session.workingText = text;
-  session.optimizedText = text;
-  try {
-    session.report = session.report || {};
-    session.report.parsed = parseCv(text);
-  } catch {
-    /* ignore */
-  }
-}
-
-function downloadPrimary(session) {
-  ensureWorkingText(session);
-  const meta = exportMeta(session);
-  downloadLayoutFaithful(session, meta).catch((err) => {
-    console.error(err);
-    downloadAtsHtml(session.workingText || session.optimizedText, meta);
-  });
-}
-
-function printPrimary(session) {
-  ensureWorkingText(session);
-  const meta = exportMeta(session, {
-    layoutHostile: session.report?.layoutHostile,
-  });
-  openFaithfulPrintable(session.workingText || session.optimizedText, meta.parsed, meta);
 }
 
 function showJdOverlap(root, session) {
@@ -445,13 +267,9 @@ async function runProAnalyze(root, session) {
     alert(t("studio.pro.needConsent"));
     return;
   }
-  const banner = root.querySelector("#retest-banner");
   try {
-    if (banner) {
-      banner.classList.remove("hidden");
-      banner.innerHTML = `<p>${escapeHtml(t("studio.pro.running"))}</p>`;
-    }
-    const text = session.optimizedText || session.extracted?.text || "";
+    showToast(root, t("studio.pro.running"));
+    const text = session.extracted?.text || "";
     const data = await proAnalyze({
       text,
       jobDescription: session.jobDescription || "",
@@ -467,172 +285,11 @@ async function runProAnalyze(root, session) {
     renderList(root, session);
     renderDetail(root, session);
     updateBar(root, session);
-    if (banner) {
-      banner.innerHTML = `<p role="status">${escapeHtml(t("studio.pro.done"))}</p>`;
-    }
+    showToast(root, t("studio.pro.done"));
   } catch (err) {
     console.error(err);
-    if (banner) {
-      banner.classList.remove("hidden");
-      banner.innerHTML = `<p role="alert">${escapeHtml(t("studio.pro.error"))}</p>`;
-    }
+    showToast(root, t("studio.pro.error"));
   }
-}
-
-async function runProPdf(session) {
-  const t = window.ATSi18n?.t || ((k) => k);
-  if (!hasProConsent() || !isProConfigured()) {
-    alert(t("studio.pro.needConsent"));
-    return;
-  }
-  try {
-    const buf = await resolveUsableArrayBuffer(
-      session.extracted?.originalBuffer,
-      session.originalFile
-    );
-    if (buf && session.extracted && session.extracted.originalBuffer?.detached) {
-      session.extracted.originalBuffer = buf;
-    }
-    const optimizedText = session.optimizedText || session.extracted?.text || "";
-    const blob = await proPdfPatch({
-      pdfBase64: buf ? arrayBufferToBase64(buf) : "",
-      optimizedText,
-      lang: window.ATSi18n?.getLang?.() || "fr",
-      fileName: session.originalFile?.name || "cv.pdf",
-    });
-    const base = String(session.originalFile?.name || "cv").replace(/\.[^.]+$/, "");
-    downloadBlob(blob, `${base}.pdf`);
-  } catch (err) {
-    console.error(err);
-    alert(t("studio.pro.error"));
-  }
-}
-
-function textToPreviewHtml(text) {
-  const esc = escapeHtml(text || "");
-  const blocks = esc
-    .split(/\n{2,}/)
-    .map((block) => {
-      const lines = block.split("\n").filter(Boolean);
-      if (!lines.length) return "";
-      if (lines.length === 1) return `<p>${lines[0]}</p>`;
-      return `<p>${lines.join("<br>")}</p>`;
-    })
-    .join("");
-  return `<div class="cv-html-doc cv-html-optimized">${blocks || "<p></p>"}</div>`;
-}
-
-async function runRetest(root, session, hooks) {
-  try {
-    const t = window.ATSi18n?.t || ((k) => k);
-    ensureWorkingText(session);
-    const report = await analyzeCvAsync(
-      session.workingText || session.optimizedText,
-      {
-        fileName: session.originalFile?.name || "cv-optimise",
-        pages: estimatePagesFromText(session.workingText || session.optimizedText),
-        lang: window.ATSi18n?.getLang?.() || "fr",
-        pagesGeo: session.extracted?.pagesGeo,
-        tableCount: session.extracted?.tableCount || 0,
-        tableHint: session.extracted?.tableHint,
-        headerSparse: session.extracted?.headerSparse,
-        readingOrderOk: session.extracted?.readingOrderOk,
-        profilePhotoHint: session.extracted?.profilePhotoHint,
-      },
-      { jobDescription: session.jobDescription || "" }
-    );
-    session.retestReport = report;
-    const before = session.scoreBefore ?? 0;
-    const after = report.total;
-    const delta = after - before;
-    const ready = report.passes || after >= 70;
-    const banner = root.querySelector("#retest-banner");
-    if (banner) {
-      banner.classList.remove("hidden");
-      banner.innerHTML = `
-        <div class="retest-inner">
-          <p class="retest-delta">Score <strong>${before}</strong> → <strong>${after}</strong>
-            <span class="${delta >= 0 ? "delta-up" : "delta-down"}">(${delta >= 0 ? "+" : ""}${delta})</span>
-          </p>
-          <p>${
-            ready
-              ? t("studio.retest.ready")
-              : report.passes
-                ? t("studio.retest.pass")
-                : t("studio.retest.continue")
-          }</p>
-          <div class="retest-actions">
-            ${
-              ready
-                ? `<button type="button" class="analyze-btn" id="btn-retest-download">${escapeHtml(
-                    t("studio.actions.downloadWorking")
-                  )}</button>
-                   <button type="button" class="btn-secondary" id="btn-retest-ats">${escapeHtml(
-                     t("studio.actions.downloadAts")
-                   )}</button>
-                   <button type="button" class="btn-secondary" id="btn-retest-print">${escapeHtml(
-                     t("studio.actions.print")
-                   )}</button>`
-                : ""
-            }
-            <button type="button" class="btn-secondary" id="btn-continue-opt">${escapeHtml(
-              t("studio.retest.continueButton")
-            )}</button>
-          </div>
-        </div>`;
-      banner.querySelector("#btn-retest-download")?.addEventListener("click", () => {
-        downloadPrimary(session);
-      });
-      banner.querySelector("#btn-retest-ats")?.addEventListener("click", () => {
-        downloadAtsHtml(session.workingText || session.optimizedText, exportMeta(session));
-      });
-      banner.querySelector("#btn-retest-print")?.addEventListener("click", () => {
-        printPrimary(session);
-      });
-      banner.querySelector("#btn-continue-opt")?.addEventListener("click", () => {
-        banner.classList.add("hidden");
-        // Keep original preview (PDF/DOCX) — merge new annotations, do not replace with regenerated HTML
-        const freshAnns = (report.annotations || []).map((a) => ({
-          ...a,
-          status: "pending",
-          approximate: true,
-          placement: a.applyMode === "replace" ? "approx" : "insert",
-          rects: [],
-        }));
-        session.annotations = freshAnns;
-        session.report = report;
-        session.selectedId = session.annotations[0]?.id || null;
-        session.scoreBefore = after;
-        session.previewOptimized = false;
-        session.previewShowsWorking = true;
-        if (session.extracted) {
-          session.extracted.text = session.workingText || session.extracted.text;
-        }
-        const scoreEl = root.querySelector("#studio-score-before");
-        if (scoreEl) scoreEl.textContent = String(after);
-        refreshPreview(root, session);
-        renderList(root, session);
-        renderDetail(root, session);
-        updateBar(root, session);
-        showJdOverlap(root, session);
-      });
-    }
-    showJdOverlap(root, session);
-    window.ATSAnalytics?.track?.("ats_retest", { before, after, delta });
-    hooks.onRetest?.(report, session.workingText || session.optimizedText);
-  } catch (err) {
-    console.error(err);
-    const banner = root.querySelector("#retest-banner");
-    if (banner) {
-      banner.classList.remove("hidden");
-      banner.innerHTML = `<p role="alert">${escapeHtml(err.message || "Retest impossible")}</p>`;
-    }
-  }
-}
-
-function estimatePagesFromText(text) {
-  const words = (text || "").split(/\s+/).filter(Boolean).length;
-  return Math.max(1, Math.round(words / 450));
 }
 
 async function refreshPreview(root, session) {
@@ -650,28 +307,19 @@ async function refreshPreview(root, session) {
     });
   };
 
-  const usePdf =
-    !session.previewOptimized &&
-    session.extracted.format === "pdf" &&
-    session.extracted.pdfDoc;
+  const usePdf = session.extracted?.format === "pdf" && session.extracted?.pdfDoc;
 
   if (usePdf) {
     await renderPdfPreview(preview, session.extracted.pdfDoc, session.annotations, {
       onSelect,
       selectedId: session.selectedId,
-      showAppliedSuggestions: true,
     });
   } else {
-    const plain =
-      session.previewShowsWorking && session.workingText
-        ? session.workingText
-        : session.extracted.text;
-    const html =
-      session.extracted.html || textToPreviewHtml(plain || "");
+    const plain = session.extracted?.text || "";
+    const html = session.extracted?.html || `<pre class="cv-txt">${escapeHtml(plain)}</pre>`;
     renderHtmlPreview(preview, html, plain, session.annotations, {
       onSelect,
       selectedId: session.selectedId,
-      showAppliedSuggestions: true,
     });
   }
 }
@@ -697,11 +345,13 @@ function renderList(root, session) {
   if (!list) return;
   const t = window.ATSi18n?.t || ((k) => k);
   const pending = session.annotations.filter((a) => a.status === "pending").length;
-  const accepted = session.annotations.filter((a) => a.status === "accepted").length;
+  const noted = session.annotations.filter(
+    (a) => a.status === "noted" || a.status === "accepted"
+  ).length;
   const spellN = session.report?.spelling?.length || 0;
   const countText = t("studio.side.count", {
     total: session.annotations.length,
-    accepted,
+    accepted: noted,
     pending,
   });
   const stripExtra =
@@ -780,7 +430,7 @@ function renderList(root, session) {
 
 function statusLabel(s) {
   const t = window.ATSi18n?.t || ((k) => k);
-  if (s === "accepted") return t("studio.accepted");
+  if (s === "noted" || s === "accepted") return t("studio.noted");
   if (s === "ignored") return t("studio.ignored");
   return t("studio.pending");
 }
@@ -818,45 +468,38 @@ function renderDetail(root, session) {
       <h3>${escapeHtml(ann.title)}</h3>
       <p class="ann-why-label">${escapeHtml(t("studio.detail.why"))}</p>
       <p class="ann-problem">${escapeHtml(ann.detail || "")}</p>
+      <p class="ann-self-edit">${escapeHtml(t("studio.detail.selfEdit"))}</p>
       <label class="ann-suggest-label" for="ann-suggest-input">${escapeHtml(t("studio.detail.correction"))}</label>
       <textarea id="ann-suggest-input" class="ann-suggest" rows="3">${escapeHtml(ann.suggestion || "")}</textarea>
       <div class="ann-actions">
-        <button type="button" class="analyze-btn" id="btn-accept">${escapeHtml(t("studio.actions.accept"))}</button>
-        <button type="button" class="btn-ghost-text" id="btn-edit-accept">${escapeHtml(t("studio.actions.editAccept"))}</button>
+        <button type="button" class="analyze-btn" id="btn-copy">${escapeHtml(t("studio.actions.copySuggestion"))}</button>
         <button type="button" class="btn-secondary" id="btn-ignore">${escapeHtml(t("studio.actions.ignore"))}</button>
       </div>
     </div>`;
 
   const input = detail.querySelector("#ann-suggest-input");
-  const originalSuggestion = ann.suggestion || "";
 
-  // Accepter = suggestion d'origine (ignore les edits textarea non validés via "Modifier")
-  detail.querySelector("#btn-accept")?.addEventListener("click", async () => {
-    session.annotations = updateAnnotation(session.annotations, ann.id, {
-      status: "accepted",
-      suggestion: originalSuggestion,
-    });
-    await applyAcceptedInPlace(session);
-    afterDecision(root, session);
-  });
-
-  // Modifier puis accepter = utilise le contenu édité du textarea
-  detail.querySelector("#btn-edit-accept")?.addEventListener("click", async () => {
-    if (document.activeElement !== input) {
-      input?.focus();
-      input?.classList.add("is-editing");
-      input?.select?.();
-      // Premier clic : focus pour éditer ; second clic (déjà focus) ou si déjà modifié → accept
-      if ((input?.value ?? "") === originalSuggestion) {
-        return;
+  detail.querySelector("#btn-copy")?.addEventListener("click", async () => {
+    const suggestion = (input?.value ?? ann.suggestion ?? "").trim();
+    try {
+      if (suggestion && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(suggestion);
+      } else if (suggestion && input) {
+        input.focus();
+        input.select();
+        document.execCommand("copy");
       }
+      session.annotations = updateAnnotation(session.annotations, ann.id, {
+        status: "noted",
+        suggestion,
+      });
+      showToast(root, t("studio.copied"));
+      window.ATSAnalytics?.track?.("ats_suggestion_copied", { id: ann.id });
+      afterDecision(root, session);
+    } catch (err) {
+      console.warn(err);
+      showToast(root, t("studio.copyFailed"));
     }
-    session.annotations = updateAnnotation(session.annotations, ann.id, {
-      status: "accepted",
-      suggestion: input?.value ?? ann.suggestion,
-    });
-    await applyAcceptedInPlace(session);
-    afterDecision(root, session);
   });
 
   detail.querySelector("#btn-ignore")?.addEventListener("click", () => {
@@ -878,24 +521,25 @@ async function afterDecision(root, session) {
 
 function updateBar(root, session) {
   const total = session.annotations.length;
-  const accepted = session.annotations.filter((a) => a.status === "accepted").length;
+  const noted = session.annotations.filter(
+    (a) => a.status === "noted" || a.status === "accepted"
+  ).length;
   const pending = session.annotations.filter((a) => a.status === "pending").length;
   const t = window.ATSi18n?.t || ((k) => k);
   const bar = root.querySelector("#studio-bar-count");
   const count = root.querySelector("#studio-count");
-  const text = t("studio.side.count", { total, accepted, pending });
-  if (bar) bar.textContent = text;
-  if (count) count.textContent = text;
-  const acceptAll = root.querySelector("#btn-accept-all");
-  if (acceptAll) {
-    const safePending = session.annotations.some(
-      (a) =>
-        a.status === "pending" &&
-        a.applyMode === "replace" &&
-        (a.kind === "typo" || a.kind === "passive_verb" || a.kind === "missing_metric")
-    );
-    acceptAll.disabled = !safePending;
-  }
+  const label = t("studio.side.count", { total, accepted: noted, pending });
+  if (bar) bar.textContent = label;
+  if (count) count.textContent = label;
+}
+
+function showToast(root, message) {
+  const el = root.querySelector("#studio-toast");
+  if (!el) return;
+  el.textContent = message;
+  el.classList.remove("hidden");
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => el.classList.add("hidden"), 2200);
 }
 
 function escapeHtml(str) {

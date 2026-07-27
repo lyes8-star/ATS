@@ -18,7 +18,7 @@ window.ATSChat = (function () {
       },
       {
         q: "Qu’est-ce que le Mode Pro ?",
-        a: "Option consentie : suggestions LLM, matching compétences ESCO, et export PDF avancé via un Worker Cloudflare. Sans Mode Pro ni Extrait, tout reste 100 % local.",
+        a: "Option consentie : suggestions LLM et matching compétences ESCO via un Worker Cloudflare. Sans Mode Pro ni Extrait, tout reste 100 % local. Vous appliquez ensuite les corrections dans votre propre fichier.",
       },
       {
         q: "Qu’est-ce que l’Enrichissement Extrait ?",
@@ -44,11 +44,11 @@ window.ATSChat = (function () {
       },
       {
         q: "Are my data sent to a server?",
-        a: "By default no — local analysis stays in your browser. With Extract enrichment, a short extract (text / header image) is sent temporarily for grammar, geocoding and photo classification. With Pro mode, CV text is also sent for LLM / ESCO / PDF. No long-term retention. See the privacy policy.",
+        a: "By default no — local analysis stays in your browser. With Extract enrichment, a short extract (text / header image) is sent temporarily for grammar, geocoding and photo classification. With Pro mode, CV text is also sent for LLM / ESCO suggestions. No long-term retention. See the privacy policy.",
       },
       {
         q: "What is Pro mode?",
-        a: "An opt-in: LLM suggestions, ESCO skill matching, and advanced PDF export via a Cloudflare Worker. Without Pro or Extract, everything stays 100% local.",
+        a: "An opt-in: LLM suggestions and ESCO skill matching via a Cloudflare Worker. Without Pro or Extract, everything stays 100% local. You then apply fixes in your own file.",
       },
       {
         q: "What is Extract enrichment?",
