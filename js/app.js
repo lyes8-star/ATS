@@ -386,7 +386,7 @@ function resetToUpload() {
   els.viewStudio?.classList.add("hidden");
   els.viewUpload.classList.remove("hidden");
   if (els.studioRoot) els.studioRoot.innerHTML = "";
-  els.subnavTitle.textContent = window.ATSi18n?.t?.("results.subnav.reset") || "Vérificateur ATS gratuit";
+  els.subnavTitle.textContent = window.ATSi18n?.t?.("results.subnav.reset") || "Contrôle de CV";
   els.btnNewTest.classList.add("hidden");
   clearError();
   window.scrollTo({ top: 0, behavior: "smooth" });

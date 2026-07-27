@@ -1,20 +1,29 @@
 :root {
-  --warm-bg: #faf6f0;
-  --warm-bg-2: #f5f0e8;
-  --border: #ede0cf;
-  --charcoal: #2c2a28;
-  --gold: #d4a853;
-  --terra: #c45c26;
-  --stone-400: #a8a29e;
-  --stone-500: #78716c;
+  --ink: #12161c;
+  --paper: #f3f5f7;
+  --paper-2: #e8ecef;
+  --line: #d5dbe3;
+  --accent: #0f766e;
+  --accent-soft: #d9f0ed;
+  --accent-bright: #14b8a6;
+  --mark: #1e293b;
+  /* Compat aliases — former cream/terra/gold template */
+  --warm-bg: var(--paper);
+  --warm-bg-2: var(--paper-2);
+  --border: var(--line);
+  --charcoal: var(--ink);
+  --gold: var(--accent-bright);
+  --terra: var(--accent);
+  --stone-400: #94a3b8;
+  --stone-500: #64748b;
   --green-500: #22c55e;
   --green-700: #15803d;
   --amber-500: #f59e0b;
   --amber-600: #d97706;
   --red-700: #991b1b;
   --orange-800: #9a3412;
-  --font: "IBM Plex Sans", "Segoe UI", sans-serif;
-  --font-display: "Space Grotesk", "Segoe UI", sans-serif;
+  --font: "Figtree", "Segoe UI", sans-serif;
+  --font-display: "Syne", "Segoe UI", sans-serif;
 }
 
 *,
@@ -85,13 +94,14 @@ img {
 .logo-mark {
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 0.75rem;
-  background: var(--charcoal);
-  color: var(--gold);
+  border-radius: 0.35rem;
+  background: var(--mark);
+  color: var(--accent-bright);
   display: grid;
   place-items: center;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   font-weight: 800;
+  letter-spacing: 0.04em;
 }
 
 .btn-ghost {
@@ -101,9 +111,13 @@ img {
   font-size: 0.875rem;
   font-weight: 600;
   padding: 0.5rem 1rem;
-  border-radius: 9999px;
-  background: var(--charcoal);
-  color: var(--gold);
+  border-radius: 0.35rem;
+  background: var(--ink);
+  color: #fff;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+.btn-ghost:hover {
+  background: var(--accent);
 }
 
 .subnav {
@@ -231,8 +245,33 @@ img {
 
 /* Hero / Upload */
 .hero {
-  padding: 4rem 1rem;
-  background: var(--warm-bg-2);
+  padding: 3.5rem 1rem 4.5rem;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, var(--accent-soft), transparent 55%),
+    linear-gradient(180deg, var(--paper-2) 0%, var(--paper) 100%);
+}
+.hero-brand {
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 4vw, 2.35rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 0 0 0.75rem;
+  opacity: 0;
+  animation: hero-in 0.55s ease forwards;
+}
+.hero-inner > * {
+  opacity: 0;
+  animation: hero-in 0.55s ease forwards;
+}
+.hero-inner > *:nth-child(1) { animation-delay: 0.05s; }
+.hero-inner > *:nth-child(2) { animation-delay: 0.12s; }
+.hero-inner > *:nth-child(3) { animation-delay: 0.18s; }
+.hero-inner > *:nth-child(4) { animation-delay: 0.24s; }
+.hero-inner > *:nth-child(5) { animation-delay: 0.3s; }
+@keyframes hero-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .hero-inner {
@@ -247,18 +286,19 @@ img {
   gap: 0.5rem;
   font-size: 0.75rem;
   font-weight: 600;
-  padding: 0.375rem 0.75rem;
-  border-radius: 9999px;
-  background: var(--terra);
-  color: #fff;
-  margin-bottom: 1.5rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 0.3rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin-bottom: 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .badge-dot {
   width: 0.375rem;
   height: 0.375rem;
   border-radius: 50%;
-  background: #fff;
+  background: var(--accent);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -286,13 +326,13 @@ img {
 
 .hero-lead {
   font-size: 1.125rem;
-  color: #6b5744;
+  color: #64748b;
   max-width: 28rem;
   margin: 0 auto 2.5rem;
 }
 
 .dropzone {
-  border: 2px dashed #d4b896;
+  border: 2px dashed #a8b4c0;
   border-radius: 1rem;
   padding: 2.5rem 1.5rem;
   background: #fff;
@@ -303,8 +343,11 @@ img {
 .dropzone:hover,
 .dropzone.dragover {
   border-color: var(--terra);
-  background: #fffaf5;
+  background: var(--accent-soft);
   transform: translateY(-2px);
+}
+.dropzone:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .dropzone-icon {
@@ -314,7 +357,7 @@ img {
   margin: 0 auto 1rem;
   display: grid;
   place-items: center;
-  background: #fef3e2;
+  background: #d9f0ed;
   color: var(--terra);
 }
 
@@ -336,11 +379,15 @@ img {
   gap: 0.5rem;
   margin-top: 1.5rem;
   padding: 0.625rem 1.5rem;
-  border-radius: 9999px;
+  border-radius: 0.4rem;
   font-weight: 600;
   font-size: 0.875rem;
-  background: var(--gold);
-  color: var(--charcoal);
+  background: var(--accent);
+  color: #fff;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+.dropzone-btn:hover {
+  background: var(--mark);
 }
 
 .file-chip {
@@ -454,12 +501,12 @@ img {
   width: 100%;
   margin-top: 1rem;
   padding: 0.875rem 1.5rem;
-  border-radius: 0.875rem;
+  border-radius: 0.4rem;
   font-weight: 700;
   font-size: 0.95rem;
   background: var(--terra);
   color: #fff;
-  transition: opacity 0.2s;
+  transition: background 0.2s ease, transform 0.15s ease, opacity 0.2s;
 }
 
 .analyze-btn:disabled {
@@ -468,14 +515,22 @@ img {
 }
 
 .analyze-btn:not(:disabled):hover {
-  opacity: 0.9;
+  background: var(--mark);
+  transform: translateY(-1px);
 }
 
 .features {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
-  margin-top: 3rem;
+  margin-top: 0;
+}
+
+.section-features {
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+  background: var(--paper);
+  border-top: 1px solid var(--border);
 }
 
 .feature {
@@ -559,7 +614,8 @@ img {
 /* CTA band */
 .cta-band {
   padding: 3rem 1rem;
-  background: var(--gold);
+  background: var(--ink);
+  color: #fff;
   text-align: center;
 }
 
@@ -570,12 +626,12 @@ img {
 }
 
 .cta-band p:nth-child(2) {
-  color: #6b5744;
+  color: #94a3b8;
   margin: 0 0 1.5rem;
 }
 
 .cta-band .btn-ghost {
-  background: var(--charcoal);
+  background: var(--accent);
   color: var(--gold);
 }
 
@@ -1575,6 +1631,8 @@ html.a11y-font-150 {
 }
 
 html.a11y-contrast {
+  --paper: #fff;
+  --paper-2: #f5f5f5;
   --warm-bg: #fff;
   --warm-bg-2: #f5f5f5;
   --charcoal: #000;
@@ -2594,5 +2652,22 @@ html.a11y-motion .btn-secondary {
 
   .studio-wrap {
     padding-bottom: 7rem;
+  }
+}
+
+
+html.a11y-motion .hero-inner > *,
+html.a11y-motion .hero-brand {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-inner > *,
+  .hero-brand,
+  .badge-dot {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }

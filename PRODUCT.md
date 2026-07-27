@@ -10,30 +10,30 @@ web
 
 ## Users
 
-**Primary:** candidats francophones (Junior à Senior) qui préparent des candidatures et veulent savoir si leur CV passe les filtres ATS avant envoi.
+**Primary:** candidats francophones (Junior à Senior) qui préparent des candidatures et veulent savoir si leur CV est lisible par un logiciel de recrutement avant envoi.
 
-**Secondary:** coachs / cabinets RH qui testent rapidement la lisibilité ATS d’un CV.
+**Secondary:** coachs / cabinets RH qui testent rapidement la lisibilité d’un CV.
 
 Contexte typique : mobile ou desktop, première visite, besoin d’un score clair et d’actions concrètes en moins d’une minute.
 
 ## Product Purpose
 
-Outil gratuit **Test Mon CV** (`https://www.testmoncv.fr/`) : analyser un CV (PDF/DOCX) **localement dans le navigateur** (par défaut), produire un score ATS /100, un **atelier annoté**, télécharger un **CV 1 page propre** (thème ATS Clean, sans branding outil), avec options consenties :
+Outil gratuit **Test Mon CV** (`https://www.testmoncv.fr/`) : analyser un CV (PDF/DOCX) **localement dans le navigateur** (par défaut), produire un score /100, un **atelier de corrections**, télécharger le **document modifié**, avec options consenties :
 
 - **Enrichissement Extrait** — Worker : LanguageTool, géocode Nominatim, classification photo vs logo (extrait uniquement, pas le fichier complet).
 - **Mode Pro** — Worker : LLM, ESCO, PDF + les mêmes enrichissements Extrait.
 
-Succès = le visiteur dépose un CV, atterrit dans l’atelier, accepte des corrections, télécharge un CV **lisible et professionnel**, reteste le score, et choisit s’il active Extrait et/ou Mode Pro.
+Succès = le visiteur dépose un CV, atterrit dans l’atelier, accepte des corrections, télécharge un CV **lisible**, reteste le score, et choisit s’il active Extrait et/ou Mode Pro.
 
 ## Positioning
 
-Vérificateur ATS gratuit, immédiat, respectueux de la vie privée — analyse 100 % navigateur + atelier de correction guidée.
+Atelier de contrôle de CV — immédiat, respectueux de la vie privée — analyse navigateur + corrections guidées sur le document chargé.
 
 ## Conversion & proof
 
-- **Primary CTA:** déposer / analyser mon CV → **ouvrir l’atelier annoté**.
-- **Secondary CTAs:** voir le rapport détaillé ; télécharger le CV modifié ; version ATS linéaire ; retester ; assistant FAQ ; pages légales / accessibilité.
-- **Line a visitor remembers after 10 seconds:** Votre CV à côté des zones à corriger — acceptez, générez, retestez. Sans envoyer le fichier.
+- **Primary CTA:** déposer / contrôler mon CV → **ouvrir l’atelier**.
+- **Secondary CTAs:** voir le rapport ; télécharger le document modifié ; export linéaire ; retester ; aide FAQ ; pages légales / accessibilité.
+- **Line a visitor remembers after 10 seconds:** Votre CV à côté des zones à corriger — acceptez, téléchargez, retestez. Sans envoyer le fichier.
 - **Belief ladder:**
   1. L’outil est gratuit et immédiat.
   2. Mon CV ne quitte pas mon appareil.
@@ -60,7 +60,7 @@ Ton : professionnel, direct, sans jargon inutile. Émotions visées : contrôle,
 3. **Preuve par le score** — jauge + catégories, pas d’abstraction décorative.
 4. **Confidentialité visible** — rappel « analyse locale » près de l’upload et dans le footer.
 5. **Normes FR / UE** — CMP Consent Mode v2, pages LCEN/RGPD/cookies/a11y, PWA.
-6. **Parité Crevia** — barre contact + popup Google Maps **chargée après consentement**, FR/EN i18n (pas de /en routes), typographie Space Grotesk / IBM Plex Sans, footer « Fait par Crevia ».
+6. **Identité propre** — encre / papier / teal, Syne + Figtree, FR/EN i18n (pas de /en routes), footer discret « Édité par Crevia ».
 
 ## Accessibility & Inclusion
 

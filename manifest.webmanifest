@@ -1,14 +1,14 @@
 {
   "id": "/",
-  "name": "Test Mon CV — Vérificateur ATS",
+  "name": "Test Mon CV",
   "short_name": "Test Mon CV",
-  "description": "Testez gratuitement la compatibilité ATS de votre CV.",
+  "description": "Analyse locale de votre CV — score, diagnostic et atelier de corrections.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#faf6f0",
-  "theme_color": "#2c2a28",
+  "background_color": "#f3f5f7",
+  "theme_color": "#12161c",
   "lang": "fr",
   "dir": "ltr",
   "icons": [

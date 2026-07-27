@@ -2,17 +2,17 @@
   "site": {
     "name": "Test Mon CV",
     "shortName": "Test Mon CV",
-    "tagline": "Vérificateur de compatibilité ATS pour CV",
-    "description": "85% des CV sont éliminés avant d'atteindre un recruteur. Testez gratuitement votre CV et obtenez votre score ATS en quelques secondes.",
-    "phone": "+33 1 84 80 00 00",
-    "phoneDisplay": "01 84 80 00 00",
+    "tagline": "Contrôlez la lisibilité de votre CV",
+    "description": "Test Mon CV analyse votre CV dans le navigateur : score sur 100, points bloquants et atelier de corrections — sans compte.",
+    "phone": "",
+    "phoneDisplay": "",
     "email": "contact@testmoncv.fr",
     "dpoEmail": "dpo@testmoncv.fr",
-    "hours": "Lun – Ven : 9h00 – 18h00",
+    "hours": "",
     "address": {
-      "street": "10 rue Jean Baptiste",
-      "postalCode": "95240",
-      "city": "Cormeilles-en-Parisis",
+      "street": "",
+      "postalCode": "",
+      "city": "",
       "country": "France"
     },
     "publisher": {
@@ -22,8 +22,8 @@
     "url": "https://www.testmoncv.fr/",
     "adsId": "",
     "gaId": "",
-    "themeColor": "#2c2a28",
-    "backgroundColor": "#faf6f0",
+    "themeColor": "#12161c",
+    "backgroundColor": "#f3f5f7",
     "ogImage": "icons/og.jpg",
     "legal": {
       "raisonSociale": "Test Mon CV",

@@ -9,46 +9,24 @@
       "design-system-color",
       "design-system-radius",
       "design-system-spacing",
-      "cream-palette",
-      "overused-font",
       "layout-transition"
     ],
     "ignoreFiles": [],
     "ignoreValues": [
       {
         "rule": "overused-font",
-        "value": "fraunces",
-        "reason": "Intentional display serif for Test Mon CV (DESIGN.md)"
-      },
-      {
-        "rule": "overused-font",
-        "value": "Space Grotesk",
+        "value": "Syne",
         "reason": "Intentional display font for Test Mon CV (DESIGN.md)"
       },
       {
         "rule": "overused-font",
-        "value": "IBM Plex Sans",
-        "reason": "Intentional UI sans for Test Mon CV (DESIGN.md)"
-      },
-      {
-        "rule": "overused-font",
-        "value": "ibm plex sans",
+        "value": "Figtree",
         "reason": "Intentional UI sans for Test Mon CV (DESIGN.md)"
       },
       {
         "rule": "layout-transition",
         "value": "width",
         "reason": "Progress bar score animation (category cards)"
-      },
-      {
-        "rule": "cream-palette",
-        "value": "#faf6f0",
-        "reason": "Warm paper ground intentional — brand heritage (DESIGN.md)"
-      },
-      {
-        "rule": "cream-palette",
-        "value": "#f5f0e8",
-        "reason": "Warm paper secondary surface — intentional brand token"
       }
     ],
     "designSystem": {

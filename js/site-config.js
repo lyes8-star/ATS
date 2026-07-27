@@ -39,22 +39,26 @@
           console.warn("[ATSSiteConfig]", err);
           window.ATS_SITE = {
             name: "Test Mon CV",
-          phone: "+33 1 84 80 00 00",
-          phoneDisplay: "01 84 80 00 00",
-          email: "contact@testmoncv.fr",
-          dpoEmail: "dpo@testmoncv.fr",
-          hours: "Lun – Ven : 9h00 – 18h00",
-          address: {
-            street: "10 rue Jean Baptiste",
-            postalCode: "95240",
-            city: "Cormeilles-en-Parisis",
-            country: "France",
-          },
-          publisher: { name: "Crevia", url: "https://crevia.fr" },
+            tagline: "Contrôlez la lisibilité de votre CV",
+            description:
+              "Test Mon CV analyse votre CV dans le navigateur : score sur 100, points bloquants et atelier de corrections — sans compte.",
+            phone: "",
+            phoneDisplay: "",
+            email: "contact@testmoncv.fr",
+            dpoEmail: "dpo@testmoncv.fr",
+            hours: "",
+            address: {
+              street: "",
+              postalCode: "",
+              city: "",
+              country: "France",
+            },
+            publisher: { name: "Crevia", url: "https://crevia.fr" },
             url: "https://www.testmoncv.fr/",
             gaId: "",
             adsId: "",
-            themeColor: "#2c2a28",
+            themeColor: "#12161c",
+            backgroundColor: "#f3f5f7",
             legal: {},
           };
           return window.ATS_SITE;

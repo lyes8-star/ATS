@@ -38,7 +38,7 @@ window.ATSSeo = (function () {
         {
           "@type": "WebApplication",
           "@id": `${url}#app`,
-          name: `${name} — Vérificateur ATS`,
+          name: `${name} — Contrôle de CV`,
           url,
           applicationCategory: "BusinessApplication",
           operatingSystem: "Web",

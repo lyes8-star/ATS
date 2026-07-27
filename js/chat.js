@@ -1,11 +1,11 @@
 /**
- * Assistant ATS — FAQ guidée + mailto.
+ * Aide Test Mon CV — FAQ guidée + mailto.
  */
 window.ATSChat = (function () {
   const FAQ_BY_LANG = {
     fr: [
       {
-        q: "Comment est calculé le score ATS ?",
+        q: "Comment est calculé le score ?",
         a: "Le score /100 agrège 4 axes (/25) : lisibilité (texte extractible), structure (sections, coordonnées), qualité du contenu (verbes d’action, chiffres) et mots-clés professionnels.",
       },
       {
@@ -26,7 +26,7 @@ window.ATSChat = (function () {
       },
       {
         q: "Que faire si mon score est faible ?",
-        a: "Corrigez d’abord les points bloquants : email/téléphone, sections Expérience/Formation, verbes d’action et résultats chiffrés. Relancez ensuite l’analyse.",
+        a: "Corrigez d’abord les points bloquants : email/téléphone, sections Expérience/Formation, verbes d’action et résultats chiffrés. Relancez ensuite le contrôle.",
       },
       {
         q: "Les fautes d’orthographe comptent-elles ?",
@@ -35,8 +35,8 @@ window.ATSChat = (function () {
     ],
     en: [
       {
-        q: "How is the ATS score calculated?",
-        a: "The /100 score aggregates 4 axes (/25): extractability (ATS-readable text), structure (sections, contact details), content quality (action verbs, numbers) and professional keywords.",
+        q: "How is the score calculated?",
+        a: "The /100 score aggregates 4 axes (/25): extractability (machine-readable text), structure (sections, contact details), content quality (action verbs, numbers) and professional keywords.",
       },
       {
         q: "Which formats are accepted?",
@@ -56,7 +56,7 @@ window.ATSChat = (function () {
       },
       {
         q: "What should I do if my score is low?",
-        a: "First fix the blocking issues: email/phone, Experience/Education sections, action verbs, and quantified results. Then re-run the analysis.",
+        a: "First fix the blocking issues: email/phone, Experience/Education sections, action verbs, and quantified results. Then run the check again.",
       },
       {
         q: "Do spelling mistakes matter?",
