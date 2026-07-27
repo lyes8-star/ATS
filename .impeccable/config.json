@@ -18,22 +18,22 @@
       {
         "rule": "overused-font",
         "value": "fraunces",
-        "reason": "Intentional display serif for ATS Check (DESIGN.md)"
+        "reason": "Intentional display serif for Test Mon CV (DESIGN.md)"
       },
       {
         "rule": "overused-font",
         "value": "Space Grotesk",
-        "reason": "Intentional display font for ATS Check (DESIGN.md)"
+        "reason": "Intentional display font for Test Mon CV (DESIGN.md)"
       },
       {
         "rule": "overused-font",
         "value": "IBM Plex Sans",
-        "reason": "Intentional UI sans for ATS Check (DESIGN.md)"
+        "reason": "Intentional UI sans for Test Mon CV (DESIGN.md)"
       },
       {
         "rule": "overused-font",
         "value": "ibm plex sans",
-        "reason": "Intentional UI sans for ATS Check (DESIGN.md)"
+        "reason": "Intentional UI sans for Test Mon CV (DESIGN.md)"
       },
       {
         "rule": "layout-transition",

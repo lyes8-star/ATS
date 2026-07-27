@@ -1,4 +1,4 @@
-# ATS Check
+# Test Mon CV
 
 Analyseur de compatibilité ATS pour CV (PDF / DOCX) — site statique aux normes production (PWA, SEO, SEA, RGPD FR, accessibilité, chatbot).
 
@@ -14,13 +14,14 @@ Ouvrir http://localhost:8080/
 
 ## Fonctionnalités produit
 
-- Upload PDF / DOCX — analyse **locale par défaut** (aucun CV envoyé sans Mode Pro)
+- Upload PDF / DOCX — analyse **locale par défaut** (aucun envoi sans case Extrait / Pro)
 - **Atelier annoté = expérience principale** après analyse
 - Score /100 + 4 axes ; parse structuré, lexiques, overlap offre
 - **Export CV 1 page propre** (ATS Clean) — HTML/DOCX, **sans** mention générateur
-- **Mode Pro** opt-in : Worker Cloudflare (LLM annotations, ESCO, PDF reflow)
+- **Enrichissement Extrait** opt-in : LanguageTool, géocode, classification photo (extrait)
+- **Mode Pro** opt-in : Worker Cloudflare (LLM annotations, ESCO, PDF reflow + Extrait)
 - **Retest automatique** avec delta de score
-- Parité Crevia, i18n FR/EN, PWA / RGPD / a11y
+- Domaine : `https://www.testmoncv.fr/` — parité Crevia, i18n FR/EN, PWA / RGPD / a11y
 
 ## Normes production (modèle Test / Test2)
 
@@ -65,7 +66,7 @@ js/optimize.js          # Application des suggestions
 js/export-cv.js         # Export CV ATS Clean 1 page (HTML)
 js/export-reconstruct.js# DOCX reconstruit + download layout
 js/export-docx.js       # DOCX in-place (PizZip)
-js/pro-client.js        # Client Mode Pro (consent + Worker)
+js/pro-client.js        # Client Mode Pro + Extrait (consent + Worker)
 workers/ats-pro/        # Cloudflare Worker LLM / ESCO / PDF
 js/app.js               # Orchestration upload → studio → retest
 js/consent.js           # CMP + Consent Mode v2

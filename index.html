@@ -4,35 +4,35 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>Vérificateur ATS gratuit — ATS Check</title>
+  <title>Vérificateur ATS gratuit — Test Mon CV</title>
   <meta name="description" content="85% des CV sont éliminés avant d'atteindre un recruteur. Testez gratuitement votre CV et obtenez votre score ATS en quelques secondes.">
   <meta name="robots" content="index, follow, max-image-preview:large">
   <meta name="theme-color" content="#2c2a28">
   <meta name="keywords" content="vérificateur ATS, score ATS, CV compatible ATS, analyse CV, ATS checker">
-  <link rel="canonical" href="https://www.ats-check.fr/">
-  <link rel="alternate" hreflang="fr" href="https://www.ats-check.fr/">
-  <link rel="alternate" hreflang="x-default" href="https://www.ats-check.fr/">
+  <link rel="canonical" href="https://www.testmoncv.fr/">
+  <link rel="alternate" hreflang="fr" href="https://www.testmoncv.fr/">
+  <link rel="alternate" hreflang="x-default" href="https://www.testmoncv.fr/">
 
   <meta property="og:type" content="website">
   <meta property="og:locale" content="fr_FR">
-  <meta property="og:site_name" content="ATS Check">
-  <meta property="og:title" content="Vérificateur ATS gratuit — ATS Check">
+  <meta property="og:site_name" content="Test Mon CV">
+  <meta property="og:title" content="Vérificateur ATS gratuit — Test Mon CV">
   <meta property="og:description" content="85% des CV sont éliminés avant d'atteindre un recruteur. Obtenez votre score ATS en quelques secondes.">
-  <meta property="og:url" content="https://www.ats-check.fr/">
-  <meta property="og:image" content="https://www.ats-check.fr/icons/og.jpg">
+  <meta property="og:url" content="https://www.testmoncv.fr/">
+  <meta property="og:image" content="https://www.testmoncv.fr/icons/og.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Vérificateur ATS gratuit — ATS Check">
+  <meta name="twitter:title" content="Vérificateur ATS gratuit — Test Mon CV">
   <meta name="twitter:description" content="Testez gratuitement la compatibilité ATS de votre CV.">
-  <meta name="twitter:image" content="https://www.ats-check.fr/icons/og.jpg">
+  <meta name="twitter:image" content="https://www.testmoncv.fr/icons/og.jpg">
 
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="ATS Check">
+  <meta name="apple-mobile-web-app-title" content="Test Mon CV">
 
   <!-- Optional SEA IDs (filled from data/site.json at runtime too) -->
   <meta name="ats-ga-id" content="">
@@ -114,9 +114,9 @@
 
   <header class="site-header">
     <div class="header-inner">
-      <a href="index.html" class="logo" aria-label="ATS Check — accueil">
+      <a href="index.html" class="logo" aria-label="Test Mon CV — accueil">
         <span class="logo-mark">ATS</span>
-        <span>ATS Check</span>
+        <span>Test Mon CV</span>
       </a>
       <button type="button" id="btn-new-test" class="btn-ghost hidden" aria-label="Nouveau test" data-i18n="header.newTest" data-i18n-attr="aria-label">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
@@ -179,12 +179,20 @@
             <textarea id="jd-input" rows="3" data-i18n="upload.jd.placeholder" data-i18n-attr="placeholder" placeholder="Collez l'annonce pour mesurer l'alignement mots-clés CV ↔ offre"></textarea>
           </div>
 
+          <div class="pro-row" id="enrich-consent-row">
+            <label class="pro-consent-label">
+              <input type="checkbox" id="enrich-consent" />
+              <span data-i18n="upload.enrich.consent">Enrichissement Extrait (optionnel) — j’accepte l’envoi temporaire d’un extrait (texte / image d’en-tête) pour grammaire LanguageTool, géocodage d’adresse et classification photo. Aucune conservation longue.</span>
+            </label>
+            <p class="pro-hint" data-i18n="upload.enrich.hint">L’extrait ne remplace pas le Mode Pro : pas d’IA générative ni d’export PDF avancé.</p>
+          </div>
+
           <div class="pro-row" id="pro-consent-row">
             <label class="pro-consent-label">
               <input type="checkbox" id="pro-consent" />
               <span data-i18n="upload.pro.consent">Mode Pro (optionnel) — j’accepte l’envoi temporaire de mon CV au serveur pour suggestions LLM, ESCO et PDF avancé. Aucune conservation longue.</span>
             </label>
-            <p class="pro-hint" data-i18n="upload.pro.hint">Sans Mode Pro, l’analyse reste 100 % locale dans votre navigateur.</p>
+            <p class="pro-hint" data-i18n="upload.pro.hint">Sans Mode Pro ni Extrait, l’analyse reste 100 % locale dans votre navigateur.</p>
           </div>
 
           <button type="button" id="analyze-btn" class="analyze-btn" disabled data-i18n="upload.analyze.button">
@@ -288,7 +296,7 @@
       <button type="button" data-manage-cookies class="footer-manage" data-i18n="cookie.banner.manage">Gérer les cookies</button>
     </nav>
     <p>
-      © <span data-year></span> ATS Check ·
+      © <span data-year></span> Test Mon CV ·
       <span data-i18n="footer.madeBy">Fait par</span>
       <a href="https://crevia.fr" target="_blank" rel="noopener noreferrer">Crevia</a>
       · <span data-i18n="footer.analysisLocal">Analyse locale dans votre navigateur.</span>

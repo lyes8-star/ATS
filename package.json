@@ -1,5 +1,5 @@
 {
-  "name": "ats-check",
+  "name": "test-mon-cv",
   "private": true,
   "type": "module",
   "scripts": {

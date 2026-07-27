@@ -1,5 +1,5 @@
 ---
-name: ATS Check
+name: Test Mon CV
 description: Vérificateur de compatibilité ATS pour CV — analyse locale, score /100
 colors:
   primary: "#2c2a28"
@@ -80,7 +80,7 @@ components:
 
 ## Overview
 
-ATS Check is a brand-first marketing + tool surface for a free ATS CV checker. Visual system: charcoal + gold + terracotta accents on a warm paper background (product heritage from the reference verifier UX), Space Grotesk for display, IBM Plex Sans for UI. One composition on first viewport: brand, headline, short support, upload CTA.
+Test Mon CV is a brand-first marketing + tool surface for a free ATS CV checker. Visual system: charcoal + gold + terracotta accents on a warm paper background (product heritage from the reference verifier UX), Space Grotesk for display, IBM Plex Sans for UI. One composition on first viewport: brand, headline, short support, upload CTA.
 
 ## Colors
 

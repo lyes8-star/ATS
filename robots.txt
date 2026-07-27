@@ -3,4 +3,4 @@ Allow: /
 Disallow: /admin
 Disallow: /.well-known/
 
-Sitemap: https://www.ats-check.fr/sitemap.xml
+Sitemap: https://www.testmoncv.fr/sitemap.xml

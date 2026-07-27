@@ -1,5 +1,5 @@
 /**
- * Paramètres d’accessibilité ATS Check — WCAG 2.2 / RGAA.
+ * Paramètres d’accessibilité Test Mon CV — WCAG 2.2 / RGAA.
  */
 window.ATSA11y = (function () {
   const STORAGE_KEY = "ats-a11y";

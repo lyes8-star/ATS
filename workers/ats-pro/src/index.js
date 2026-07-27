@@ -1,20 +1,26 @@
 /**
- * Cloudflare Worker — Mode Pro ATS Check
+ * Cloudflare Worker — Mode Pro + Enrichissement Extrait (Test Mon CV)
  *
  * Secrets (wrangler secret put):
  *   OPENAI_API_KEY or ANTHROPIC_API_KEY
- *   PRO_CORS_ORIGIN (optional, default *)
+ *   LANGUAGETOOL_API_KEY (optional — public LT API without key has rate limits)
+ *   PRO_CORS_ORIGIN (optional, default * — set https://www.testmoncv.fr in prod)
  *
  * Routes:
  *   POST /pro/analyze  — LLM → annotations JSON
  *   POST /pro/skills   — ESCO search + overlap
  *   POST /pro/pdf-patch — reflow PDF (pdf-lib) from optimized text
+ *   POST /pro/grammar  — LanguageTool grammar/spelling issues
+ *   POST /pro/geocode  — Nominatim address normalization
+ *   POST /pro/photo-classify — face vs logo (vision LLM or stub)
  *   GET  /health
  */
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 const MAX_TEXT = 80_000;
+const MAX_GRAMMAR_TEXT = 20_000;
 const MAX_PDF_B64 = 12_000_000;
+const MAX_IMAGE_B64 = 2_000_000;
 
 export default {
   async fetch(request, env) {
@@ -25,7 +31,7 @@ export default {
 
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, service: "ats-pro" }, cors);
+      return json({ ok: true, service: "ats-pro", brand: "Test Mon CV" }, cors);
     }
 
     if (request.method !== "POST") {
@@ -47,6 +53,15 @@ export default {
           return result;
         }
         return json(result, cors);
+      }
+      if (url.pathname === "/pro/grammar") {
+        return json(await handleGrammar(await request.json(), env), cors);
+      }
+      if (url.pathname === "/pro/geocode") {
+        return json(await handleGeocode(await request.json(), env), cors);
+      }
+      if (url.pathname === "/pro/photo-classify") {
+        return json(await handlePhotoClassify(await request.json(), env), cors);
       }
       return json({ error: "Not found" }, cors, 404);
     } catch (err) {
@@ -431,3 +446,206 @@ function buildPdfLines(text, lang) {
   }
   return blocks;
 }
+
+/**
+ * LanguageTool grammar / spelling via public API (or keyed endpoint).
+ */
+async function handleGrammar(body, env) {
+  const text = String(body.text || "").slice(0, MAX_GRAMMAR_TEXT);
+  const lang = body.lang === "en" ? "en-US" : "fr";
+  if (text.replace(/\s/g, "").length < 20) {
+    return { issues: [], source: "languagetool", retainedSeconds: 0 };
+  }
+
+  const endpoint =
+    env.LANGUAGETOOL_API_URL || "https://api.languagetool.org/v2/check";
+  const form = new URLSearchParams();
+  form.set("text", text);
+  form.set("language", lang);
+  form.set("enabledOnly", "false");
+  if (env.LANGUAGETOOL_API_KEY) {
+    form.set("apiKey", env.LANGUAGETOOL_API_KEY);
+  }
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+      "User-Agent": "TestMonCV/1.0 (https://www.testmoncv.fr)",
+    },
+    body: form.toString(),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`LanguageTool ${res.status}: ${errText.slice(0, 120)}`);
+  }
+  const data = await res.json();
+  const issues = [];
+  const seen = new Set();
+  for (const m of data.matches || []) {
+    const wrong = String(m.context?.text || text).slice(
+      m.context?.offset ?? 0,
+      (m.context?.offset ?? 0) + (m.context?.length ?? m.length ?? 0)
+    );
+    const offset = typeof m.offset === "number" ? m.offset : null;
+    const length = typeof m.length === "number" ? m.length : (wrong || "").length;
+    const excerpt =
+      offset != null
+        ? text.slice(offset, offset + length)
+        : wrong || m.message || "";
+    const key = `${excerpt.toLowerCase()}@${offset}`;
+    if (!excerpt || seen.has(key)) continue;
+    seen.add(key);
+    const replacements = (m.replacements || []).map((r) => r.value).filter(Boolean);
+    const right = replacements[0] || "";
+    const ruleId = m.rule?.id || "";
+    const isTypo = /SPELL|MORFOLOGIK|HUNSPELL/i.test(ruleId);
+    issues.push({
+      wrong: excerpt,
+      right: right || excerpt,
+      context: (m.context?.text || m.message || "").replace(/\s+/g, " ").trim().slice(0, 160),
+      textStart: offset,
+      textEnd: offset != null ? offset + length : null,
+      kind: isTypo ? "typo" : "grammar",
+      message: m.message || "",
+    });
+    if (issues.length >= 20) break;
+  }
+  return { issues, source: "languagetool", retainedSeconds: 0 };
+}
+
+/**
+ * Nominatim OSM geocoding — normalize city/address.
+ */
+async function handleGeocode(body, env) {
+  const address = String(body.address || "").trim();
+  const location = String(body.location || "").trim();
+  const q = [address, location].filter(Boolean).join(", ").slice(0, 200);
+  if (q.length < 3) {
+    return {
+      ok: false,
+      normalized: null,
+      confidence: 0,
+      lat: null,
+      lon: null,
+      source: "nominatim",
+      retainedSeconds: 0,
+    };
+  }
+
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("q", q);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("addressdetails", "1");
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "TestMonCV/1.0 (https://www.testmoncv.fr; contact@testmoncv.fr)",
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Nominatim ${res.status}`);
+  }
+  const rows = await res.json();
+  const hit = Array.isArray(rows) && rows[0] ? rows[0] : null;
+  if (!hit) {
+    return {
+      ok: false,
+      normalized: null,
+      confidence: 0,
+      lat: null,
+      lon: null,
+      query: q,
+      source: "nominatim",
+      retainedSeconds: 0,
+    };
+  }
+  const importance = Number(hit.importance) || 0;
+  const confidence = Math.max(0.15, Math.min(1, importance * 1.4 || 0.55));
+  return {
+    ok: true,
+    normalized: hit.display_name || q,
+    confidence,
+    lat: hit.lat ? Number(hit.lat) : null,
+    lon: hit.lon ? Number(hit.lon) : null,
+    query: q,
+    source: "nominatim",
+    retainedSeconds: 0,
+  };
+}
+
+/**
+ * Classify header image: face (profile photo) vs logo vs other.
+ */
+async function handlePhotoClassify(body, env) {
+  const b64 = String(body.imageBase64 || "").replace(/^data:[^;]+;base64,/, "");
+  if (!b64 || b64.length < 80) {
+    return { kind: "unknown", confidence: 0, source: "none", retainedSeconds: 0 };
+  }
+  if (b64.length > MAX_IMAGE_B64) {
+    throw new Error("Image trop volumineuse");
+  }
+  const mime = String(body.mime || "image/jpeg").slice(0, 40);
+
+  if (env.OPENAI_API_KEY) {
+    try {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          max_tokens: 80,
+          messages: [
+            {
+              role: "system",
+              content:
+                'Classify the image for a CV header. Reply ONLY JSON: {"kind":"face"|"logo"|"other","confidence":0-1}. face=person portrait; logo=company/brand mark; other=decorative/icon.',
+            },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Classify this CV header image." },
+                {
+                  type: "image_url",
+                  image_url: { url: `data:${mime};base64,${b64.slice(0, MAX_IMAGE_B64)}` },
+                },
+              ],
+            },
+          ],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const raw = data.choices?.[0]?.message?.content || "{}";
+        const m = String(raw).match(/\{[\s\S]*\}/);
+        const parsed = m ? JSON.parse(m[0]) : {};
+        const kind = ["face", "logo", "other"].includes(parsed.kind) ? parsed.kind : "unknown";
+        return {
+          kind,
+          confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0.6)),
+          source: "openai-vision",
+          retainedSeconds: 0,
+        };
+      }
+    } catch (e) {
+      console.warn("photo classify openai fail", e);
+    }
+  }
+
+  // Heuristic stub without vision keys: small images → likely logo/icon; larger → unknown
+  const approxBytes = Math.floor((b64.length * 3) / 4);
+  if (approxBytes < 12_000) {
+    return { kind: "logo", confidence: 0.4, source: "heuristic", retainedSeconds: 0 };
+  }
+  if (approxBytes > 40_000) {
+    return { kind: "face", confidence: 0.35, source: "heuristic", retainedSeconds: 0 };
+  }
+  return { kind: "other", confidence: 0.3, source: "heuristic", retainedSeconds: 0 };
+}
+

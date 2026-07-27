@@ -290,7 +290,7 @@ console.log("✓ JD overlap scoring OK", withJd.categories.keywords.score);
 const htmlFaithful = buildFaithfulHtml(goodCv, sampleParsed, { fileName: "marie.pdf" });
 assert.ok(htmlFaithful.includes("Expérience") || htmlFaithful.includes("expérience") || htmlFaithful.includes("Experience"));
 assert.ok(htmlFaithful.includes("<h1>"), "name as h1");
-assert.ok(!/Généré par|ATS Check|score \d/i.test(htmlFaithful), "no tool branding in export");
+assert.ok(!/Généré par|Test Mon CV|score \d/i.test(htmlFaithful), "no tool branding in export");
 assert.ok(htmlFaithful.includes("cv-role") || htmlFaithful.includes("<ul>"), "structured roles/bullets");
 console.log("✓ clean reconstruct order + no branding OK");
 
@@ -705,6 +705,62 @@ Lecture, cinéma, sport, voyages, musique
     "→",
     dirty.categories.content.score
   );
+}
+
+{
+  const { mergeRemoteEnrichment } = await import("./analyzer.js");
+  const base = analyzeCv(goodCv, { pages: 1 });
+  const beforeContent = base.categories.content.score;
+  mergeRemoteEnrichment(
+    base,
+    {
+      grammar: {
+        issues: [
+          {
+            wrong: "parceque",
+            right: "parce que",
+            context: "…parceque…",
+            textStart: 10,
+            textEnd: 18,
+            kind: "grammar",
+          },
+        ],
+      },
+      geo: {
+        ok: true,
+        normalized: "Paris, Île-de-France, France",
+        confidence: 0.82,
+        lat: 48.85,
+        lon: 2.35,
+        source: "nominatim",
+      },
+      photo: { kind: "logo", confidence: 0.7, source: "test" },
+    },
+    { lang: "fr" }
+  );
+  assert.ok(base.spelling.some((s) => s.wrong === "parceque"));
+  assert.ok(base.annotations.some((a) => a.kind === "grammar" && a.quote === "parceque"));
+  assert.equal(base.parsed.contact.geo.ok, true);
+  assert.ok(base.checklist.find((c) => c.id === "identity_address")?.ok);
+  assert.match(base.checklist.find((c) => c.id === "identity_address")?.label || "", /géocode/i);
+  assert.equal(base.parsed.layout.photoKind, "logo");
+  assert.equal(base.checklist.find((c) => c.id === "profile_photo")?.ok, true);
+  assert.ok(!base.annotations.some((a) => a.kind === "profile_photo"));
+  assert.ok(base.categories.content.score <= beforeContent);
+  console.log("✓ mergeRemoteEnrichment grammar/geo/photo OK");
+}
+
+{
+  const { mergeRemoteEnrichment } = await import("./analyzer.js");
+  const withHint = analyzeCv(goodCv, {
+    pages: 1,
+    profilePhotoHint: true,
+    parsed: parseCv(goodCv, { profilePhotoHint: true }),
+  });
+  assert.equal(withHint.checklist.find((c) => c.id === "profile_photo")?.ok, false);
+  mergeRemoteEnrichment(withHint, { photo: { kind: "face", confidence: 0.9 } }, { lang: "fr" });
+  assert.equal(withHint.checklist.find((c) => c.id === "profile_photo")?.ok, false);
+  console.log("✓ photo face keeps ATS warning OK");
 }
 
 console.log("Tous les tests OK");

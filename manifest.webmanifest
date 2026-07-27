@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "ATS Check — Vérificateur ATS",
-  "short_name": "ATS Check",
+  "name": "Test Mon CV — Vérificateur ATS",
+  "short_name": "Test Mon CV",
   "description": "Testez gratuitement la compatibilité ATS de votre CV.",
   "start_url": "./",
   "scope": "./",
