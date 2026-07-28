@@ -2708,6 +2708,9 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 .ann-approx-banner.is-selected {
   border-style: solid;
   background: rgba(196, 163, 90, 0.28);
+  opacity: 1 !important;
+  outline: 3px solid var(--ink-deep);
+  outline-offset: 1px;
 }
 
 .studio-side {
