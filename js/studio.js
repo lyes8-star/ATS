@@ -5,6 +5,14 @@ import {
   renderPdfPreview,
   renderHtmlPreview,
   scrollPreviewToAnnotation,
+  syncPreviewSelection,
+  computeFitWidthScale,
+  computeHtmlFitScale,
+  clampScale,
+  MIN_SCALE,
+  MAX_SCALE,
+  SCALE_STEP,
+  DEFAULT_SCALE,
 } from "./annotate.js";
 import { updateAnnotation } from "./optimize.js";
 import { attachGeometry } from "./analyzer.js";
@@ -48,6 +56,8 @@ export async function mountStudio(root, session, hooks = {}) {
   session.scoreBefore = session.report?.total ?? null;
   session.previewOptimized = false;
   session.previewShowsWorking = false;
+  if (session.previewScale == null) session.previewScale = "fit";
+  session._resolvedScale = session._resolvedScale || DEFAULT_SCALE;
 
   root.innerHTML = studioShell(session);
   bindStudio(root, session, hooks);
@@ -169,6 +179,12 @@ function studioShell(session) {
     </div>
     <div class="studio-split">
       <div class="studio-preview-col">
+        <div class="cv-preview-toolbar" role="toolbar" aria-label="${escapeHtml(t("studio.zoom.label"))}">
+          <button type="button" class="cv-zoom-btn" id="btn-zoom-fit" title="${escapeHtml(t("studio.zoom.fit"))}">${escapeHtml(t("studio.zoom.fit"))}</button>
+          <button type="button" class="cv-zoom-btn" id="btn-zoom-out" aria-label="${escapeHtml(t("studio.zoom.out"))}">−</button>
+          <span class="cv-zoom-pct" id="cv-zoom-pct" aria-live="polite">100%</span>
+          <button type="button" class="cv-zoom-btn" id="btn-zoom-in" aria-label="${escapeHtml(t("studio.zoom.in"))}">+</button>
+        </div>
         <div id="cv-preview" class="cv-preview" tabindex="0" aria-label="Prévisualisation du CV annoté"></div>
       </div>
       <aside class="studio-side" aria-label="Suggestions">
@@ -238,7 +254,10 @@ function focusFailedChecklist(root, session, preferredCheckId = null) {
   renderDetail(root, session);
   highlightSelection(root, session);
   const preview = root.querySelector("#cv-preview");
-  if (preview) scrollPreviewToAnnotation(preview, ann.id);
+  if (preview) {
+    syncPreviewSelection(preview, ann.id, session.annotations);
+    scrollPreviewToAnnotation(preview, ann.id);
+  }
   root.querySelector(`.ann-item[data-id="${ann.id}"]`)?.scrollIntoView({
     behavior: "smooth",
     block: "nearest",
@@ -269,8 +288,58 @@ function bindStudio(root, session, hooks) {
     root.querySelector("#btn-pro-analyze")?.classList.remove("hidden");
   }
 
+  bindZoomControls(root, session);
   showJdOverlap(root, session);
   void hooks;
+}
+
+function bindZoomControls(root, session) {
+  const applyZoom = async (next) => {
+    session.previewScale = next;
+    await refreshPreview(root, session);
+    updateZoomLabel(root, session);
+    const preview = root.querySelector("#cv-preview");
+    if (preview && session.selectedId) {
+      scrollPreviewToAnnotation(preview, session.selectedId);
+    }
+  };
+
+  root.querySelector("#btn-zoom-fit")?.addEventListener("click", () => {
+    applyZoom("fit");
+  });
+  root.querySelector("#btn-zoom-out")?.addEventListener("click", () => {
+    const cur = session._resolvedScale || DEFAULT_SCALE;
+    applyZoom(clampScale(cur - SCALE_STEP));
+  });
+  root.querySelector("#btn-zoom-in")?.addEventListener("click", () => {
+    const cur = session._resolvedScale || DEFAULT_SCALE;
+    applyZoom(clampScale(cur + SCALE_STEP));
+  });
+
+  let resizeTimer = 0;
+  const onResize = () => {
+    if (session.previewScale !== "fit") return;
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      applyZoom("fit");
+    }, 180);
+  };
+  window.addEventListener("resize", onResize);
+  session._zoomResizeHandler = onResize;
+}
+
+function updateZoomLabel(root, session) {
+  const el = root.querySelector("#cv-zoom-pct");
+  if (!el) return;
+  const pct = Math.round((session._resolvedScale || DEFAULT_SCALE) * 100);
+  el.textContent = `${pct}%`;
+  const fitBtn = root.querySelector("#btn-zoom-fit");
+  if (fitBtn) fitBtn.classList.toggle("is-active", session.previewScale === "fit");
+  const out = root.querySelector("#btn-zoom-out");
+  const inn = root.querySelector("#btn-zoom-in");
+  const cur = session._resolvedScale || DEFAULT_SCALE;
+  if (out) out.disabled = cur <= MIN_SCALE + 0.001;
+  if (inn) inn.disabled = cur >= MAX_SCALE - 0.001;
 }
 
 function showJdOverlap(root, session) {
@@ -323,6 +392,7 @@ async function refreshPreview(root, session) {
     renderList(root, session);
     renderDetail(root, session);
     highlightSelection(root, session);
+    syncPreviewSelection(preview, id, session.annotations);
     scrollPreviewToAnnotation(preview, id);
     root.querySelector(`.ann-item[data-id="${id}"]`)?.scrollIntoView({
       behavior: "smooth",
@@ -331,11 +401,24 @@ async function refreshPreview(root, session) {
   };
 
   const usePdf = session.extracted?.format === "pdf" && session.extracted?.pdfDoc;
+  const col = root.querySelector(".studio-preview-col");
+  const width = (col?.clientWidth || preview.clientWidth || 640) - 8;
+
+  let scale;
+  if (session.previewScale === "fit") {
+    scale = usePdf
+      ? await computeFitWidthScale(session.extracted.pdfDoc, width)
+      : computeHtmlFitScale(width);
+  } else {
+    scale = clampScale(session.previewScale || DEFAULT_SCALE);
+  }
+  session._resolvedScale = scale;
 
   if (usePdf) {
     await renderPdfPreview(preview, session.extracted.pdfDoc, session.annotations, {
       onSelect,
       selectedId: session.selectedId,
+      scale,
     });
   } else {
     const plain = session.extracted?.text || "";
@@ -343,14 +426,18 @@ async function refreshPreview(root, session) {
     renderHtmlPreview(preview, html, plain, session.annotations, {
       onSelect,
       selectedId: session.selectedId,
+      scale,
     });
   }
+  updateZoomLabel(root, session);
 }
 
 function highlightSelection(root, session) {
-  root.querySelectorAll(".ann-box, .ann-mark, .ann-approx-banner, .ann-item").forEach((el) => {
+  root.querySelectorAll(".ann-item").forEach((el) => {
     el.classList.toggle("is-selected", el.dataset.id === session.selectedId);
   });
+  const preview = root.querySelector("#cv-preview");
+  if (preview) syncPreviewSelection(preview, session.selectedId, session.annotations);
 }
 
 function placementMeta(a, t) {
@@ -487,9 +574,13 @@ function renderDetail(root, session) {
     suggestion &&
     suggestion !== quote &&
     !/^\[.+\]$/.test(suggestion); /* skip bare placeholders like [email] alone if same as action */
+  const annNum = ann.id.replace("ann-", "");
 
   detail.innerHTML = `
     <div class="ann-detail-card severity-${ann.severity}">
+      <p class="ann-detail-num"><span class="ann-num">${escapeHtml(annNum)}</span> ${escapeHtml(
+        t("studio.detail.annotation", { n: annNum })
+      )}</p>
       <p class="ann-where"><span>${escapeHtml(t("studio.detail.where"))}</span> ${
         ann.page ? `Page ${ann.page}` : "Document"
       }${ann.section ? ` · ${escapeHtml(ann.section)}` : ""}${
