@@ -2,6 +2,36 @@
  * Overlays d'annotation — PDF (rects) + DOCX/HTML (highlights offsets).
  */
 
+export const MIN_SCALE = 0.5;
+export const MAX_SCALE = 2.5;
+export const SCALE_STEP = 0.15;
+export const DEFAULT_SCALE = 1.25;
+
+/**
+ * Calcule une échelle PDF.js pour que la page 1 tienne dans la largeur utile.
+ * @param {any} pdfDoc
+ * @param {number} containerWidth
+ */
+export async function computeFitWidthScale(pdfDoc, containerWidth) {
+  const width = Math.max(120, Number(containerWidth) || 640);
+  try {
+    const page = await pdfDoc.getPage(1);
+    const base = page.getViewport({ scale: 1 }).width;
+    if (!base) return DEFAULT_SCALE;
+    const raw = (width - 24) / base;
+    return clampScale(raw);
+  } catch {
+    return DEFAULT_SCALE;
+  }
+}
+
+/** @param {number} n */
+export function clampScale(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return DEFAULT_SCALE;
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.round(v * 100) / 100));
+}
+
 /**
  * Rend les pages PDF en canvas + couches d'annotation.
  * @param {HTMLElement} container
@@ -12,8 +42,10 @@
 export async function renderPdfPreview(container, pdfDoc, annotations, opts = {}) {
   container.innerHTML = "";
   container.classList.add("cv-preview-pdf");
-  const scale = opts.scale || 1.25;
+  container.classList.remove("cv-preview-html");
+  const scale = clampScale(opts.scale || DEFAULT_SCALE);
   const selectedId = opts.selectedId || null;
+  container.classList.toggle("has-selection", Boolean(selectedId));
   const t = window.ATSi18n?.t || ((k) => k);
 
   for (let i = 1; i <= pdfDoc.numPages; i++) {
@@ -72,8 +104,7 @@ export async function renderPdfPreview(container, pdfDoc, annotations, opts = {}
           const badge = document.createElement("span");
           badge.className = "ann-badge";
           const num = ann.id.replace("ann-", "");
-          const short = (ann.shortLabel || "").slice(0, 14);
-          badge.textContent = short ? `${num} · ${short}` : num;
+          badge.textContent = num;
           badge.title = ann.title || "";
           box.appendChild(badge);
           if (ann.status === "accepted" && opts.showAppliedSuggestions) {
@@ -86,10 +117,10 @@ export async function renderPdfPreview(container, pdfDoc, annotations, opts = {}
               ? `<span class="ann-strike">${escapeHtml(quote)}</span> → <span class="ann-new">${escapeHtml(sug)}</span>`
               : `<span class="ann-new">${escapeHtml(sug)}</span>`;
             box.appendChild(applied);
-          } else if (ann.id === selectedId && ann.detail) {
+          } else if (ann.id === selectedId && (ann.title || ann.detail)) {
             const tip = document.createElement("span");
             tip.className = "ann-callout";
-            tip.textContent = ann.title;
+            tip.textContent = ann.title || "";
             box.appendChild(tip);
           }
         }
@@ -105,6 +136,8 @@ export async function renderPdfPreview(container, pdfDoc, annotations, opts = {}
     wrap.appendChild(overlay);
     container.appendChild(wrap);
   }
+
+  return scale;
 }
 
 /**
@@ -266,16 +299,22 @@ function mapPlainOffsetsToDom(plainText, domText) {
 
 /**
  * Rend le HTML DOCX avec highlights ancrés sur textStart/textEnd du plain text.
+ * @param {{ onSelect?: (id: string) => void, selectedId?: string|null, scale?: number }} [opts]
  */
 export function renderHtmlPreview(container, html, plainText, annotations, opts = {}) {
   container.innerHTML = "";
   container.classList.add("cv-preview-html");
+  container.classList.remove("cv-preview-pdf");
   const article = document.createElement("article");
   article.className = "cv-html-doc";
   article.innerHTML = html || "<p>(aperçu indisponible)</p>";
   container.appendChild(article);
 
+  const scale = clampScale(opts.scale || 1);
+  applyHtmlZoom(article, scale);
+
   const selectedId = opts.selectedId || null;
+  container.classList.toggle("has-selection", Boolean(selectedId));
   const t = window.ATSi18n?.t || ((k) => k);
   const active = (annotations || []).filter((a) => a.status !== "ignored");
   const index0 = buildTextIndex(article);
@@ -321,6 +360,70 @@ export function renderHtmlPreview(container, html, plainText, annotations, opts 
     if (!applied) {
       prependInsertBanner(article, ann, selectedId, opts.onSelect, t);
     }
+  }
+
+  return scale;
+}
+
+/** Zoom HTML via font-size / max-width (pas de transform — overlays inline OK). */
+export function applyHtmlZoom(article, scale) {
+  if (!article) return;
+  const s = clampScale(scale);
+  article.style.fontSize = `${0.92 * s}rem`;
+  article.style.maxWidth = `${Math.max(18, 40 * s)}rem`;
+  article.dataset.zoom = String(s);
+}
+
+/**
+ * Échelle « fit » pour HTML (doc ~40rem de base).
+ * @param {number} containerWidth
+ */
+export function computeHtmlFitScale(containerWidth) {
+  const width = Math.max(120, Number(containerWidth) || 640);
+  const basePx = 40 * 16;
+  return clampScale((width - 24) / basePx);
+}
+
+/**
+ * Met à jour sélection / callouts sans re-render des canvas.
+ * @param {HTMLElement} container
+ * @param {string|null} selectedId
+ * @param {object[]} [annotations]
+ */
+export function syncPreviewSelection(container, selectedId, annotations = []) {
+  if (!container) return;
+  container.classList.toggle("has-selection", Boolean(selectedId));
+  container.querySelectorAll(".ann-callout").forEach((el) => el.remove());
+
+  container.querySelectorAll(".ann-box, .ann-mark, .ann-approx-banner").forEach((el) => {
+    el.classList.toggle("is-selected", el.dataset.id === selectedId);
+  });
+
+  if (!selectedId) return;
+  const ann = annotations.find((a) => a.id === selectedId);
+  const title = ann?.title || ann?.shortLabel || "";
+
+  const box = container.querySelector(`.ann-box.is-selected`);
+  if (box && title) {
+    const tip = document.createElement("span");
+    tip.className = "ann-callout";
+    tip.textContent = title;
+    box.appendChild(tip);
+  }
+
+  const mark = container.querySelector(`.ann-mark.is-selected`);
+  if (mark && title) {
+    let wrap = mark.closest(".ann-mark-wrap");
+    if (!wrap) {
+      wrap = document.createElement("span");
+      wrap.className = "ann-mark-wrap";
+      mark.parentNode?.insertBefore(wrap, mark);
+      wrap.appendChild(mark);
+    }
+    const tip = document.createElement("span");
+    tip.className = "ann-callout ann-callout-inline";
+    tip.textContent = title;
+    wrap.appendChild(tip);
   }
 }
 

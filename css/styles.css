@@ -2229,17 +2229,18 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 .ann-callout {
   position: absolute;
   left: 0;
-  top: calc(100% + 2px);
-  z-index: 5;
-  max-width: 14rem;
-  padding: 0.25rem 0.45rem;
-  font-size: 0.7rem;
+  top: calc(100% + 4px);
+  z-index: 6;
+  max-width: 16rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  line-height: 1.25;
-  color: #1c1917;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  line-height: 1.3;
+  color: var(--paper);
+  background: var(--ink);
+  border: 1px solid rgba(196, 163, 90, 0.45);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(30, 51, 41, 0.2);
   pointer-events: none;
 }
 
@@ -2385,7 +2386,7 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 
 .studio-split {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.9fr);
   gap: 1rem;
   align-items: start;
 }
@@ -2393,13 +2394,72 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 .studio-preview-col {
   position: sticky;
   top: 0.5rem;
-  max-height: calc(100vh - 8rem);
+  max-height: calc(100vh - 5rem);
   overflow: auto;
   background:
     radial-gradient(ellipse at top, #efe6d6 0%, transparent 55%),
     #e8dfd0;
   border: 1px solid var(--border);
-  padding: 0.75rem;
+  border-radius: 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cv-preview-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.65rem;
+  background: rgba(250, 248, 245, 0.94);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(196, 163, 90, 0.28);
+  flex-shrink: 0;
+}
+
+.cv-zoom-btn {
+  min-height: 2.1rem;
+  min-width: 2.1rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--ink-deep);
+  font-family: var(--font);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.cv-zoom-btn:hover:not(:disabled) {
+  border-color: var(--signal);
+  background: rgba(196, 163, 90, 0.12);
+}
+
+.cv-zoom-btn.is-active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+.cv-zoom-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cv-zoom-pct {
+  min-width: 3.25rem;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-deep);
 }
 
 .cv-preview {
@@ -2407,12 +2467,16 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
   flex-direction: column;
   gap: 1rem;
   align-items: center;
+  padding: 0.75rem;
+  flex: 1;
+  min-height: 0;
 }
 
 .cv-page {
   position: relative;
   background: #fff;
   box-shadow: 0 8px 28px rgba(44, 42, 40, 0.12);
+  max-width: 100%;
 }
 
 .cv-page canvas {
@@ -2431,32 +2495,40 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
   position: absolute;
   pointer-events: auto;
   border: 2px solid transparent;
-  background: rgba(196, 163, 90, 0.2);
+  background: rgba(196, 163, 90, 0.22);
   cursor: pointer;
   padding: 0;
-  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
 }
 
 .ann-box.severity-critical {
-  background: rgba(185, 28, 28, 0.2);
+  background: rgba(185, 28, 28, 0.22);
   border-color: rgba(185, 28, 28, 0.55);
 }
 
 .ann-box.severity-warning {
-  background: rgba(196, 163, 90, 0.24);
-  border-color: rgba(168, 135, 63, 0.55);
+  background: rgba(196, 163, 90, 0.28);
+  border-color: rgba(168, 135, 63, 0.6);
 }
 
 .ann-box.severity-info {
-  background: rgba(44, 74, 62, 0.12);
-  border-color: rgba(44, 74, 62, 0.4);
+  background: rgba(44, 74, 62, 0.14);
+  border-color: rgba(44, 74, 62, 0.45);
+}
+
+.cv-preview.has-selection .ann-box:not(.is-selected),
+.cv-preview.has-selection .ann-mark:not(.is-selected),
+.cv-preview.has-selection .ann-approx-banner:not(.is-selected) {
+  opacity: 0.42;
 }
 
 .ann-box.is-selected {
-  border-color: var(--ink-deep);
-  background: rgba(196, 163, 90, 0.38);
-  transform: scale(1.01);
-  z-index: 2;
+  border: 3px solid var(--ink-deep);
+  background: rgba(196, 163, 90, 0.48);
+  box-shadow: 0 0 0 2px rgba(196, 163, 90, 0.55), 0 6px 18px rgba(30, 51, 41, 0.18);
+  transform: scale(1.015);
+  z-index: 5;
+  opacity: 1 !important;
 }
 
 .ann-box.is-accepted {
@@ -2557,25 +2629,23 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 
 .ann-badge {
   position: absolute;
-  top: -0.55rem;
-  left: -0.35rem;
+  top: -0.65rem;
+  left: -0.4rem;
   z-index: 3;
-  max-width: 9.5rem;
-  min-width: 1.15rem;
+  min-width: 1.45rem;
   height: auto;
-  min-height: 1.15rem;
-  padding: 0.15rem 0.35rem;
-  border-radius: 0.2rem;
-  background: var(--charcoal);
-  color: var(--gold);
-  font-size: 0.62rem;
+  min-height: 1.45rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--signal);
+  font-size: 0.8rem;
   font-weight: 700;
   display: grid;
   place-items: center;
   line-height: 1.15;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  box-shadow: 0 2px 8px rgba(30, 51, 41, 0.25);
 }
 
 .cv-html-doc {
@@ -2611,8 +2681,11 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 }
 
 .ann-mark.is-selected {
-  outline: 2px solid var(--charcoal);
-  outline-offset: 1px;
+  outline: 3px solid var(--ink-deep);
+  outline-offset: 2px;
+  background: rgba(196, 163, 90, 0.45);
+  box-shadow: 0 0 0 2px rgba(196, 163, 90, 0.4);
+  opacity: 1 !important;
 }
 
 .ann-mark.is-accepted {
@@ -2754,6 +2827,20 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 .ann-detail {
   flex: 1;
   overflow: auto;
+}
+
+.ann-detail-num {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.65rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink-deep);
+}
+
+.ann-detail-num .ann-num {
+  position: static;
 }
 
 .ann-detail-card {
