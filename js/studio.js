@@ -103,32 +103,32 @@ function studioShell(session) {
   const checklistOk = scoredChecks.filter((c) => c.ok === true).length;
   const checklistTotal = scoredChecks.length;
   const checklistFail = scoredChecks.filter((c) => c.ok === false);
+  const KO_CHIP_CAP = 4;
+  const visibleKos = checklistFail.slice(0, KO_CHIP_CAP);
+  const moreKos = checklistFail.length - visibleKos.length;
   const failIdsHtml = checklistFail.length
-    ? `<div class="studio-checklist-kos" id="studio-checklist-kos">${checklistFail
-        .map(
-          (c) =>
-            `<button type="button" class="studio-ko-id" data-check-id="${escapeHtml(
-              c.id
-            )}" title="${escapeHtml(c.label)}">${escapeHtml(c.id)}</button>`
-        )
-        .join("")}</div>`
+    ? `<div class="studio-checklist-kos" id="studio-checklist-kos">${visibleKos
+        .map((c) => {
+          const full = String(c.label || c.id || "").trim();
+          const short = shortCheckLabel(full);
+          return `<button type="button" class="studio-ko-id" data-check-id="${escapeHtml(
+            c.id
+          )}" title="${escapeHtml(full)}">${escapeHtml(short)}</button>`;
+        })
+        .join("")}${
+        moreKos > 0
+          ? `<button type="button" class="studio-ko-more" data-ko-more="1" title="${escapeHtml(
+              t("studio.checklist.hint")
+            )}">+${moreKos}</button>`
+          : ""
+      }</div>`
     : "";
 
-  return `
-  <div class="studio" id="studio">
-    <div class="studio-score-strip studio-report-strip">
-      <div class="studio-score-main">
-        <p class="studio-kicker">${escapeHtml(t("studio.kicker"))}</p>
-        <p class="studio-score-line">
-          <strong id="studio-score-before">${total}</strong>/100
-          <span class="studio-label">${escapeHtml(label)}</span>
-          <span class="studio-pass-pill ${pass ? "is-ok" : "is-risk"}">${escapeHtml(passLabel)}</span>
-        </p>
-        ${
-          checklistTotal
-            ? `<button type="button" class="studio-checklist-recap" id="studio-checklist-recap" title="${escapeHtml(
-                t("studio.checklist.hint")
-              )}">
+  const checklistBlock = checklistTotal
+    ? `<div class="studio-checklist-block">
+        <button type="button" class="studio-checklist-recap" id="studio-checklist-recap" title="${escapeHtml(
+          t("studio.checklist.hint")
+        )}">
           <span class="studio-checklist-score">${checklistOk}/${checklistTotal}</span>
           ${escapeHtml(t("studio.checklist.recap"))}
           ${
@@ -138,19 +138,33 @@ function studioShell(session) {
                 )}</span>`
               : ""
           }
-        </button>${failIdsHtml}`
-            : ""
-        }
-        <p id="studio-count" class="studio-count-inline"></p>
+        </button>
+        ${failIdsHtml}
+      </div>`
+    : "";
+
+  return `
+  <div class="studio" id="studio">
+    <div class="studio-score-strip studio-report-strip">
+      <div class="studio-score-row studio-score-row--hero">
+        <div class="studio-score-main">
+          <p class="studio-kicker">${escapeHtml(t("studio.kicker"))}</p>
+          <p class="studio-score-line">
+            <strong id="studio-score-before">${total}</strong>/100
+            <span class="studio-label">${escapeHtml(label)}</span>
+            <span class="studio-pass-pill ${pass ? "is-ok" : "is-risk"}">${escapeHtml(passLabel)}</span>
+          </p>
+          <p class="studio-hint">${escapeHtml(t("studio.hint"))}</p>
+        </div>
       </div>
-      <div class="studio-axes" aria-label="${escapeHtml(t("studio.axes.label"))}">
-        ${axisBar("readability")}
-        ${axisBar("structure")}
-        ${axisBar("content")}
-        ${axisBar("keywords")}
-      </div>
-      <div class="studio-score-actions">
-        <p class="studio-hint">${escapeHtml(t("studio.hint"))}</p>
+      <div class="studio-score-row studio-score-row--meta">
+        <div class="studio-axes" aria-label="${escapeHtml(t("studio.axes.label"))}">
+          ${axisBar("readability")}
+          ${axisBar("structure")}
+          ${axisBar("content")}
+          ${axisBar("keywords")}
+        </div>
+        ${checklistBlock}
       </div>
     </div>
     <div class="studio-split">
@@ -160,6 +174,7 @@ function studioShell(session) {
       <aside class="studio-side" aria-label="Suggestions">
         <div class="studio-side-head">
           <h2>${escapeHtml(t("studio.side.title"))}</h2>
+          <p id="studio-side-count" class="studio-side-count"></p>
         </div>
         <div id="ann-list" class="ann-list" role="listbox" aria-label="Liste des annotations"></div>
         <div id="ann-detail" class="ann-detail"></div>
@@ -236,6 +251,11 @@ function bindStudio(root, session, hooks) {
     focusFailedChecklist(root, session);
   });
   root.querySelector("#studio-checklist-kos")?.addEventListener("click", (e) => {
+    const more = e.target.closest?.("[data-ko-more]");
+    if (more) {
+      focusFailedChecklist(root, session);
+      return;
+    }
     const btn = e.target.closest?.("[data-check-id]");
     if (!btn) return;
     focusFailedChecklist(root, session, btn.getAttribute("data-check-id"));
@@ -343,7 +363,7 @@ function placementMeta(a, t) {
 
 function renderList(root, session) {
   const list = root.querySelector("#ann-list");
-  const count = root.querySelector("#studio-count");
+  const sideCount = root.querySelector("#studio-side-count");
   const barCount = root.querySelector("#studio-bar-count");
   if (!list) return;
   const t = window.ATSi18n?.t || ((k) => k);
@@ -361,7 +381,7 @@ function renderList(root, session) {
     spellN > 0
       ? ` · ${t("studio.spell.count", { n: spellN, plural: spellN > 1 ? "s" : "" })}`
       : "";
-  if (count) count.textContent = countText + stripExtra;
+  if (sideCount) sideCount.textContent = countText + stripExtra;
   if (barCount) barCount.textContent = countText;
 
   const axisOrder = ["readability", "structure", "content", "keywords"];
@@ -386,16 +406,18 @@ function renderList(root, session) {
     for (const a of items) {
       const num = a.id.replace("ann-", "");
       const short = a.shortLabel || "";
+      const metaParts = [];
+      if (short) metaParts.push(short);
+      if (a.page) metaParts.push(`p.${a.page}`);
+      const meta = metaParts.join(" · ");
       blocks.push(`
-      <button type="button" class="ann-item severity-${a.severity} status-${a.status}${
+      <button type="button" class="ann-item severity-${a.severity || "info"} status-${a.status}${
         a.id === session.selectedId ? " is-selected" : ""
       }" data-id="${a.id}" role="option" aria-selected="${a.id === session.selectedId}">
         <span class="ann-num" title="${escapeHtml(short)}">${escapeHtml(num)}</span>
         <span class="ann-item-body">
           <strong>${escapeHtml(a.title)}</strong>
-          <span class="ann-meta">${escapeHtml(short)}${short ? " · " : ""}${escapeHtml(
-            a.section || ""
-          )}${placementMeta(a, t)}${a.page ? ` · p.${a.page}` : ""}</span>
+          ${meta ? `<span class="ann-meta">${escapeHtml(meta)}</span>` : ""}
         </span>
         <span class="ann-status-pill">${statusLabel(a.status)}</span>
       </button>`);
@@ -477,9 +499,6 @@ function renderDetail(root, session) {
       <p class="ann-quote-label">${escapeHtml(t("studio.detail.passage"))}</p>
       <blockquote class="ann-quote">« ${escapeHtml(quote)} »</blockquote>
       <h3>${escapeHtml(ann.title)}</h3>
-      <p class="ann-why-label">${escapeHtml(t("studio.detail.why"))}</p>
-      <p class="ann-problem">${escapeHtml(ann.detail || "")}</p>
-      <p class="ann-self-edit">${escapeHtml(t("studio.detail.selfEdit"))}</p>
       ${
         showReform
           ? `<p class="ann-reform-label">${escapeHtml(t("studio.detail.reform"))}</p>
@@ -501,6 +520,9 @@ function renderDetail(root, session) {
           t("studio.actions.ignore")
         )}</button>
       </div>
+      <p class="ann-why-label">${escapeHtml(t("studio.detail.why"))}</p>
+      <p class="ann-problem">${escapeHtml(ann.detail || "")}</p>
+      <p class="ann-self-edit">${escapeHtml(t("studio.detail.selfEdit"))}</p>
     </div>`;
 
   const copyText = async (text, toastKey) => {
@@ -554,10 +576,17 @@ function updateBar(root, session) {
   const pending = session.annotations.filter((a) => a.status === "pending").length;
   const t = window.ATSi18n?.t || ((k) => k);
   const bar = root.querySelector("#studio-bar-count");
-  const count = root.querySelector("#studio-count");
+  const sideCount = root.querySelector("#studio-side-count");
   const label = t("studio.side.count", { total, accepted: noted, pending });
   if (bar) bar.textContent = label;
-  if (count) count.textContent = label;
+  if (sideCount) sideCount.textContent = label;
+}
+
+/** Libellé court pour chips checklist (max ~28 car.) */
+function shortCheckLabel(label) {
+  const s = String(label || "").trim();
+  if (s.length <= 28) return s;
+  return `${s.slice(0, 27)}…`;
 }
 
 function showToast(root, message) {
