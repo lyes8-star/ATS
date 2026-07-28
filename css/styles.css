@@ -2102,12 +2102,10 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 
 .studio-score-strip {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 0.75rem 1.5rem;
+  flex-direction: column;
+  gap: 1rem;
   margin-bottom: 1rem;
-  padding: 1.1rem 1.25rem;
+  padding: 1.15rem 1.35rem 1.25rem;
   background:
     linear-gradient(135deg, rgba(196, 163, 90, 0.14), transparent 55%),
     var(--white);
@@ -2120,25 +2118,42 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
   align-items: stretch;
 }
 
+.studio-score-row--hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+}
+
+.studio-score-row--meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem 1.5rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(196, 163, 90, 0.28);
+}
+
 .studio-axes {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.35rem 1rem;
-  flex: 1 1 14rem;
-  min-width: 12rem;
-  max-width: 22rem;
+  gap: 0.5rem 1.25rem;
+  flex: 1 1 18rem;
+  min-width: 14rem;
+  max-width: none;
 }
 
 .studio-axis {
   display: grid;
-  grid-template-columns: 4.5rem 1fr 2.2rem;
-  gap: 0.35rem;
+  grid-template-columns: minmax(5.5rem, auto) 1fr 2.5rem;
+  gap: 0.4rem;
   align-items: center;
-  font-size: 0.72rem;
+  font-size: 0.85rem;
 }
 
 .studio-axis-name {
-  color: var(--stone-500);
+  color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2146,8 +2161,8 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 
 .studio-axis-track {
   display: block;
-  height: 0.35rem;
-  background: rgba(0, 0, 0, 0.08);
+  height: 0.5rem;
+  background: rgba(44, 74, 62, 0.1);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -2161,17 +2176,19 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 .studio-axis-score {
   text-align: right;
   font-variant-numeric: tabular-nums;
-  color: var(--stone-600, #57534e);
+  color: var(--ink-soft);
+  font-weight: 600;
 }
 
 .studio-pass-pill {
   display: inline-block;
   margin-left: 0.5rem;
-  padding: 0.15rem 0.5rem;
+  padding: 0.35rem 0.75rem;
   font-family: var(--font);
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  border-radius: 0.25rem;
+  letter-spacing: 0.04em;
+  border-radius: 8px;
   vertical-align: middle;
 }
 
@@ -2186,22 +2203,27 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 }
 
 .ann-axis-head {
-  margin: 0.65rem 0 0.25rem;
-  padding: 0 0.25rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  margin: 0.85rem 0 0.35rem;
+  padding: 0 0.25rem 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--stone-500);
+  color: var(--ink);
+  border-bottom: 1px solid rgba(196, 163, 90, 0.35);
+}
+
+.ann-axis-head:first-child {
+  margin-top: 0.15rem;
 }
 
 .ann-why-label {
-  margin: 0.5rem 0 0.15rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  margin: 0.85rem 0 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--stone-500);
+  color: var(--ink-soft);
 }
 
 .ann-callout {
@@ -2243,24 +2265,27 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 }
 
 .studio-score-line {
-  margin: 0.25rem 0 0;
+  margin: 0.3rem 0 0;
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 2rem;
   letter-spacing: 0.01em;
+  line-height: 1.15;
 }
 
 .studio-label {
   font-family: var(--font);
-  font-size: 0.9rem;
-  color: var(--stone-500);
-  margin-left: 0.35rem;
+  font-size: 1rem;
+  color: var(--ink-soft);
+  margin-left: 0.4rem;
+  font-weight: 400;
 }
 
 .studio-hint {
-  margin: 0;
-  font-size: 0.875rem;
-  color: var(--stone-500);
-  max-width: 22rem;
+  margin: 0.55rem 0 0;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  max-width: 36rem;
+  line-height: 1.45;
 }
 
 .studio-score-actions {
@@ -2273,7 +2298,12 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 .studio-count-inline {
   margin: 0.35rem 0 0;
   font-size: 0.85rem;
-  color: var(--stone-500);
+  color: var(--ink-soft);
+}
+
+.studio-checklist-block {
+  flex: 1 1 14rem;
+  min-width: 12rem;
 }
 
 .studio-checklist-recap {
@@ -2281,27 +2311,27 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
   align-items: center;
   flex-wrap: wrap;
   gap: 0.35rem 0.5rem;
-  margin: 0.45rem 0 0;
-  padding: 0.35rem 0.65rem;
-  border: 1px solid var(--stone-200, #e7e5e4);
-  border-radius: 6px;
-  background: var(--stone-50, #fafaf9);
-  color: var(--stone-700, #44403c);
-  font-size: 0.8rem;
+  margin: 0;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink-deep);
+  font-size: 0.85rem;
   font-family: inherit;
   cursor: pointer;
   text-align: left;
 }
 
 .studio-checklist-recap:hover {
-  border-color: var(--terra, #c4a35a);
-  color: var(--stone-900, #1c1917);
+  border-color: var(--signal);
+  color: var(--ink-deep);
 }
 
 .studio-checklist-score {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--stone-900, #1c1917);
+  color: var(--ink-deep);
 }
 
 .studio-checklist-fail {
@@ -2355,7 +2385,7 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 
 .studio-split {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 1fr);
   gap: 1rem;
   align-items: start;
 }
@@ -2487,23 +2517,38 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 .studio-checklist-kos {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.4rem;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
 }
 
-.studio-ko-id {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.68rem;
-  padding: 0.15rem 0.4rem;
-  border: 1px solid #fdba74;
-  background: #fff7ed;
-  color: #9a3412;
-  border-radius: 0.2rem;
+.studio-ko-id,
+.studio-ko-more {
+  font-family: var(--font);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--ink);
+  border-left: 3px solid var(--signal);
+  background: var(--paper);
+  color: var(--ink-deep);
+  border-radius: 8px;
   cursor: pointer;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.studio-ko-id:hover {
-  background: #ffedd5;
+.studio-ko-id:hover,
+.studio-ko-more:hover {
+  background: rgba(196, 163, 90, 0.14);
+  border-color: var(--signal);
+}
+
+.studio-ko-more {
+  border-left-color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
 .ann-box.is-approx {
@@ -2604,21 +2649,23 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 .studio-side-head h2 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.25rem;
+  font-size: 1.35rem;
+  letter-spacing: 0.01em;
 }
 
-.studio-side-head p {
-  margin: 0.2rem 0 0;
-  font-size: 0.8rem;
-  color: var(--stone-500);
+.studio-side-head p,
+.studio-side-count {
+  margin: 0.3rem 0 0;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
 }
 
 .ann-list {
   overflow: auto;
-  max-height: 40vh;
+  max-height: min(52vh, 28rem);
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.45rem;
   padding-right: 0.15rem;
 }
 
@@ -2628,17 +2675,31 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
   gap: 0.55rem;
   align-items: start;
   text-align: left;
-  padding: 0.65rem 0.7rem;
+  padding: 0.7rem 0.75rem;
   border: 1px solid var(--border);
+  border-left: 3px solid var(--ink);
+  border-radius: 10px;
   background: #fff;
-  color: var(--charcoal);
+  color: var(--ink-deep);
   transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.ann-item.severity-critical {
+  border-left-color: #b42318;
+}
+
+.ann-item.severity-warning {
+  border-left-color: var(--signal);
+}
+
+.ann-item.severity-info {
+  border-left-color: var(--ink);
 }
 
 .ann-item:hover,
 .ann-item.is-selected {
-  border-color: var(--charcoal);
-  background: var(--warm-bg-2);
+  border-color: var(--ink);
+  background: var(--paper-2);
 }
 
 .ann-item.status-accepted {
@@ -2652,35 +2713,42 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 .ann-num {
   display: grid;
   place-items: center;
-  min-width: 1.35rem;
-  height: 1.35rem;
-  background: var(--charcoal);
-  color: var(--gold);
-  font-size: 0.7rem;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  background: var(--ink);
+  color: var(--signal);
+  font-size: 0.75rem;
   font-weight: 700;
+  border-radius: 6px;
 }
 
 .ann-item-body {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.2rem;
   min-width: 0;
 }
 
 .ann-item-body strong {
-  font-size: 0.85rem;
-  line-height: 1.3;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  font-weight: 600;
 }
 
 .ann-meta {
-  font-size: 0.72rem;
-  color: var(--stone-500);
+  font-size: 0.8rem;
+  color: var(--ink-soft);
 }
 
 .ann-status-pill {
-  font-size: 0.65rem;
-  color: var(--stone-500);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   white-space: nowrap;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: var(--paper-2);
+  color: var(--ink-soft);
 }
 
 .ann-detail {
@@ -2707,22 +2775,22 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 
 .ann-where {
   margin: 0 0 0.5rem;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--ink-soft);
 }
 
 .ann-where span {
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   margin-right: 0.35rem;
   color: var(--signal);
 }
 
 .ann-quote-label,
 .ann-reform-label {
-  margin: 0.75rem 0 0.35rem;
-  font-size: 0.72rem;
+  margin: 0.85rem 0 0.35rem;
+  font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -2731,23 +2799,23 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 
 .ann-quote {
   margin: 0;
-  padding: 0.75rem 0.9rem;
+  padding: 0.85rem 1rem;
   border-left: 3px solid var(--signal);
-  background: rgba(196, 163, 90, 0.1);
+  background: rgba(196, 163, 90, 0.12);
   border-radius: 0 12px 12px 0;
   font-family: var(--font-display);
-  font-size: 1.02rem;
+  font-size: 1.1rem;
   font-weight: 700;
   font-style: normal;
   letter-spacing: 0.01em;
-  line-height: 1.35;
+  line-height: 1.4;
   color: var(--ink-deep);
 }
 
 .ann-detail-card h3 {
-  margin: 0.85rem 0 0.4rem;
+  margin: 0.85rem 0 0.35rem;
   font-family: var(--font-display);
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   letter-spacing: 0.01em;
 }
 
@@ -2755,21 +2823,18 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
   margin: 0;
   font-size: 0.9rem;
   color: var(--ink-soft);
+  line-height: 1.5;
 }
 
 .ann-reform-text {
   margin: 0;
-  padding: 0.65rem 0.8rem;
-  border-radius: 0.55rem;
-  background: var(--paper-2);
-  border: 1px solid var(--line);
-  font-size: 0.9rem;
-  color: var(--ink);
-}
-
-.ann-suggest-label,
-.ann-suggest {
-  display: none !important;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(196, 163, 90, 0.35);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: var(--ink-deep);
 }
 
 .ann-actions {
@@ -2778,6 +2843,7 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
   gap: 0.55rem;
   align-items: center;
   margin-top: 1rem;
+  margin-bottom: 0.25rem;
 }
 
 .ann-actions .analyze-btn {
@@ -2928,7 +2994,7 @@ html.a11y-motion .btn-secondary {
   }
 
   .ann-list {
-    max-height: 14rem;
+    max-height: 18rem;
   }
 
   .studio-bar {
@@ -2984,12 +3050,18 @@ html.a11y-motion .badge-dot {
 .ann-item.status-noted .ann-status-pill,
 .ann-item.status-accepted .ann-status-pill {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--ink-deep);
 }
+
+.ann-item.status-ignored .ann-status-pill {
+  background: transparent;
+  color: var(--ink-soft);
+}
+
 .ann-self-edit {
-  margin: 0.75rem 0 0.35rem;
+  margin: 0.65rem 0 0;
   font-size: 0.85rem;
-  color: var(--stone-500);
+  color: var(--ink-soft);
 }
 
 /* Cases + formulas (Test2 premium craft) */
