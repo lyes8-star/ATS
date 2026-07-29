@@ -376,20 +376,31 @@ export function analyzePdfLayout(pagesGeo, opts = {}) {
 
   const fromWord = isWordPdfSource(opts.pdfCreator, opts.pdfProducer);
 
-  // Table detection across all pages — require strong grid; never flag 2-column layouts
+  // Table detection across all pages — never flag sidebar / 2-column layouts as tables
   let tablePages = 0;
+  let anyBimodal = false;
   for (const pg of pages) {
     const pgItems = (pg.items || []).filter((it) => it.str?.trim() && it.rect);
-    if (isBimodalColumnLayout(pgItems)) continue;
-    if (detectTableHint(pgItems, { requireStrongGrid: fromWord })) tablePages += 1;
+    if (isBimodalColumnLayout(pgItems)) {
+      anyBimodal = true;
+      continue;
+    }
+    if (detectTableHint(pgItems, { requireStrongGrid: true })) tablePages += 1;
   }
   let tableHint = tablePages > 0;
   let tableCount = tablePages;
+
+  // Sidebar CV on any page → never treat as table grid (prose columns ≠ data table)
+  if (anyBimodal) {
+    tableHint = false;
+    tableCount = 0;
+  }
 
   // Word text PDF without a strong multi-column grid → never flag as tables
   if (fromWord && tableHint) {
     const anyStrong = pages.some((pg) => {
       const pgItems = (pg.items || []).filter((it) => it.str?.trim() && it.rect);
+      if (isBimodalColumnLayout(pgItems)) return false;
       return detectStrongTableGrid(pgItems);
     });
     if (!anyStrong) {
@@ -597,17 +608,21 @@ export function detectStrongTableGrid(items) {
       }
     }
   }
-  if (alignedRows < 4) return false;
+  if (alignedRows < 5) return false;
 
   // Sidebar + corps (Word 2 cols, même fragmenté en titre/entreprise/dates) ≠ tableau
   if (isBimodalColumnLayout(items)) return false;
 
   // True data grid: ≥4 recurring columns spanning the page (no sidebar split)
-  if (recurring.length >= 4) return true;
+  if (recurring.length >= 4 && alignedRows >= 5) {
+    const shortRatio4 = cellHits ? shortCellHits / cellHits : 0;
+    // Even 4-col needs some short-cell signal (avoid two prose blocks + fragments)
+    return shortRatio4 >= 0.4;
+  }
 
   // ≥3 columns with mostly short cell-like fragments
   const shortRatio = cellHits ? shortCellHits / cellHits : 0;
-  return shortRatio >= 0.55;
+  return shortRatio >= 0.62;
 }
 
 /**

@@ -1656,6 +1656,7 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
   for (const role of parsed?.roles || []) {
     if (missingDateAnns >= 3) break;
     if (role.startYear) continue;
+    if (!isCredibleRoleForDates(role)) continue;
     const quote = (role.title || role.company || role.raw || "poste").slice(0, 80);
     const loc = locateQuote(text, quote) || {
       textStart: 0,
@@ -1852,6 +1853,34 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       };
     })
     .filter(Boolean);
+}
+
+/**
+ * Skip phantom "roles" that are actually duty/tool lines (false missing_dates).
+ * @param {object} role
+ */
+function isCredibleRoleForDates(role) {
+  if (!role) return false;
+  const title = String(role.title || "").trim();
+  const company = String(role.company || "").trim();
+  const raw = String(role.raw || "").trim();
+  const blob = title || raw;
+  if (!blob && !company) return false;
+  // Tool / reporting mission lines
+  if (/[;|]/.test(blob) && blob.length >= 20) return false;
+  if (
+    /\b(ATS|SIRH|Excel|PowerPoint|CRM|ERP|KPI|reporting|reportings?|pipeline)\b/i.test(blob) &&
+    blob.length >= 18 &&
+    !company
+  ) {
+    return false;
+  }
+  // Long prose without company → not a poste
+  if (!company && blob.length >= 45 && !/—|–/.test(blob)) return false;
+  // Need at least a title-like or company signal
+  if (!title && !company) return false;
+  if (title && !company && /[.!?]$/.test(title)) return false;
+  return true;
 }
 
 function shortLabelFor(kind) {
