@@ -201,7 +201,19 @@ export async function extractFromPdf(file) {
   }
 
   const approximate = itemCount < 8 || text.replace(/\s/g, "").length < 40;
-  const layout = analyzePdfLayout(pagesGeo);
+
+  let pdfCreator = null;
+  let pdfProducer = null;
+  try {
+    const meta = await doc.getMetadata();
+    const info = meta?.info || {};
+    pdfCreator = info.Creator ? String(info.Creator) : null;
+    pdfProducer = info.Producer ? String(info.Producer) : null;
+  } catch {
+    /* metadata optional */
+  }
+
+  const layout = analyzePdfLayout(pagesGeo, { pdfCreator, pdfProducer });
   let profilePhotoHint = false;
   let profileImagePreview = null;
   try {
@@ -215,17 +227,6 @@ export async function extractFromPdf(file) {
     } catch {
       profileImagePreview = null;
     }
-  }
-
-  let pdfCreator = null;
-  let pdfProducer = null;
-  try {
-    const meta = await doc.getMetadata();
-    const info = meta?.info || {};
-    pdfCreator = info.Creator ? String(info.Creator) : null;
-    pdfProducer = info.Producer ? String(info.Producer) : null;
-  } catch {
-    /* metadata optional */
   }
 
   return {
@@ -356,8 +357,9 @@ export async function extractPdfProfileImagePreview(pdfDoc) {
 /**
  * Heuristiques layout PDF : tableaux / bandeau contact / ordre de lecture / pages image.
  * @param {PageGeo[]} pagesGeo
+ * @param {{ pdfCreator?: string|null, pdfProducer?: string|null }} [opts]
  */
-export function analyzePdfLayout(pagesGeo) {
+export function analyzePdfLayout(pagesGeo, opts = {}) {
   const pages = Array.isArray(pagesGeo) ? pagesGeo : [];
   if (!pages.length) {
     return {
@@ -372,14 +374,28 @@ export function analyzePdfLayout(pagesGeo) {
   const page1 = pages[0];
   const items = (page1?.items || []).filter((it) => it.str?.trim() && it.rect);
 
-  // Table detection across all pages (count how many pages look tabular)
+  const fromWord = isWordPdfSource(opts.pdfCreator, opts.pdfProducer);
+
+  // Table detection across all pages — require strong grid; Word PDFs are stricter
   let tablePages = 0;
   for (const pg of pages) {
     const pgItems = (pg.items || []).filter((it) => it.str?.trim() && it.rect);
-    if (detectTableHint(pgItems)) tablePages += 1;
+    if (detectTableHint(pgItems, { requireStrongGrid: fromWord })) tablePages += 1;
   }
-  const tableHint = tablePages > 0;
-  const tableCount = tablePages;
+  let tableHint = tablePages > 0;
+  let tableCount = tablePages;
+
+  // Word text PDF without a strong multi-column grid → never flag as tables
+  if (fromWord && tableHint) {
+    const anyStrong = pages.some((pg) => {
+      const pgItems = (pg.items || []).filter((it) => it.str?.trim() && it.rect);
+      return detectStrongTableGrid(pgItems);
+    });
+    if (!anyStrong) {
+      tableHint = false;
+      tableCount = 0;
+    }
+  }
 
   // Contact header density: few items in top band while body is rich → likely graphic header
   const headerItems = items.filter((it) => (it.rect?.y ?? 1) < 0.12);
@@ -402,6 +418,20 @@ export function analyzePdfLayout(pagesGeo) {
 }
 
 /**
+ * @param {string|null|undefined} creator
+ * @param {string|null|undefined} producer
+ */
+function isWordPdfSource(creator, producer) {
+  const blob = `${creator || ""} ${producer || ""}`.toLowerCase();
+  return (
+    /\bmicrosoft\b/.test(blob) ||
+    /\bword\b/.test(blob) ||
+    /\bwps\b/.test(blob) ||
+    /libreoffice|openoffice|writer/i.test(blob)
+  );
+}
+
+/**
  * Pages avec très peu de texte extractible → scan / image dominante.
  * @param {PageGeo[]} pagesGeo
  * @returns {number[]}
@@ -420,44 +450,78 @@ function detectImageOnlyPages(pagesGeo) {
 }
 
 /**
- * Grille / fragments courts alignés → indices de tableau.
- * Distingue grille régulière (tableau) des simples colonnes (2 blocs).
+ * Vraie grille tableau : ≥3 colonnes X récurrentes sur ≥4 lignes body (hors bandeau contact).
  * @param {TextItem[]} items
+ * @returns {boolean}
  */
-function detectTableHint(items) {
-  if (!items || items.length < 12) return false;
-  // Bucket by Y row
+export function detectStrongTableGrid(items) {
+  if (!items || items.length < 16) return false;
+  // Ignore contact header band — email | phone | city looks like 3 columns
+  const body = items.filter((it) => (it.rect?.y ?? 0) >= 0.18);
+  if (body.length < 12) return false;
+
+  const SNAP = 0.03;
   const rows = new Map();
-  for (const it of items) {
-    const yKey = Math.round((it.rect?.y ?? 0) * 50) / 50; // ~0.02 bands
+  for (const it of body) {
+    const yKey = Math.round((it.rect?.y ?? 0) / SNAP) * SNAP;
     if (!rows.has(yKey)) rows.set(yKey, []);
     rows.get(yKey).push(it);
   }
-  let multiColRows = 0;
-  let shortFragRows = 0;
-  let threePlusCellRows = 0;
+
+  // Collect candidate column X from rows with ≥3 cells spanning width
+  /** @type {number[][]} */
+  const rowXs = [];
   for (const row of rows.values()) {
     if (row.length < 3) continue;
-    threePlusCellRows += 1;
     const xs = row.map((r) => r.rect.x).sort((a, b) => a - b);
-    const gaps = [];
-    for (let i = 1; i < xs.length; i++) gaps.push(xs[i] - xs[i - 1]);
-    const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-    const regular =
-      gaps.length >= 2 &&
-      gaps.every((g) => Math.abs(g - avgGap) < Math.max(0.035, avgGap * 0.4));
-    // ≥3 cells spanning width → table grid (not just 2-column sidebar)
-    if (regular && row.length >= 3 && xs[xs.length - 1] - xs[0] > 0.4) multiColRows += 1;
-    const short = row.filter((r) => (r.str || "").trim().length <= 12).length;
-    if (short >= 3 && row.length >= 3) shortFragRows += 1;
+    if (xs[xs.length - 1] - xs[0] < 0.45) continue;
+    rowXs.push(xs);
   }
-  // Stronger: need grid evidence (3+ aligned rows) not just 2-column layout
-  if (multiColRows >= 3) return true;
-  if (shortFragRows >= 4 && threePlusCellRows >= 3) return true;
-  // Dense micro-fragments overall (cell-like tokens)
-  const micro = items.filter((it) => (it.str || "").trim().length <= 4).length;
-  if (micro >= 28 && micro / items.length > 0.38 && threePlusCellRows >= 2) return true;
-  return false;
+  if (rowXs.length < 4) return false;
+
+  // Cluster X positions across those rows → recurring columns
+  const allX = rowXs.flat().sort((a, b) => a - b);
+  const clusters = [];
+  for (const x of allX) {
+    const last = clusters[clusters.length - 1];
+    if (last && Math.abs(last.sum / last.n - x) < SNAP) {
+      last.sum += x;
+      last.n += 1;
+    } else {
+      clusters.push({ sum: x, n: 1 });
+    }
+  }
+  // Columns that appear on ≥4 grid rows
+  const recurring = clusters
+    .filter((c) => c.n >= 4)
+    .map((c) => c.sum / c.n)
+    .sort((a, b) => a - b);
+  if (recurring.length < 3) return false;
+  if (recurring[recurring.length - 1] - recurring[0] < 0.45) return false;
+
+  // Count body rows that hit ≥3 recurring columns
+  let alignedRows = 0;
+  for (const xs of rowXs) {
+    let hits = 0;
+    for (const col of recurring) {
+      if (xs.some((x) => Math.abs(x - col) < SNAP)) hits += 1;
+    }
+    if (hits >= 3) alignedRows += 1;
+  }
+  return alignedRows >= 4;
+}
+
+/**
+ * Indices de tableau PDF — grille forte uniquement (évite faux positifs Word texte).
+ * @param {TextItem[]} items
+ * @param {{ requireStrongGrid?: boolean }} [opts]
+ */
+export function detectTableHint(items, opts = {}) {
+  if (!items || items.length < 12) return false;
+  const strong = detectStrongTableGrid(items);
+  if (opts.requireStrongGrid) return strong;
+  // Default path: only strong grid (shortFrag / micro alone removed — Word-fragile)
+  return strong;
 }
 
 /**

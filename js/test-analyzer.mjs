@@ -440,29 +440,110 @@ Lead Frontend — StartupXYZ
 }
 
 {
-  const { analyzePdfLayout } = await import("./extract.js");
-  const layout = analyzePdfLayout([
+  const { analyzePdfLayout, detectTableHint, detectStrongTableGrid } = await import("./extract.js");
+
+  // Real 4×6 grid in body → table
+  const gridLayout = analyzePdfLayout([
     {
       page: 1,
       width: 600,
       height: 800,
       items: Array.from({ length: 24 }, (_, i) => ({
-        str: i < 2 ? "x" : `Cell${i % 4}`,
+        str: `Cell${i % 4}`,
         page: 1,
         textStart: i * 5,
         textEnd: i * 5 + 4,
         rect: {
           x: 0.1 + (i % 4) * 0.2,
-          y: 0.2 + Math.floor(i / 4) * 0.08,
+          y: 0.22 + Math.floor(i / 4) * 0.08,
           w: 0.08,
           h: 0.02,
         },
       })),
     },
   ]);
-  assert.equal(typeof layout.tableHint, "boolean");
-  assert.equal(typeof layout.readingOrderOk, "boolean");
-  console.log("✓ PDF layout heuristics OK", layout);
+  assert.equal(gridLayout.tableHint, true, "aligned 4-col grid should flag tables");
+  assert.ok(gridLayout.tableCount >= 1);
+  console.log("✓ PDF layout heuristics OK", gridLayout);
+
+  // Word-like linear CV: contact 3-frag line + left-aligned body (no grid)
+  const wordLikeItems = [];
+  // Header contact band (would false-positive old heuristic)
+  ["marie@x.com", "|", "06 12 34 56 78", "|", "Paris"].forEach((str, i) => {
+    wordLikeItems.push({
+      str,
+      page: 1,
+      textStart: i * 10,
+      textEnd: i * 10 + str.length,
+      rect: { x: 0.08 + i * 0.16, y: 0.06, w: 0.12, h: 0.02 },
+    });
+  });
+  // Body: mostly single-column fragments + a few title/date pairs
+  const bodyLines = [
+    ["EXPÉRIENCE"],
+    ["Développeuse Full Stack", "—", "TechCorp", "(2021", "-", "2023)"],
+    ["Développé une plateforme SaaS"],
+    ["Lead Frontend", "StartupXYZ", "2019-2021"],
+    ["Créé le design system React"],
+    ["FORMATION"],
+    ["Master Informatique", "Université", "2017-2019"],
+    ["COMPÉTENCES"],
+    ["React,", "Node,", "TypeScript,", "Agile"],
+    ["management,", "SQL,", "Docker,", "AWS"],
+  ];
+  let cursor = 100;
+  bodyLines.forEach((parts, li) => {
+    parts.forEach((str, pi) => {
+      wordLikeItems.push({
+        str,
+        page: 1,
+        textStart: cursor,
+        textEnd: cursor + str.length,
+        rect: {
+          x: 0.08 + (pi > 0 ? Math.min(pi * 0.12, 0.35) : 0),
+          y: 0.2 + li * 0.055,
+          w: Math.min(0.2, 0.02 + str.length * 0.008),
+          h: 0.02,
+        },
+      });
+      cursor += str.length + 1;
+    });
+  });
+
+  const wordLinear = analyzePdfLayout(
+    [{ page: 1, width: 600, height: 800, items: wordLikeItems }],
+    { pdfCreator: "Microsoft Word", pdfProducer: "Microsoft: Print To PDF" }
+  );
+  assert.equal(wordLinear.tableHint, false, "Word-like linear CV must not flag tables");
+  assert.equal(detectTableHint(wordLikeItems), false);
+  assert.equal(detectStrongTableGrid(wordLikeItems), false);
+  console.log("✓ Word-like linear PDF no false table OK");
+
+  // Same grid with Word creator still flags (strong grid)
+  const wordGrid = analyzePdfLayout(
+    [
+      {
+        page: 1,
+        width: 600,
+        height: 800,
+        items: Array.from({ length: 24 }, (_, i) => ({
+          str: `C${i % 4}`,
+          page: 1,
+          textStart: i * 3,
+          textEnd: i * 3 + 2,
+          rect: {
+            x: 0.12 + (i % 4) * 0.2,
+            y: 0.25 + Math.floor(i / 4) * 0.07,
+            w: 0.1,
+            h: 0.02,
+          },
+        })),
+      },
+    ],
+    { pdfCreator: "Word", pdfProducer: "Microsoft Word" }
+  );
+  assert.equal(wordGrid.tableHint, true, "Word PDF with real grid still flags");
+  console.log("✓ Word PDF with real grid still detected OK");
 }
 
 // —— Detached ArrayBuffer / cloneBytesForPdf ——
