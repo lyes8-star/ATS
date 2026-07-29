@@ -424,12 +424,14 @@ async function enrichSpellingWithNspell(text, lang, issues, whitelist) {
     const spell = await load(lang);
     if (!spell?.correct) return issues;
     const seen = new Set(issues.map((i) => i.wrong.toLowerCase()));
-    const words = text.match(/[A-Za-zÀ-ü]{5,}/g) || [];
+    const words = text.match(/[A-Za-zÀ-ü](?:[A-Za-zÀ-ü\-]*[A-Za-zÀ-ü])?/g) || [];
     for (const w of words) {
+      if (w.length < 3) continue;
       const low = w.toLowerCase();
       if (seen.has(low)) continue;
       if (whitelist?.has(low)) continue;
-      if (/^\d/.test(w) || /[A-Z]{2,}/.test(w)) continue; // acronyms / codes
+      if (/^\d/.test(w)) continue;
+      if (/^[A-Z]{2,}$/.test(w)) continue;
       if (spell.correct(w)) continue;
       const suggestions = spell.suggest?.(w) || [];
       if (!suggestions.length) continue;
@@ -443,7 +445,7 @@ async function enrichSpellingWithNspell(text, lang, issues, whitelist) {
         textStart: idx,
         textEnd: idx + w.length,
       });
-      if (issues.length >= 12) break;
+      if (issues.length >= 20) break;
     }
   } catch {
     /* nspell optional */
