@@ -1606,4 +1606,113 @@ Python, SQL, Docker
   console.log("✓ DOCX/HTML table classify layout vs grid OK");
 }
 
+// —— Aliases + JD must/nice + soft-stuffing + semantic scope ——
+{
+  const {
+    buildAho,
+    ahoFind,
+    matchSkills,
+    matchJdOverlap,
+    matchRoleKeywordGaps,
+    countVerbs,
+    resetSkillsMatchCaches,
+  } = await import("./skills-match.js");
+  resetSkillsMatchCaches?.();
+
+  const auto = buildAho([
+    { label: "react", tier: "hard", aliases: ["react.js", "reactjs"] },
+    { label: "leadership", tier: "soft" },
+  ]);
+  const found = ahoFind(auto, "Built SPA with React.js and ReactJS tooling");
+  assert.ok(found.has("react"), "alias react.js folds to canonical react");
+  assert.equal(found.has("react.js"), false, "alias key not kept as separate hit");
+
+  // Live lexicon alias
+  const sm = await matchSkills("Stack: react.js, TypeScript, Docker");
+  assert.ok(sm.hardHits.includes("react"), "lexicon alias react.js → react");
+  assert.ok(!sm.hardHits.includes("javascript"), "no js false-positive from react.js");
+  console.log("✓ skill aliases fold to canonical OK", sm.hardHits.slice(0, 6));
+
+  const jd = await matchJdOverlap(
+    "Dev React Node.js AWS",
+    "We need a React developer with Kubernetes and Terraform experience. Soft skills: leadership communication."
+  );
+  assert.ok(jd.mustTerms?.length >= 1, "JD hard terms are must");
+  assert.ok(Array.isArray(jd.mustMissing), "mustMissing present");
+  assert.ok(jd.mustMissing.some((t) => /kubernetes|terraform/i.test(t)), "missing must listed");
+  assert.ok(typeof jd.mustCoverage === "number", "mustCoverage computed");
+  console.log("✓ JD must/nice overlap OK", { score: jd.score, mustMissing: jd.mustMissing, mustCoverage: jd.mustCoverage });
+
+  const softStuffCv = `
+Pat Soft
+pat@mail.com | 01 23 45 67 89
+EXPÉRIENCE
+Assistant — Corp (2020 - 2022)
+- Responsable de la communication interne sans chiffre
+FORMATION
+Licence (2018 - 2020)
+COMPÉTENCES
+communication, leadership, collaboration, teamwork, créativité, autonomie
+`;
+  const softStuff = analyzeCv(softStuffCv, {
+    pages: 1,
+    skillsMatch: {
+      hits: ["communication", "leadership", "collaboration", "teamwork", "créativité", "autonomie"],
+      hardHits: [],
+      softHits: ["communication", "leadership", "collaboration", "teamwork", "créativité"],
+      count: 0,
+      density: 0,
+    },
+  });
+  const stuffing = softStuff.checklist.find((c) => c.id === "keyword_soft_stuffing");
+  assert.ok(stuffing && stuffing.ok === false, "soft-stuffing check KO");
+  assert.ok(
+    softStuff.annotations.some((a) => a.checkId === "keyword_soft_stuffing"),
+    "soft-stuffing annotation"
+  );
+  console.log("✓ soft-stuffing check + annotation OK");
+
+  // Ambiguous role pack should not penalize
+  const amb = await matchRoleKeywordGaps(
+    "Polyvalent project coordination meetings reporting excel powerpoint",
+    { headline: "Chargé de mission", roleTitle: "Chargé de mission" }
+  );
+  // Either null role (ambiguous) or role with confidence — just ensure no crash
+  assert.ok(amb && typeof amb === "object");
+  console.log("✓ role pack margin/ambiguity OK", amb.role, amb.ambiguous || amb.margin);
+
+  const verbs = await countVerbs(
+    `INTITULÉ\nEXPÉRIENCE\nDev — Co (2020)\n- Chargé de suivre les tickets\n- Participé aux réunions\nFORMATION\nMaster`,
+    "fr",
+    { scope: "Dev — Co (2020)\n- Chargé de suivre les tickets\n- Participé aux réunions" }
+  );
+  assert.ok(verbs.weak >= 1 || verbs.strong >= 0, "verbs scoped runs");
+  assert.ok(verbs.scoped === true, "verbs marked as scoped");
+  console.log("✓ verbs scoped to experience OK", verbs);
+
+  // JD annotation lists mustMissing
+  const withMust = analyzeCv(goodCv, {
+    pages: 1,
+    skillsMatch: {
+      hits: ["javascript", "react"],
+      hardHits: ["javascript", "react"],
+      softHits: [],
+      count: 2,
+      density: 1,
+    },
+    jdOverlap: {
+      overlap: ["javascript", "react"],
+      score: 40,
+      jdTerms: ["javascript", "react", "kubernetes", "terraform"],
+      mustTerms: ["javascript", "react", "kubernetes", "terraform"],
+      mustMissing: ["kubernetes", "terraform"],
+      mustCoverage: 50,
+      niceTerms: [],
+    },
+  });
+  const kwAnn = withMust.annotations.find((a) => a.kind === "keyword" && /kubernetes|terraform/i.test(a.detail || a.title || ""));
+  assert.ok(kwAnn, "keyword annotation mentions mustMissing terms");
+  console.log("✓ JD mustMissing in keyword bubble OK");
+}
+
 console.log("Tous les tests OK");

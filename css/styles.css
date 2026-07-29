@@ -2526,7 +2526,10 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 }
 
 .ann-box.is-insert {
-  border-style: dashed;
+  border-style: solid;
+  border-width: 3px;
+  border-color: var(--signal);
+  box-shadow: 0 0 0 1px #fff, 0 0 0 3px rgba(196, 163, 90, 0.75), inset 4px 0 0 var(--signal);
 }
 
 .ann-suggest.is-editing {
@@ -2696,38 +2699,42 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 .ann-box {
   position: absolute;
   pointer-events: auto;
-  border: 2px solid transparent;
-  background: rgba(196, 163, 90, 0.22);
+  border: 3px solid var(--signal);
+  background: rgba(196, 163, 90, 0.14);
+  box-shadow: 0 0 0 1px #fff, 0 0 0 3px rgba(196, 163, 90, 0.85);
   cursor: pointer;
   padding: 0;
-  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
 }
 
 .ann-box.severity-critical {
-  background: rgba(185, 28, 28, 0.22);
-  border-color: rgba(185, 28, 28, 0.55);
+  background: rgba(185, 28, 28, 0.12);
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 1px #fff, 0 0 0 3px rgba(185, 28, 28, 0.75);
 }
 
 .ann-box.severity-warning {
-  background: rgba(196, 163, 90, 0.28);
-  border-color: rgba(168, 135, 63, 0.6);
+  background: rgba(196, 163, 90, 0.16);
+  border-color: #a8873f;
+  box-shadow: 0 0 0 1px #fff, 0 0 0 3px rgba(168, 135, 63, 0.9);
 }
 
 .ann-box.severity-info {
-  background: rgba(44, 74, 62, 0.14);
-  border-color: rgba(44, 74, 62, 0.45);
+  background: rgba(44, 74, 62, 0.1);
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px #fff, 0 0 0 3px rgba(44, 74, 62, 0.7);
 }
 
 .cv-preview.has-selection .ann-box:not(.is-selected),
 .cv-preview.has-selection .ann-mark:not(.is-selected),
 .cv-preview.has-selection .ann-approx-banner:not(.is-selected) {
-  opacity: 0.42;
+  opacity: 0.72;
 }
 
 .ann-box.is-selected {
   border: 3px solid var(--ink-deep);
-  background: rgba(196, 163, 90, 0.48);
-  box-shadow: 0 0 0 2px rgba(196, 163, 90, 0.55), 0 6px 18px rgba(30, 51, 41, 0.18);
+  background: rgba(196, 163, 90, 0.42);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 5px var(--signal), 0 6px 18px rgba(30, 51, 41, 0.2);
   transform: scale(1.015);
   z-index: 10;
   opacity: 1 !important;
@@ -2735,8 +2742,9 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 }
 
 .ann-box.is-accepted {
-  background: rgba(34, 197, 94, 0.2);
-  border-color: rgba(22, 101, 52, 0.5);
+  background: rgba(34, 197, 94, 0.16);
+  border-color: #166534;
+  box-shadow: 0 0 0 1px #fff, 0 0 0 3px rgba(22, 101, 52, 0.7);
 }
 
 .ann-box.is-applied {
@@ -2827,7 +2835,9 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 }
 
 .ann-box.is-approx {
-  border-style: dashed;
+  border-style: solid;
+  border-width: 3px;
+  box-shadow: 0 0 0 1px #fff, 0 0 0 3px rgba(196, 163, 90, 0.75), inset 4px 0 0 var(--signal);
 }
 
 .ann-badge {
@@ -2840,6 +2850,7 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
   min-height: 1.45rem;
   padding: 0.2rem 0.4rem;
   border-radius: 6px;
+  border: 2px solid var(--signal);
   background: var(--ink);
   color: var(--signal);
   font-size: 0.8rem;
@@ -2868,32 +2879,41 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
 
 .ann-mark {
   display: inline;
-  padding: 0 0.1em;
-  border: none;
+  padding: 0.05em 0.15em;
+  border: 2px solid var(--signal);
   border-bottom: 2px solid var(--signal);
-  background: rgba(196, 163, 90, 0.2);
+  background: rgba(196, 163, 90, 0.14);
   color: inherit;
   font: inherit;
   cursor: pointer;
-  border-radius: 0.15rem;
+  border-radius: 0.2rem;
+  box-shadow: 0 0 0 1px #fff;
 }
 
 .ann-mark.severity-critical {
-  background: rgba(185, 28, 28, 0.18);
-  border-bottom-color: #991b1b;
+  background: rgba(185, 28, 28, 0.12);
+  border-color: #b91c1c;
+}
+
+.ann-mark.severity-warning {
+  border-color: #a8873f;
+}
+
+.ann-mark.severity-info {
+  border-color: var(--ink);
 }
 
 .ann-mark.is-selected {
   outline: 3px solid var(--ink-deep);
   outline-offset: 2px;
-  background: rgba(196, 163, 90, 0.45);
-  box-shadow: 0 0 0 2px rgba(196, 163, 90, 0.4);
+  background: rgba(196, 163, 90, 0.4);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--signal);
   opacity: 1 !important;
 }
 
 .ann-mark.is-accepted {
-  background: rgba(34, 197, 94, 0.2);
-  border-bottom-color: #166534;
+  background: rgba(34, 197, 94, 0.16);
+  border-color: #166534;
 }
 
 .ann-approx-banner {
@@ -2902,10 +2922,12 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
   text-align: left;
   margin-bottom: 0.5rem;
   padding: 0.45rem 0.65rem;
-  border: 1px dashed var(--signal);
+  border: 2px solid var(--signal);
+  border-left-width: 4px;
   background: rgba(196, 163, 90, 0.12);
   color: var(--ink-deep);
   font-size: 0.8rem;
+  box-shadow: 0 0 0 1px #fff;
 }
 
 .ann-approx-banner.is-selected {
