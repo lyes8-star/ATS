@@ -1765,6 +1765,15 @@ communication, leadership, collaboration, teamwork, créativité, autonomie
   assert.ok(/Consigne finale/i.test(promptFr), "FR final instruction");
   assert.ok(/adapte mon CV à cette offre/i.test(promptFr), "FR JD mode role mentions offre");
   assert.ok(/matching prioritaire|offre d.emploi/i.test(promptFr), "FR JD section present");
+  // Dates + reverse chrono + ATS skeleton
+  assert.ok(/2021/i.test(promptFr), "FR prompt includes experience start year 2021");
+  assert.ok(/2019/i.test(promptFr), "FR prompt includes older role / education year 2019");
+  const techIdx = promptFr.indexOf("TechCorp");
+  const startupIdx = promptFr.indexOf("StartupXYZ");
+  assert.ok(techIdx >= 0 && startupIdx >= 0 && techIdx < startupIdx, "FR experience reverse-chrono (TechCorp before StartupXYZ)");
+  assert.ok(/## Coordonnées[\s\S]*## Profil[\s\S]*## Expérience[\s\S]*## Formation[\s\S]*## Compétences/i.test(promptFr), "FR ATS section order");
+  assert.ok(/anti-chronologique|AAAA/i.test(promptFr), "FR constraints require dates + reverse chrono");
+  assert.ok(/À compléter/i.test(promptFr) || /LinkedIn/i.test(promptFr), "FR skeleton has contact fields or todos");
 
   const promptEn = buildAiCvPrompt(session, { lang: "en" });
   assert.ok(/Output constraints/i.test(promptEn), "EN section headers");
@@ -1772,6 +1781,9 @@ communication, leadership, collaboration, teamwork, créativité, autonomie
   assert.ok(/Marie Dupont/i.test(promptEn), "EN prompt keeps identity");
   assert.ok(/Adapt my CV to this job offer/i.test(promptEn), "EN JD mode role mentions job");
   assert.ok(!promptEn.includes("IGNORED_SHOULD_NOT_APPEAR"), "EN ignored excluded");
+  assert.ok(/2021/.test(promptEn) && /2019/.test(promptEn), "EN prompt includes role/education years");
+  assert.ok(/## Contact[\s\S]*## Summary[\s\S]*## Experience[\s\S]*## Education[\s\S]*## Skills/i.test(promptEn), "EN ATS section order");
+  assert.ok(/reverse-chronological|To complete/i.test(promptEn), "EN constraints mention reverse-chrono / placeholders");
 
   // With jdOverlap mustMissing — appears early in prompt
   session.report = {
@@ -1812,8 +1824,62 @@ communication, leadership, collaboration, teamwork, créativité, autonomie
   const genericFr = buildAiCvPrompt(noJdSession, { lang: "fr" });
   assert.ok(!/adapte mon CV à cette offre/i.test(genericFr), "no-JD keeps generic FR role");
   assert.ok(/Réécris mon CV en version parfaite/i.test(genericFr), "generic FR role");
-  const metaNoJd = promptMeta(noJdSession, { lang: "fr" });
-  assert.ok(metaNoJd.hasJd === false, "meta.hasJd false without JD");
+  assert.ok(/N.INVENTE JAMAIS|À compléter/i.test(genericFr), "generic prompt keeps no-invent + placeholders rule");
+
+  // Incomplete CV → À compléter / To complete placeholders
+  const thinCv = `
+Alex
+EXPÉRIENCE
+Dev — Startup
+- Fait des trucs
+FORMATION
+Master
+COMPÉTENCES
+JS
+`;
+  const thinReport = analyzeCv(thinCv + "\nalex@example.com | 06 00 00 00 00\n", {
+    fileName: "thin.pdf",
+    pages: 1,
+  });
+  // Force missing contact bits via stripped parsed contact for prompt skeleton
+  const incompleteSession = {
+    report: {
+      ...thinReport,
+      parsed: {
+        ...(thinReport.parsed || {}),
+        contact: { firstName: "Alex", lastName: "", email: "", phone: "", linkedin: "", location: "" },
+        roles: [
+          { title: "Dev", company: "Startup", startYear: null, endYear: null, ongoing: false, bullets: ["Fait des trucs"] },
+          { title: "Senior", company: "BigCo", startYear: 2022, endYear: 2024, ongoing: false, bullets: ["Livré X"] },
+          { title: "Junior", company: "OldCo", startYear: 2018, endYear: 2020, ongoing: false, bullets: ["Appris Y"] },
+        ],
+        educationRoles: [
+          { title: "Master", company: "Univ", startYear: null, endYear: null, ongoing: false, bullets: [] },
+        ],
+        skills: ["JS"],
+        sections: { languages: [] },
+        sectionOrder: ["experience", "education", "skills"],
+      },
+      jdOverlap: null,
+    },
+    annotations: [],
+    jobDescription: "",
+  };
+  const { formatYears, sortRolesAntiChrono } = await import("./ai-prompt.js");
+  assert.equal(formatYears({ startYear: 2021, endYear: null, ongoing: true }, { ongoing: "aujourd’hui" }), "2021 – aujourd’hui");
+  assert.equal(formatYears({ startYear: 2019, endYear: 2021 }), "2019 – 2021");
+  const sorted = sortRolesAntiChrono(incompleteSession.report.parsed.roles);
+  assert.equal(sorted[0].company, "BigCo", "sort newest first");
+  assert.equal(sorted[1].company, "OldCo", "then older dated");
+  assert.equal(sorted[2].company, "Startup", "undated last");
+
+  const incompleteFr = buildAiCvPrompt(incompleteSession, { lang: "fr" });
+  assert.ok(/À compléter : e-mail/i.test(incompleteFr), "FR missing email → À compléter");
+  assert.ok(/À compléter : téléphone/i.test(incompleteFr), "FR missing phone → À compléter");
+  assert.ok(/À compléter : dates/i.test(incompleteFr), "FR missing role dates → À compléter");
+  const incompleteEn = buildAiCvPrompt(incompleteSession, { lang: "en" });
+  assert.ok(/To complete: email/i.test(incompleteEn), "EN missing email → To complete");
+  assert.ok(/To complete: dates/i.test(incompleteEn), "EN missing role dates → To complete");
 
   // Pro merge must preserve local must*
   const localJd = {
