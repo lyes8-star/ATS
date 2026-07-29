@@ -22,6 +22,7 @@ import {
   proAnalyze,
 } from "./pro-client.js";
 import * as extractApi from "./extract.js";
+import { buildAiCvPrompt, promptMeta } from "./ai-prompt.js";
 
 /**
  * @typedef {object} StudioSession
@@ -199,6 +200,7 @@ function studioShell(session) {
         <div id="cv-preview" class="cv-preview" tabindex="0" aria-label="Prévisualisation du CV annoté"></div>
       </div>
     </div>
+    ${aiPromptBlock(session)}
     <div class="studio-bar" role="region" aria-label="Actions">
       <p id="studio-bar-count" class="studio-bar-count"></p>
       <div class="studio-bar-actions">
@@ -208,6 +210,48 @@ function studioShell(session) {
     <div id="studio-toast" class="studio-toast hidden" role="status" aria-live="polite"></div>
     <p id="studio-jd-overlap" class="studio-jd-overlap hidden" role="status"></p>
   </div>`;
+}
+
+function aiPromptBlock(session) {
+  const t = window.ATSi18n?.t || ((k) => k);
+  const lang = window.ATSi18n?.getLang?.() === "en" ? "en" : "fr";
+  const prompt = buildAiCvPrompt(session, { lang });
+  const meta = promptMeta(session);
+  const lead = t("studio.aiPrompt.lead", {
+    n: meta.corrections,
+    plural: meta.corrections > 1 ? "s" : "",
+  });
+  return `
+    <section class="studio-ai-prompt" aria-labelledby="studio-ai-prompt-title">
+      <div class="studio-ai-prompt-head">
+        <div>
+          <p class="studio-ai-prompt-kicker">${escapeHtml(t("studio.aiPrompt.kicker"))}</p>
+          <h2 id="studio-ai-prompt-title" class="studio-ai-prompt-title">${escapeHtml(t("studio.aiPrompt.title"))}</h2>
+          <p class="studio-ai-prompt-lead">${escapeHtml(lead)}</p>
+        </div>
+        <button type="button" class="btn-primary" id="btn-copy-ai-prompt">${escapeHtml(t("studio.aiPrompt.copy"))}</button>
+      </div>
+      <label class="visually-hidden" for="studio-ai-prompt-text">${escapeHtml(t("studio.aiPrompt.title"))}</label>
+      <textarea id="studio-ai-prompt-text" class="studio-ai-prompt-text" readonly rows="14" spellcheck="false">${escapeHtml(prompt)}</textarea>
+      <p class="studio-ai-prompt-hint">${escapeHtml(t("studio.aiPrompt.hint"))}</p>
+    </section>`;
+}
+
+function refreshAiPrompt(root, session) {
+  const ta = root.querySelector("#studio-ai-prompt-text");
+  const lead = root.querySelector(".studio-ai-prompt-lead");
+  if (!ta) return;
+  const lang = window.ATSi18n?.getLang?.() === "en" ? "en" : "fr";
+  const prompt = buildAiCvPrompt(session, { lang });
+  ta.value = prompt;
+  if (lead) {
+    const t = window.ATSi18n?.t || ((k) => k);
+    const meta = promptMeta(session);
+    lead.textContent = t("studio.aiPrompt.lead", {
+      n: meta.corrections,
+      plural: meta.corrections > 1 ? "s" : "",
+    });
+  }
 }
 
 function focusFailedChecklist(root, session, preferredCheckId = null) {
@@ -285,6 +329,37 @@ function bindStudio(root, session, hooks) {
 
   root.querySelector("#btn-pro-analyze")?.addEventListener("click", () => {
     runProAnalyze(root, session);
+  });
+
+  root.querySelector("#btn-copy-ai-prompt")?.addEventListener("click", async () => {
+    const t = window.ATSi18n?.t || ((k) => k);
+    const ta = root.querySelector("#studio-ai-prompt-text");
+    const text = ta?.value || buildAiCvPrompt(session, {
+      lang: window.ATSi18n?.getLang?.() === "en" ? "en" : "fr",
+    });
+    try {
+      if (text && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else if (ta) {
+        ta.focus();
+        ta.select();
+        throw new Error("clipboard");
+      } else {
+        throw new Error("clipboard");
+      }
+      showToast(root, t("studio.aiPrompt.copied"));
+      window.ATSAnalytics?.track?.("ats_ai_prompt_copied", {
+        chars: text.length,
+        corrections: promptMeta(session).corrections,
+      });
+    } catch (err) {
+      console.warn(err);
+      try {
+        ta?.focus();
+        ta?.select();
+      } catch (_) {}
+      showToast(root, t("studio.copyFailed"));
+    }
   });
 
   if (session.proEnabled || (hasProConsent() && isProConfigured())) {
@@ -378,6 +453,7 @@ async function runProAnalyze(root, session) {
     session.annotations = [...(session.annotations || []), ...geo];
     session.selectedId = session.annotations.find((a) => a.status === "pending")?.id || session.selectedId;
     updateBar(root, session);
+    refreshAiPrompt(root, session);
     await refreshPreview(root, session);
     showToast(root, data.source === "heuristic" ? t("studio.pro.heuristic") : t("studio.pro.done"));
   } catch (err) {
@@ -496,6 +572,7 @@ async function afterDecision(root, session) {
   session.selectedId = next?.id || session.selectedId;
   await refreshPreview(root, session);
   updateBar(root, session);
+  refreshAiPrompt(root, session);
 }
 
 function updateBar(root, session) {

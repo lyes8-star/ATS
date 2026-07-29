@@ -1715,4 +1715,64 @@ communication, leadership, collaboration, teamwork, créativité, autonomie
   console.log("✓ JD mustMissing in keyword bubble OK");
 }
 
+// —— AI rebuild prompt ——
+{
+  const { buildAiCvPrompt, promptMeta } = await import("./ai-prompt.js");
+  const report = analyzeCv(goodCv, { fileName: "marie.pdf", pages: 1 });
+  const session = {
+    report,
+    annotations: [
+      ...(report.annotations || []).map((a) => ({ ...a, status: "pending" })),
+      {
+        id: "ann-ignored-test",
+        kind: "keyword",
+        status: "ignored",
+        title: "IGNORED_SHOULD_NOT_APPEAR",
+        quote: "secret-ignored-quote",
+        suggestion: "IGNORE_ME_SUGGESTION",
+        detail: "should be filtered",
+        axis: "keywords",
+      },
+    ],
+    jobDescription: "Need React Kubernetes Terraform developer",
+  };
+  // Ensure at least one suggestion in pending set
+  if (!session.annotations.some((a) => a.status === "pending" && a.suggestion)) {
+    session.annotations.push({
+      id: "ann-force",
+      kind: "missing_metric",
+      status: "pending",
+      title: "Ajouter un chiffre",
+      quote: "Développé une plateforme",
+      suggestion: "Développé une plateforme SaaS (+12 000 clients)",
+      detail: "Chiffrer l'impact",
+      axis: "content",
+    });
+  }
+
+  const promptFr = buildAiCvPrompt(session, { lang: "fr" });
+  assert.ok(/Marie Dupont/i.test(promptFr), "prompt includes name");
+  assert.ok(/marie\.dupont@email\.com/i.test(promptFr), "prompt includes email");
+  assert.ok(
+    session.annotations.some(
+      (a) => a.status !== "ignored" && a.suggestion && promptFr.includes(String(a.suggestion).slice(0, 24))
+    ) || /Correction proposée|corrections/i.test(promptFr),
+    "prompt includes at least one correction suggestion"
+  );
+  assert.ok(!promptFr.includes("IGNORED_SHOULD_NOT_APPEAR"), "ignored annotation title excluded");
+  assert.ok(!promptFr.includes("IGNORE_ME_SUGGESTION"), "ignored suggestion excluded");
+  assert.ok(/Contraintes de sortie|CV source/i.test(promptFr), "FR section headers");
+  assert.ok(/Consigne finale/i.test(promptFr), "FR final instruction");
+
+  const promptEn = buildAiCvPrompt(session, { lang: "en" });
+  assert.ok(/Output constraints/i.test(promptEn), "EN section headers");
+  assert.ok(/Final instruction/i.test(promptEn), "EN final instruction");
+  assert.ok(/Marie Dupont/i.test(promptEn), "EN prompt keeps identity");
+
+  const meta = promptMeta(session, { lang: "fr" });
+  assert.ok(meta.corrections >= 1, "meta counts actionable corrections");
+  assert.ok(meta.chars > 200, "meta reports prompt length");
+  console.log("✓ AI CV rebuild prompt OK", { corrections: meta.corrections, chars: meta.chars });
+}
+
 console.log("Tous les tests OK");
