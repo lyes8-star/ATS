@@ -506,6 +506,70 @@ Lead Frontend — StartupXYZ
   assert.equal(twoColLayout.tableHint, false, "analyzePdfLayout skips 2-col as tables");
   console.log("✓ PDF 2-col layout no false table OK");
 
+  // Word PDF: sidebar + corps fragmenté titre/entreprise/dates (4 pics X irréguliers)
+  const wordFrag = [];
+  for (let i = 0; i < 10; i++) {
+    const y = 0.2 + i * 0.07;
+    wordFrag.push({
+      str: `Competence skill ${i}`,
+      page: 1,
+      textStart: i * 60,
+      textEnd: i * 60 + 18,
+      rect: { x: 0.06, y, w: 0.25, h: 0.02 },
+    });
+    wordFrag.push({
+      str: `Poste Senior ${i}`,
+      page: 1,
+      textStart: i * 60 + 20,
+      textEnd: i * 60 + 33,
+      rect: { x: 0.4, y, w: 0.18, h: 0.02 },
+    });
+    wordFrag.push({
+      str: `Entreprise${i}`,
+      page: 1,
+      textStart: i * 60 + 34,
+      textEnd: i * 60 + 44,
+      rect: { x: 0.58, y, w: 0.14, h: 0.02 },
+    });
+    wordFrag.push({
+      str: `2020-202${i % 10}`,
+      page: 1,
+      textStart: i * 60 + 45,
+      textEnd: i * 60 + 54,
+      rect: { x: 0.78, y, w: 0.12, h: 0.02 },
+    });
+  }
+  // Header "Nom | Titre" (ancre visuelle du faux positif)
+  wordFrag.push({
+    str: "LYNA AMARA",
+    page: 1,
+    textStart: 0,
+    textEnd: 10,
+    rect: { x: 0.15, y: 0.05, w: 0.2, h: 0.03 },
+  });
+  wordFrag.push({
+    str: "|",
+    page: 1,
+    textStart: 11,
+    textEnd: 12,
+    rect: { x: 0.42, y: 0.05, w: 0.02, h: 0.03 },
+  });
+  wordFrag.push({
+    str: "HR Business Partner",
+    page: 1,
+    textStart: 13,
+    textEnd: 32,
+    rect: { x: 0.48, y: 0.05, w: 0.3, h: 0.03 },
+  });
+  assert.equal(isBimodalColumnLayout(wordFrag), true, "Word fragmented sidebar is bimodal");
+  assert.equal(detectStrongTableGrid(wordFrag), false, "Word frag 4-X must not be table");
+  const wordFragLayout = analyzePdfLayout(
+    [{ page: 1, width: 600, height: 800, items: wordFrag }],
+    { pdfCreator: "Microsoft Word", pdfProducer: "Microsoft: Print To PDF" }
+  );
+  assert.equal(wordFragLayout.tableHint, false, "Word PDF without real table → no tableHint");
+  console.log("✓ Word PDF fragmented 2-col no false table OK");
+
   // Word-like linear CV: contact 3-frag line + left-aligned body (no grid)
   const wordLikeItems = [];
   // Header contact band (would false-positive old heuristic)

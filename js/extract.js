@@ -451,9 +451,27 @@ function detectImageOnlyPages(pagesGeo) {
 }
 
 /**
+ * Pics X espacés de façon régulière sur la largeur → grille tableau, pas sidebar.
+ * @param {{ x: number, n: number }[]} significant
+ */
+function isEvenColumnSpread(significant) {
+  if (!significant || significant.length < 4) return false;
+  const span = significant[significant.length - 1].x - significant[0].x;
+  if (span < 0.5) return false;
+  const gaps = [];
+  for (let i = 1; i < significant.length; i++) {
+    gaps.push(significant[i].x - significant[i - 1].x);
+  }
+  const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  if (mean < 0.08) return false;
+  const maxDev = Math.max(...gaps.map((g) => Math.abs(g - mean)));
+  return maxDev <= mean * 0.4;
+}
+
+/**
  * Mise en page bi-colonne (sidebar + corps) — pas une grille tableau.
- * Deux pics X (gauche <0.38, droite ≥0.40), éventuellement un 3e pic dates à droite.
- * Une vraie grille ≥4 colonnes n'est PAS bimodale.
+ * PDF Word découpe souvent le corps droit en titre / entreprise / dates → 3–4 pics X ;
+ * tant qu’il y a une vraie bande gauche et un corps à droite (espacement irrégulier), c’est du layout.
  * @param {TextItem[]} items
  * @returns {boolean}
  */
@@ -476,25 +494,32 @@ export function isBimodalColumnLayout(items) {
       clusters.push({ sum: x, n: 1 });
     }
   }
-  const minN = Math.max(4, Math.floor(body.length * 0.12));
+  const minN = Math.max(4, Math.floor(body.length * 0.1));
   const significant = clusters
     .filter((c) => c.n >= minN)
     .map((c) => ({ x: c.sum / c.n, n: c.n }))
     .sort((a, b) => a.x - b.x);
+  if (significant.length < 2) return false;
 
-  // 4+ vertical columns spanning the page → data grid, not 2-col layout
-  if (significant.length >= 4) return false;
-  if (significant.length < 2 || significant.length > 3) return false;
+  // Grille régulière ≥4 colonnes → pas une sidebar
+  if (isEvenColumnSpread(significant)) return false;
 
-  const left = significant.filter((c) => c.x < 0.38);
+  // Sidebar = un seul pic clairement à gauche ; le reste = corps (éventuellement fragmenté)
+  const left = significant.filter((c) => c.x < 0.35);
   const right = significant.filter((c) => c.x >= 0.4);
-  if (!left.length || !right.length) return false;
+  if (left.length !== 1 || !right.length) return false;
+  if (left[0].x > 0.28) return false;
 
-  const leftN = left.reduce((s, c) => s + c.n, 0);
+  const leftN = left[0].n;
   const rightN = right.reduce((s, c) => s + c.n, 0);
   if (leftN < 6 || rightN < 6) return false;
+
+  // Gouttière : écart net entre sidebar et premier pic du corps
+  const gap = right[0].x - left[0].x;
+  if (gap < 0.12) return false;
+
   const ratio = Math.min(leftN, rightN) / Math.max(leftN, rightN, 1);
-  return ratio > 0.3;
+  return ratio > 0.22;
 }
 
 /**
@@ -574,12 +599,11 @@ export function detectStrongTableGrid(items) {
   }
   if (alignedRows < 4) return false;
 
-  // True data grid: ≥4 recurring columns always counts
-  if (recurring.length >= 4) return true;
-
-  // Two-column CV (sidebar + body, optionally dates) often yields 3 X peaks —
-  // that is layout, not a data table
+  // Sidebar + corps (Word 2 cols, même fragmenté en titre/entreprise/dates) ≠ tableau
   if (isBimodalColumnLayout(items)) return false;
+
+  // True data grid: ≥4 recurring columns spanning the page (no sidebar split)
+  if (recurring.length >= 4) return true;
 
   // ≥3 columns with mostly short cell-like fragments
   const shortRatio = cellHits ? shortCellHits / cellHits : 0;
