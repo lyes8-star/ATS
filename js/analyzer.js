@@ -1615,7 +1615,7 @@ function scoreReadability(text, fileMeta) {
   const hasColumnsSmell = layout
     ? !!layout.columnSmell
     : (text.match(/\t{2,}| {8,}/g) || []).length > 12;
-  const hasTables = !!(layout?.tableHint || fileMeta.tableHint || (fileMeta.tableCount || 0) > 0);
+  const hasTables = !!(layout?.tableHint || fileMeta.tableHint);
   const headerSparse = !!(layout?.headerSparse || fileMeta.headerSparse);
   const readingOrderOk = layout?.readingOrderOk !== false && fileMeta.readingOrderOk !== false;
   const imageOnlyPages = Array.isArray(fileMeta.imageOnlyPages)

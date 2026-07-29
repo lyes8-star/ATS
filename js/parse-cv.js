@@ -476,7 +476,8 @@ export function parseCv(text, opts = {}) {
 
   const layoutDetect = detectColumnSmell(lines);
   const employmentGaps = findEmploymentGaps(roles);
-  const tableHint = !!(opts.tableHint || (opts.tableCount || 0) > 0);
+  const tableHint = !!opts.tableHint;
+  const tableCount = opts.tableCount || 0;
 
   return {
     lines,
@@ -502,7 +503,7 @@ export function parseCv(text, opts = {}) {
       columnSmell: layoutDetect.columnSmell,
       xBimodality: layoutDetect.xBimodality,
       tableHint,
-      tableCount: opts.tableCount || 0,
+      tableCount,
       headerSparse: !!opts.headerSparse,
       readingOrderOk: opts.readingOrderOk !== false,
       profilePhotoHint: !!opts.profilePhotoHint,

@@ -558,23 +558,111 @@ function detectReadingOrderDivergence(page) {
  * @returns {Promise<ExtractResult>}
  */
 /**
- * Compte les tableaux Word (`w:tbl`) via PizZip si dispo, sinon approx HTML Mammoth.
+ * Analyse les tableaux DOCX : ignore les tableaux de mise en page (1–2 colonnes),
+ * ne flag que les grilles de contenu (≥3 colonnes sur ≥2 lignes).
+ * @param {ArrayBuffer} arrayBuffer
+ * @param {string} html
+ * @returns {{ tableCount: number, tableHint: boolean, layoutTableCount: number }}
+ */
+export function analyzeDocxTables(arrayBuffer, html) {
+  try {
+    const PizZip = window.PizZip || window.JSZip;
+    if (PizZip && arrayBuffer) {
+      const zip = new PizZip(arrayBuffer);
+      const docXml = zip.file("word/document.xml")?.asText?.() || "";
+      if (docXml) {
+        return classifyDocxXmlTables(docXml);
+      }
+    }
+  } catch {
+    /* fall through to HTML */
+  }
+  return classifyHtmlTables(html);
+}
+
+/**
+ * @param {string} docXml
+ * @returns {{ tableCount: number, tableHint: boolean, layoutTableCount: number }}
+ */
+export function classifyDocxXmlTables(docXml) {
+  const tables = String(docXml || "").match(/<w:tbl[\s>][\s\S]*?<\/w:tbl>/gi) || [];
+  let contentGrids = 0;
+  let layoutTables = 0;
+  for (const tbl of tables) {
+    const rows = tbl.match(/<w:tr[\s>][\s\S]*?<\/w:tr>/gi) || [];
+    let maxCols = 0;
+    let richRows = 0;
+    for (const row of rows) {
+      // Count cells; gridSpan expands effective columns
+      const cells = row.match(/<w:tc\b/gi) || [];
+      let cols = 0;
+      const spans = row.match(/<w:gridSpan\b[^>]*w:val="(\d+)"/gi) || [];
+      if (spans.length) {
+        let spanSum = 0;
+        for (const s of spans) {
+          const m = s.match(/w:val="(\d+)"/i);
+          spanSum += m ? Number(m[1]) || 1 : 1;
+        }
+        // Remaining plain cells without span
+        const plain = Math.max(0, cells.length - spans.length);
+        cols = spanSum + plain;
+      } else {
+        cols = cells.length;
+      }
+      if (cols > maxCols) maxCols = cols;
+      if (cols >= 3) richRows += 1;
+    }
+    if (maxCols >= 3 && richRows >= 2) {
+      contentGrids += 1;
+    } else if (rows.length > 0) {
+      layoutTables += 1;
+    }
+  }
+  return {
+    tableCount: contentGrids,
+    tableHint: contentGrids > 0,
+    layoutTableCount: layoutTables,
+  };
+}
+
+/**
+ * Fallback Mammoth HTML : ne compte que les <table> avec ≥3 cellules sur ≥2 lignes.
+ * @param {string} html
+ * @returns {{ tableCount: number, tableHint: boolean, layoutTableCount: number }}
+ */
+export function classifyHtmlTables(html) {
+  const tables = String(html || "").match(/<table\b[\s\S]*?<\/table>/gi) || [];
+  let contentGrids = 0;
+  let layoutTables = 0;
+  for (const tbl of tables) {
+    const rows = tbl.match(/<tr\b[\s\S]*?<\/tr>/gi) || [];
+    let maxCols = 0;
+    let richRows = 0;
+    for (const row of rows) {
+      const cols = (row.match(/<t[dh]\b/gi) || []).length;
+      if (cols > maxCols) maxCols = cols;
+      if (cols >= 3) richRows += 1;
+    }
+    if (maxCols >= 3 && richRows >= 2) {
+      contentGrids += 1;
+    } else if (rows.length > 0) {
+      layoutTables += 1;
+    }
+  }
+  return {
+    tableCount: contentGrids,
+    tableHint: contentGrids > 0,
+    layoutTableCount: layoutTables,
+  };
+}
+
+/**
+ * @deprecated Use analyzeDocxTables — kept for callers expecting a raw count.
  * @param {ArrayBuffer} arrayBuffer
  * @param {string} html
  */
 function countDocxTables(arrayBuffer, html) {
-  try {
-    const PizZip = window.PizZip || window.JSZip;
-    if (PizZip) {
-      const zip = new PizZip(arrayBuffer);
-      const docXml = zip.file("word/document.xml")?.asText?.() || "";
-      const n = (docXml.match(/<w:tbl[\s>]/g) || []).length;
-      if (n >= 0) return n;
-    }
-  } catch {
-    /* fall through */
-  }
-  return (html.match(/<table[\s>]/gi) || []).length;
+  return analyzeDocxTables(arrayBuffer, html).tableCount;
 }
 
 /**
@@ -651,7 +739,7 @@ export async function extractFromDocx(file) {
   ]);
   const text = raw.value || "";
   const html = htmlResult.value || "<p></p>";
-  const tableCount = countDocxTables(arrayBuffer, html);
+  const tables = analyzeDocxTables(arrayBuffer, html);
   const profilePhotoHint = detectDocxProfilePhoto(arrayBuffer, html);
   const profileImagePreview = profilePhotoHint ? extractDocxProfileImagePreview(arrayBuffer) : null;
   return {
@@ -662,8 +750,9 @@ export async function extractFromDocx(file) {
     pagesGeo: [],
     html,
     approximate: true,
-    tableCount,
-    tableHint: tableCount > 0,
+    tableCount: tables.tableCount,
+    tableHint: tables.tableHint,
+    layoutTableCount: tables.layoutTableCount,
     profilePhotoHint,
     profileImagePreview,
     imageOnlyPages: [],
