@@ -234,6 +234,10 @@ function focusFailedChecklist(root, session, preferredCheckId = null) {
         header_sparse: "contact_plaintext",
         role_keywords: "role_keywords",
         layout: a.checkId || "single_column",
+        no_tables: "no_tables",
+        single_column: "single_column",
+        image_scan: "extractable_text",
+        profile_photo: "profile_photo",
         missing_section:
           /expérience|experience/i.test(a.title || "")
             ? "section_experience"
@@ -559,6 +563,18 @@ function renderDetail(root, session) {
     return;
   }
 
+  const layoutKinds = new Set([
+    "layout",
+    "reading_order",
+    "header_sparse",
+    "profile_photo",
+    "graphic_skills",
+    "image_scan",
+    "no_tables",
+    "single_column",
+  ]);
+  const adviceInBubble = layoutKinds.has(ann.kind);
+
   const placementNote =
     ann.placement === "insert" ||
     ann.applyMode === "insert_header" ||
@@ -571,6 +587,7 @@ function renderDetail(root, session) {
   const quote = String(ann.quote || "").trim();
   const suggestion = String(ann.suggestion || "").trim();
   const showReform =
+    !adviceInBubble &&
     suggestion &&
     suggestion !== quote &&
     !/^\[.+\]$/.test(suggestion); /* skip bare placeholders like [email] alone if same as action */
@@ -611,9 +628,13 @@ function renderDetail(root, session) {
           t("studio.actions.ignore")
         )}</button>
       </div>
-      <p class="ann-why-label">${escapeHtml(t("studio.detail.why"))}</p>
+      ${
+        adviceInBubble
+          ? ""
+          : `<p class="ann-why-label">${escapeHtml(t("studio.detail.why"))}</p>
       <p class="ann-problem">${escapeHtml(ann.detail || "")}</p>
-      <p class="ann-self-edit">${escapeHtml(t("studio.detail.selfEdit"))}</p>
+      <p class="ann-self-edit">${escapeHtml(t("studio.detail.selfEdit"))}</p>`
+      }
     </div>`;
 
   const copyText = async (text, toastKey) => {

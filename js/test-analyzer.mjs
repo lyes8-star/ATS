@@ -1198,4 +1198,108 @@ Python, SQL, Docker
   console.log("✓ Overlapping dates detection OK");
 }
 
+{
+  const tables = analyzeCv(goodCv, {
+    pages: 1,
+    tableHint: true,
+    tableCount: 2,
+    parsed: {
+      ...parseCv(goodCv),
+      layout: { columnSmell: false, tableHint: true, tableCount: 2, headerSparse: false, readingOrderOk: true },
+    },
+  });
+  assert.equal(tables.checklist.find((c) => c.id === "no_tables")?.ok, false, "no_tables KO");
+  const tAnn = tables.annotations.find((a) => a.kind === "no_tables");
+  assert.ok(tAnn, "no_tables annotation");
+  assert.ok(tAnn.detail && tAnn.detail.length > 40, "tables detail actionable in bubble");
+  assert.ok(!tables.annotations.some((a) => a.kind === "layout"), "legacy layout kind unused");
+  console.log("✓ Tables annotation + checklist OK");
+}
+
+{
+  const cols = analyzeCv(goodCv, {
+    pages: 1,
+    parsed: {
+      ...parseCv(goodCv),
+      layout: { columnSmell: true, tableHint: false, tableCount: 0, headerSparse: false, readingOrderOk: true },
+    },
+  });
+  assert.equal(cols.checklist.find((c) => c.id === "single_column")?.ok, false);
+  const cAnn = cols.annotations.find((a) => a.kind === "single_column");
+  assert.ok(cAnn, "single_column annotation");
+  assert.ok(cAnn.detail && /colonne/i.test(cAnn.detail));
+  assert.ok(!cols.annotations.some((a) => a.kind === "no_tables"));
+  console.log("✓ Columns-only annotation OK");
+}
+
+{
+  const both = analyzeCv(goodCv, {
+    pages: 1,
+    tableHint: true,
+    tableCount: 1,
+    parsed: {
+      ...parseCv(goodCv),
+      layout: { columnSmell: true, tableHint: true, tableCount: 1, headerSparse: false, readingOrderOk: true },
+    },
+  });
+  const bothAnn = both.annotations.find((a) => a.kind === "no_tables");
+  assert.ok(bothAnn, "tables takes priority when both");
+  assert.ok(/colonne/i.test(bothAnn.detail), "detail mentions columns too");
+  assert.ok(!both.annotations.some((a) => a.kind === "single_column"));
+  console.log("✓ Tables+columns priority OK");
+}
+
+{
+  const header = analyzeCv(goodCv, {
+    pages: 1,
+    headerSparse: true,
+    parsed: {
+      ...parseCv(goodCv),
+      layout: { columnSmell: false, tableHint: false, headerSparse: true, readingOrderOk: true },
+    },
+  });
+  const hAnn = header.annotations.find((a) => a.kind === "header_sparse");
+  assert.ok(hAnn, "header_sparse annotation");
+  assert.ok(hAnn.detail && hAnn.detail.length > 40);
+  assert.equal(hAnn.severity, "critical");
+  console.log("✓ Header sparse annotation OK");
+}
+
+{
+  const photo = analyzeCv(goodCv, {
+    pages: 1,
+    profilePhotoHint: true,
+    parsed: parseCv(goodCv, { profilePhotoHint: true }),
+  });
+  const pAnn = photo.annotations.find((a) => a.kind === "profile_photo");
+  assert.ok(pAnn?.detail && /photo/i.test(pAnn.detail));
+  console.log("✓ Profile photo detail for bubble OK");
+}
+
+{
+  const scan = analyzeCv(goodCv, {
+    pages: 2,
+    imageOnlyPages: [2],
+    approximate: true,
+  });
+  assert.equal(scan.checklist.find((c) => c.id === "extractable_text")?.ok, false);
+  const sAnn = scan.annotations.find((a) => a.kind === "image_scan");
+  assert.ok(sAnn, "image_scan annotation");
+  assert.equal(sAnn.severity, "critical");
+  assert.ok(sAnn.detail && /ATS|image/i.test(sAnn.detail));
+  assert.ok(scan.categories.readability.imageOnlyPages?.includes(2));
+  console.log("✓ Image/scan pages annotation OK");
+}
+
+{
+  // Regression: clean CV still passes with pinned readability
+  const clean = analyzeCv(goodCv, { fileName: "marie.pdf", pages: 1 });
+  assert.equal(clean.categories.readability.score, 25);
+  assert.ok(clean.passes);
+  assert.ok(!clean.annotations.some((a) =>
+    ["no_tables", "single_column", "image_scan", "header_sparse"].includes(a.kind)
+  ));
+  console.log("✓ goodCv regression still clean OK");
+}
+
 console.log("Tous les tests OK");

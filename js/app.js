@@ -427,6 +427,10 @@ async function runAnalysis() {
         headerSparse: extracted.headerSparse,
         readingOrderOk: extracted.readingOrderOk,
         profilePhotoHint: extracted.profilePhotoHint,
+        imageOnlyPages: extracted.imageOnlyPages || [],
+        pdfCreator: extracted.pdfCreator || null,
+        pdfProducer: extracted.pdfProducer || null,
+        approximate: extracted.approximate,
       },
       { jobDescription: els.jdInput?.value || "" }
     );
