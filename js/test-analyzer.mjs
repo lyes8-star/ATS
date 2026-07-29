@@ -1440,4 +1440,66 @@ Python, SQL, Docker
   console.log("✓ Word source not hostile OK");
 }
 
+{
+  // tableCount alone must NOT flag tables (DOCX layout tables)
+  const layoutOnly = analyzeCv(goodCv, {
+    pages: 1,
+    tableCount: 2,
+    tableHint: false,
+    parsed: {
+      ...parseCv(goodCv),
+      layout: {
+        columnSmell: false,
+        tableHint: false,
+        tableCount: 2,
+        headerSparse: false,
+        readingOrderOk: true,
+      },
+    },
+  });
+  assert.equal(layoutOnly.checklist.find((c) => c.id === "no_tables")?.ok, true);
+  assert.ok(!layoutOnly.annotations.some((a) => a.kind === "no_tables"));
+  console.log("✓ tableCount without tableHint does not flag OK");
+}
+
+{
+  const { classifyDocxXmlTables, classifyHtmlTables } = await import("./extract.js");
+
+  const twoColXml = `
+    <w:document><w:body>
+      <w:tbl>
+        <w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
+        <w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
+        <w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
+      </w:tbl>
+    </w:body></w:document>`;
+  const layout = classifyDocxXmlTables(twoColXml);
+  assert.equal(layout.tableHint, false, "2-col Word layout table is not content grid");
+  assert.equal(layout.tableCount, 0);
+  assert.ok(layout.layoutTableCount >= 1);
+
+  const gridXml = `
+    <w:document><w:body>
+      <w:tbl>
+        <w:tr><w:tc/><w:tc/><w:tc/><w:tc/></w:tr>
+        <w:tr><w:tc/><w:tc/><w:tc/><w:tc/></w:tr>
+        <w:tr><w:tc/><w:tc/><w:tc/><w:tc/></w:tr>
+      </w:tbl>
+    </w:body></w:document>`;
+  const grid = classifyDocxXmlTables(gridXml);
+  assert.equal(grid.tableHint, true, "4-col grid is content table");
+  assert.equal(grid.tableCount, 1);
+
+  const htmlLayout = classifyHtmlTables(
+    `<table><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>`
+  );
+  assert.equal(htmlLayout.tableHint, false);
+
+  const htmlGrid = classifyHtmlTables(
+    `<table><tr><th>a</th><th>b</th><th>c</th></tr><tr><td>1</td><td>2</td><td>3</td></tr><tr><td>4</td><td>5</td><td>6</td></tr></table>`
+  );
+  assert.equal(htmlGrid.tableHint, true);
+  console.log("✓ DOCX/HTML table classify layout vs grid OK");
+}
+
 console.log("Tous les tests OK");
