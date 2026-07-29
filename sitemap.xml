@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://www.testmoncv.fr/</loc>
+    <loc>https://lyes8-star.github.io/ATS/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://www.testmoncv.fr/mentions-legales/</loc>
+    <loc>https://lyes8-star.github.io/ATS/mentions-legales/</loc>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://www.testmoncv.fr/confidentialite/</loc>
+    <loc>https://lyes8-star.github.io/ATS/confidentialite/</loc>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
-    <loc>https://www.testmoncv.fr/cookies/</loc>
+    <loc>https://lyes8-star.github.io/ATS/cookies/</loc>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
-    <loc>https://www.testmoncv.fr/accessibilite/</loc>
+    <loc>https://lyes8-star.github.io/ATS/accessibilite/</loc>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>

@@ -3,4 +3,4 @@ Allow: /
 Disallow: /admin
 Disallow: /.well-known/
 
-Sitemap: https://www.testmoncv.fr/sitemap.xml
+Sitemap: https://lyes8-star.github.io/ATS/sitemap.xml

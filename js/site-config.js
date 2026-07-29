@@ -54,7 +54,7 @@
               country: "France",
             },
             publisher: { name: "Crevia", url: "https://crevia.fr" },
-            url: "https://www.testmoncv.fr/",
+            url: "https://lyes8-star.github.io/ATS/",
             gaId: "",
             adsId: "",
             themeColor: "#2c4a3e",

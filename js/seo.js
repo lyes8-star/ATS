@@ -13,7 +13,7 @@ window.ATSSeo = (function () {
   }
 
   function build(site) {
-    const url = (site.url || "https://www.testmoncv.fr/").replace(/\/?$/, "/");
+    const url = (site.url || "https://lyes8-star.github.io/ATS/").replace(/\/?$/, "/");
     const name = site.name || "Test Mon CV";
     return {
       "@context": "https://schema.org",
