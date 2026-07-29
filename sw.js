@@ -1,5 +1,5 @@
 /* Service worker Test Mon CV — cache app shell (chemins relatifs) */
-const CACHE = "tmc-shell-v7";
+const CACHE = "tmc-shell-v8";
 
 function shellUrls() {
   const base = self.registration.scope;

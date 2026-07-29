@@ -130,56 +130,130 @@ function actionableAnnotations(session) {
   });
 }
 
+/**
+ * Squelette ATS ordonné : Coordonnées → Profil → Expérience → Formation → Compétences → Langues → Autres.
+ * Champs non lus → [À compléter : …] / [To complete: …].
+ */
 function formatSourceCv(parsed, rawText, L) {
   if (!parsed) {
     const raw = String(rawText || "").trim();
-    return raw ? raw.slice(0, 12000) : L.sourceEmpty;
+    if (!raw) return L.sourceEmpty;
+    return [
+      `## ${L.secContact}`,
+      L.todoName,
+      L.todoEmail,
+      L.todoPhone,
+      L.todoLinkedin,
+      L.todoLocation,
+      "",
+      `## ${L.secSummary}`,
+      L.todoSummary,
+      "",
+      `## ${L.secExperience}`,
+      L.todoSectionExp,
+      "",
+      `## ${L.secEducation}`,
+      L.todoSectionEdu,
+      "",
+      `## ${L.secSkills}`,
+      L.todoSkills,
+      "",
+      L.rawFallback,
+      raw.slice(0, 10000),
+    ].join("\n");
   }
 
   const lines = [];
   const c = parsed.contact || {};
-  const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || c.name || "";
-  if (name) lines.push(`# ${name}`);
-  if (parsed.headline) lines.push(parsed.headline);
+  const name =
+    [c.firstName, c.lastName].filter(Boolean).join(" ") || clean(c.name) || "";
 
-  const contactBits = [c.email, c.phone, c.linkedin, c.location || c.address].filter(Boolean);
-  if (contactBits.length) lines.push(contactBits.join(" · "));
+  lines.push(`## ${L.secContact}`);
+  lines.push(name ? `# ${name}` : L.todoName);
+  lines.push(c.email ? `${L.fieldEmail}: ${c.email}` : L.todoEmail);
+  lines.push(c.phone ? `${L.fieldPhone}: ${c.phone}` : L.todoPhone);
+  lines.push(c.linkedin ? `${L.fieldLinkedin}: ${c.linkedin}` : L.todoLinkedin);
+  const loc = c.location || c.address;
+  lines.push(loc ? `${L.fieldLocation}: ${loc}` : L.todoLocation);
   lines.push("");
 
-  // Prefer structured roles when available
-  if (parsed.roles?.length) {
-    lines.push(`## ${L.secExperience}`);
-    for (const role of parsed.roles) {
-      const head = [role.title, role.company].filter(Boolean).join(" — ");
-      const years = formatYears(role);
-      lines.push(`### ${head}${years ? ` (${years})` : ""}`);
-      for (const b of role.bullets || []) {
-        lines.push(`- ${b}`);
+  lines.push(`## ${L.secSummary}`);
+  if (parsed.headline) {
+    lines.push(parsed.headline);
+  } else if (parsed.sections?.summary?.length) {
+    for (const line of parsed.sections.summary) lines.push(line);
+  } else {
+    lines.push(L.todoSummary);
+  }
+  lines.push("");
+
+  // Experience — reverse chronological
+  lines.push(`## ${L.secExperience}`);
+  const roles = sortRolesAntiChrono(parsed.roles || []);
+  if (!roles.length) {
+    lines.push(L.todoSectionExp);
+  } else {
+    for (const role of roles) {
+      lines.push(formatRoleHeading(role, L));
+      const bullets = role.bullets || [];
+      if (bullets.length) {
+        for (const b of bullets) lines.push(`- ${b}`);
+      } else {
+        lines.push(`- ${L.todoBullets}`);
       }
       lines.push("");
     }
   }
+  if (!lines[lines.length - 1]) {
+    /* already blank */
+  } else {
+    lines.push("");
+  }
 
-  if (parsed.educationRoles?.length) {
-    lines.push(`## ${L.secEducation}`);
-    for (const role of parsed.educationRoles) {
-      const head = [role.title, role.company].filter(Boolean).join(" — ");
-      const years = formatYears(role);
-      lines.push(`### ${head}${years ? ` (${years})` : ""}`);
+  // Education — reverse chronological
+  lines.push(`## ${L.secEducation}`);
+  const eduRoles = sortRolesAntiChrono(parsed.educationRoles || []);
+  if (!eduRoles.length) {
+    // Fallback: raw education section lines if roles not parsed
+    const eduLines = parsed.sections?.education || [];
+    if (eduLines.length) {
+      for (const line of eduLines) lines.push(line);
+    } else {
+      lines.push(L.todoSectionEdu);
+    }
+  } else {
+    for (const role of eduRoles) {
+      lines.push(formatRoleHeading(role, L));
       for (const b of role.bullets || []) lines.push(`- ${b}`);
       lines.push("");
     }
   }
+  if (lines[lines.length - 1] !== "") lines.push("");
 
+  // Skills
+  lines.push(`## ${L.secSkills}`);
   if (parsed.skills?.length) {
-    lines.push(`## ${L.secSkills}`);
     lines.push(parsed.skills.join(" · "));
-    lines.push("");
+  } else if (parsed.sections?.skills?.length) {
+    for (const line of parsed.sections.skills) lines.push(line);
+  } else {
+    lines.push(L.todoSkills);
   }
+  lines.push("");
 
-  // Remaining section lines not already covered
+  // Languages
+  lines.push(`## ${L.secLanguages}`);
+  const langLines = parsed.sections?.languages || [];
+  if (langLines.length) {
+    for (const line of langLines) lines.push(line);
+  } else {
+    lines.push(L.todoLanguages);
+  }
+  lines.push("");
+
+  // Remaining sections (interests, other…) — keep after standard ATS blocks
   const order = parsed.sectionOrder || Object.keys(parsed.sections || {});
-  const skip = new Set(["header", "experience", "education", "skills"]);
+  const skip = new Set(["header", "experience", "education", "skills", "summary", "languages"]);
   for (const key of order) {
     if (skip.has(key)) continue;
     const secLines = parsed.sections?.[key];
@@ -189,20 +263,70 @@ function formatSourceCv(parsed, rawText, L) {
     lines.push("");
   }
 
-  // If structure was thin, append raw extract (truncated)
   const body = lines.join("\n").trim();
-  if (body.length < 120 && rawText) {
+  // Append raw extract when structure is thin (helps the LLM recover missed facts)
+  const structuredLen = body.replace(/\[(À compléter|To complete)[^\]]*\]/gi, "").trim().length;
+  if (structuredLen < 180 && rawText) {
     return `${body}\n\n${L.rawFallback}\n${String(rawText).trim().slice(0, 10000)}`;
   }
   return body || String(rawText || "").trim().slice(0, 12000) || L.sourceEmpty;
 }
 
-function formatYears(role) {
-  if (role?.years && (role.years.from || role.years.to)) {
+function formatRoleHeading(role, L) {
+  const title = clean(role.title) || L.todoJobTitle;
+  const company = clean(role.company) || L.todoCompany;
+  const years = formatYears(role, L);
+  const datePart = years || L.todoDates;
+  return `### ${title} — ${company} (${datePart})`;
+}
+
+/**
+ * Dates depuis startYear/endYear/ongoing (parse-cv), avec replis.
+ * @param {object} role
+ * @param {object} [L]
+ */
+function formatYears(role, L = null) {
+  if (!role) return "";
+  const ongoingLabel = L?.ongoing || "aujourd’hui";
+
+  if (role.startYear || role.endYear || role.ongoing) {
+    const from = role.startYear || "?";
+    const to = role.ongoing ? ongoingLabel : role.endYear || "?";
+    if (from === "?" && to === "?") return "";
+    return `${from} – ${to}`;
+  }
+
+  if (role.years && (role.years.from || role.years.to)) {
     return [role.years.from, role.years.to].filter(Boolean).join(" – ");
   }
-  if (role?.dateRaw) return String(role.dateRaw);
+  if (role.dateRaw) return String(role.dateRaw);
+
+  // Last resort: try to pull a year range from raw line
+  const raw = String(role.raw || "");
+  const m = raw.match(/\b(19|20)\d{2}\b.*\b((?:19|20)\d{2}|aujourd['’]?hui|present|en\s+cours|now)\b/i);
+  if (m) return m[0].replace(/\s+/g, " ").trim();
   return "";
+}
+
+/**
+ * Anti-chronologique : plus récent en tête ; ongoing d’abord ; sans date en fin.
+ * @param {object[]} roles
+ */
+function sortRolesAntiChrono(roles) {
+  const scored = (roles || []).map((r, i) => ({
+    r,
+    i,
+    end: r.ongoing ? 9999 : Number(r.endYear) || 0,
+    start: Number(r.startYear) || 0,
+    hasDate: !!(r.startYear || r.endYear || r.ongoing),
+  }));
+  scored.sort((a, b) => {
+    if (a.hasDate !== b.hasDate) return a.hasDate ? -1 : 1;
+    if (b.end !== a.end) return b.end - a.end;
+    if (b.start !== a.start) return b.start - a.start;
+    return a.i - b.i;
+  });
+  return scored.map((x) => x.r);
 }
 
 function sectionTitle(key, L) {
@@ -238,23 +362,38 @@ function labels(lang, opts = {}) {
         ]
       : [];
     const finalBody = hasJd
-      ? "Rewrite the entire CV tailored to the job offer above. Apply every correction. Integrate missing must-haves only when truthful. Preserve true facts only. Prefer concrete tools/methods over soft-skill stuffing. Return only the finished Markdown CV."
-      : "Rewrite the entire CV applying every correction above. Preserve true facts only. Prefer concrete tools/methods over soft-skill stuffing. Return only the finished Markdown CV.";
+      ? [
+          "Rewrite the entire CV tailored to the job offer above.",
+          "Output EXACTLY this Markdown section order: Contact → Summary → Experience → Education → Skills → Languages → (optional Other).",
+          "Experience and Education must be strictly reverse-chronological WITH start–end dates on every role.",
+          "Apply every correction. Integrate missing must-haves only when truthful.",
+          "NEVER invent facts. If a field was not read in the source CV, keep it as [To complete: …] in the final CV.",
+          "Prefer concrete tools/methods over soft-skill stuffing. Return ONLY the finished Markdown CV.",
+        ].join(" ")
+      : [
+          "Rewrite the entire CV applying every correction above.",
+          "Output EXACTLY this Markdown section order: Contact → Summary → Experience → Education → Skills → Languages → (optional Other).",
+          "Experience and Education must be strictly reverse-chronological WITH start–end dates on every role.",
+          "NEVER invent facts. If a field was not read in the source CV, keep it as [To complete: …] in the final CV.",
+          "Prefer concrete tools/methods over soft-skill stuffing. Return ONLY the finished Markdown CV.",
+        ].join(" ");
     return {
       role,
       constraintsTitle: "Output constraints",
       constraintsBody: [
         "- Single column only; selectable plain text (no tables, sidebars, multi-column layouts, icons, skill bars, or Canva-style banners).",
-        "- Standard headings: Contact, Summary (optional), Experience, Education, Skills (and Languages if relevant).",
-        "- Reverse-chronological experience; each bullet starts with a strong action verb and includes a real metric when possible.",
-        "- Keep only true facts from my source CV — do not invent jobs, degrees, employers, or numbers.",
+        "- EXACT section order in the output CV: Contact → Summary (optional but keep heading) → Experience → Education → Skills → Languages → other only if present.",
+        "- Experience AND Education: reverse-chronological (newest first). Every role MUST show dates as (YYYY – YYYY) or (YYYY – Present).",
+        "- Each experience bullet starts with a strong action verb and includes a real metric when possible.",
+        "- Keep only true facts from my source CV — do not invent jobs, degrees, employers, dates, or numbers.",
+        "- If any field is missing / marked [To complete: …] in the source extract, leave the same [To complete: …] placeholder in the final CV — do not drop the section and do not guess.",
         ...constraintsExtra,
         "- Ready to paste into Word / Google Docs, then export as a text PDF.",
         "- Output ONLY the final CV in clean Markdown (headings + bullets). No preamble, no commentary.",
       ].join("\n"),
-      sourceTitle: "Source CV (extracted)",
+      sourceTitle: "Source CV (extracted — ATS skeleton)",
       sourceEmpty: "(No structured extract — use corrections and checklist below.)",
-      rawFallback: "— Raw extract —",
+      rawFallback: "— Raw extract (recover any missed facts; still do not invent) —",
       correctionsTitle: "Corrections from Test Mon CV analysis (apply all)",
       correctionsEmpty: "(No pending corrections — still optimize for ATS clarity and metrics.)",
       passage: "Passage",
@@ -271,6 +410,7 @@ function labels(lang, opts = {}) {
       scoreLine: "Score {{total}}/100 — {{label}}",
       finalTitle: "Final instruction",
       finalBody,
+      secContact: "Contact",
       secExperience: "Experience",
       secEducation: "Education",
       secSkills: "Skills",
@@ -278,6 +418,25 @@ function labels(lang, opts = {}) {
       secLanguages: "Languages",
       secInterests: "Interests",
       secOther: "Other",
+      fieldEmail: "Email",
+      fieldPhone: "Phone",
+      fieldLinkedin: "LinkedIn",
+      fieldLocation: "Location",
+      ongoing: "Present",
+      todoName: "[To complete: full name]",
+      todoEmail: "[To complete: email]",
+      todoPhone: "[To complete: phone]",
+      todoLinkedin: "[To complete: LinkedIn URL]",
+      todoLocation: "[To complete: city / location]",
+      todoSummary: "[To complete: short professional summary]",
+      todoSectionExp: "[To complete: Experience section — title, company, dates, bullets]",
+      todoSectionEdu: "[To complete: Education section — degree, school, dates]",
+      todoSkills: "[To complete: skills / tools]",
+      todoLanguages: "[To complete: languages]",
+      todoJobTitle: "[To complete: job title]",
+      todoCompany: "[To complete: company]",
+      todoDates: "[To complete: dates YYYY – YYYY]",
+      todoBullets: "[To complete: achievement bullets]",
       axisReadability: "ATS readability",
       axisStructure: "Structure",
       axisContent: "Content quality",
@@ -294,23 +453,38 @@ function labels(lang, opts = {}) {
       ]
     : [];
   const finalBody = hasJd
-    ? "Réécris le CV intégralement en l’adaptant à l’offre ci-dessus. Applique toutes les corrections. Intègre les must absents uniquement s’ils sont vrais. Conserve uniquement les faits vrais. Privilégie outils/méthodes concrets plutôt que le stuffing soft skills. Renvoie uniquement le CV Markdown final."
-    : "Réécris le CV intégralement en appliquant toutes les corrections. Conserve uniquement les faits vrais. Privilégie outils/méthodes concrets plutôt que le stuffing soft skills. Renvoie uniquement le CV Markdown final.";
+    ? [
+        "Réécris le CV intégralement en l’adaptant à l’offre ci-dessus.",
+        "Respecte EXACTEMENT cet ordre Markdown : Coordonnées → Profil → Expérience → Formation → Compétences → Langues → (Autres si pertinent).",
+        "Expérience et Formation doivent être strictement anti-chronologiques AVEC dates début–fin sur chaque entrée.",
+        "Applique toutes les corrections. Intègre les must absents uniquement s’ils sont vrais.",
+        "N’INVENTE JAMAIS. Si une info n’a pas été lue dans le CV source, laisse [À compléter : …] dans le CV final.",
+        "Privilégie outils/méthodes concrets. Renvoie UNIQUEMENT le CV Markdown final.",
+      ].join(" ")
+    : [
+        "Réécris le CV intégralement en appliquant toutes les corrections.",
+        "Respecte EXACTEMENT cet ordre Markdown : Coordonnées → Profil → Expérience → Formation → Compétences → Langues → (Autres si pertinent).",
+        "Expérience et Formation doivent être strictement anti-chronologiques AVEC dates début–fin sur chaque entrée.",
+        "N’INVENTE JAMAIS. Si une info n’a pas été lue dans le CV source, laisse [À compléter : …] dans le CV final.",
+        "Privilégie outils/méthodes concrets. Renvoie UNIQUEMENT le CV Markdown final.",
+      ].join(" ");
   return {
     role,
     constraintsTitle: "Contraintes de sortie",
     constraintsBody: [
       "- Une seule colonne ; texte sélectionnable (pas de tableaux, colonnes, sidebar, icônes, barres de compétences, ni bandeaux type Canva).",
-      "- Titres standards : Coordonnées, Profil (optionnel), Expérience, Formation, Compétences (et Langues si pertinent).",
-      "- Expériences en anti-chronologique ; chaque puce commence par un verbe d’action fort et inclut un chiffre réel quand c’est possible.",
-      "- Ne garde que des faits vrais issus de mon CV source — n’invente ni poste, ni diplôme, ni employeur, ni métrique.",
+      "- Ordre EXACT des sections du CV final : Coordonnées → Profil (conserver le titre même si court) → Expérience → Formation → Compétences → Langues → autres seulement si présents.",
+      "- Expérience ET Formation : anti-chronologique (plus récent en premier). Chaque entrée DOIT afficher des dates (AAAA – AAAA) ou (AAAA – aujourd’hui).",
+      "- Chaque puce d’expérience commence par un verbe d’action fort et inclut un chiffre réel quand c’est possible.",
+      "- Ne garde que des faits vrais issus de mon CV source — n’invente ni poste, ni diplôme, ni employeur, ni dates, ni métrique.",
+      "- Si un champ est manquant / marqué [À compléter : …] dans l’extrait source, conserve le même placeholder [À compléter : …] dans le CV final — ne supprime pas la section et ne devine pas.",
       ...constraintsExtra,
       "- Prêt à coller dans Word / Google Docs, puis export PDF texte.",
       "- Sortie UNIQUEMENT le CV final en Markdown clair (titres + puces). Aucune intro, aucun commentaire.",
     ].join("\n"),
-    sourceTitle: "CV source (extrait)",
+    sourceTitle: "CV source (extrait — squelette ATS)",
     sourceEmpty: "(Pas d’extrait structuré — utilise les corrections et la checklist ci-dessous.)",
-    rawFallback: "— Extrait brut —",
+    rawFallback: "— Extrait brut (récupère les faits manqués ; n’invente toujours rien) —",
     correctionsTitle: "Corrections issues de l’analyse Test Mon CV (à appliquer toutes)",
     correctionsEmpty: "(Aucune correction en attente — optimise quand même clarté ATS et métriques.)",
     passage: "Passage",
@@ -327,6 +501,7 @@ function labels(lang, opts = {}) {
     scoreLine: "Score {{total}}/100 — {{label}}",
     finalTitle: "Consigne finale",
     finalBody,
+    secContact: "Coordonnées",
     secExperience: "Expérience",
     secEducation: "Formation",
     secSkills: "Compétences",
@@ -334,6 +509,25 @@ function labels(lang, opts = {}) {
     secLanguages: "Langues",
     secInterests: "Centres d’intérêt",
     secOther: "Autre",
+    fieldEmail: "E-mail",
+    fieldPhone: "Téléphone",
+    fieldLinkedin: "LinkedIn",
+    fieldLocation: "Localisation",
+    ongoing: "aujourd’hui",
+    todoName: "[À compléter : prénom et nom]",
+    todoEmail: "[À compléter : e-mail]",
+    todoPhone: "[À compléter : téléphone]",
+    todoLinkedin: "[À compléter : URL LinkedIn]",
+    todoLocation: "[À compléter : ville / localisation]",
+    todoSummary: "[À compléter : profil professionnel court]",
+    todoSectionExp: "[À compléter : section Expérience — intitulé, entreprise, dates, puces]",
+    todoSectionEdu: "[À compléter : section Formation — diplôme, école, dates]",
+    todoSkills: "[À compléter : compétences / outils]",
+    todoLanguages: "[À compléter : langues]",
+    todoJobTitle: "[À compléter : intitulé de poste]",
+    todoCompany: "[À compléter : entreprise]",
+    todoDates: "[À compléter : dates AAAA – AAAA]",
+    todoBullets: "[À compléter : puces de réalisations]",
     axisReadability: "Lisibilité ATS",
     axisStructure: "Structure",
     axisContent: "Qualité du contenu",
@@ -370,3 +564,6 @@ function clean(s) {
 function oneLine(s) {
   return clean(s).slice(0, 500);
 }
+
+/** @internal exported for unit tests */
+export { formatYears, sortRolesAntiChrono, formatSourceCv };
