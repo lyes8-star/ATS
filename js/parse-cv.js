@@ -596,9 +596,30 @@ function parseRoles(sectionLines, section = "experience") {
 
   const applyPendingToDates = (dates, raw) => {
     const joined = pendingMeta.join(" — ");
+    // Pending mission lines → attach as bullets to previous role, don't become the new title
+    if (looksLikeDutyLine(joined) && !looksLikeRoleHeader(joined)) {
+      const last = roles[roles.length - 1];
+      if (last) {
+        for (const p of pendingMeta) {
+          if (p?.trim()) last.bullets.push(p.trim());
+        }
+      }
+      pendingMeta = [];
+      let cleaned = String(raw || "").replace(DATE_RANGE_RE, "").replace(/\s+/g, " ").trim();
+      cleaned = cleanAfterDateStrip(cleaned);
+      const { title, company } = splitTitleCompany(cleaned);
+      startRole(title, company, dates, raw);
+      return;
+    }
     const { title, company } = splitTitleCompany(cleanAfterDateStrip(joined || raw || ""));
     startRole(title, company, dates, [joined, raw].filter(Boolean).join(" | "));
     pendingMeta = [];
+  };
+
+  const absorbAsBullet = (line) => {
+    if (!current) return false;
+    current.bullets.push(String(line).replace(/^[-•●▪–—*]\s+/, "").replace(/^\d+[.)]\s+/, "").trim());
+    return true;
   };
 
   for (const line of sectionLines) {
@@ -610,6 +631,24 @@ function parseRoles(sectionLines, section = "experience") {
       cleaned = cleanAfterDateStrip(cleaned);
       if (cleaned.length > 2 && !isDateOnlyLine(line)) {
         // Title/company + dates on the same line
+        if (pendingMeta.length) {
+          // Attach stray pending duties to previous role before opening the new dated one
+          const pendingJoin = pendingMeta.join(" — ");
+          if (looksLikeDutyLine(pendingJoin) || !looksLikeRoleHeader(pendingJoin)) {
+            const last = roles[roles.length - 1] || current;
+            if (last && last !== current) {
+              for (const p of pendingMeta) {
+                if (p?.trim()) last.bullets.push(p.trim());
+              }
+              pendingMeta = [];
+            } else if (current) {
+              for (const p of pendingMeta) {
+                if (p?.trim()) current.bullets.push(p.trim());
+              }
+              pendingMeta = [];
+            }
+          }
+        }
         const { title, company } = splitTitleCompany(cleaned);
         startRole(title, company, dates, line);
       } else if (pendingMeta.length) {
@@ -628,9 +667,17 @@ function parseRoles(sectionLines, section = "experience") {
 
     if (isBullet) {
       if (pendingMeta.length && !current) {
-        const { title, company } = splitTitleCompany(pendingMeta.join(" — "));
-        startRole(title, company, null, pendingMeta.join(" | "));
-        pendingMeta = [];
+        const joined = pendingMeta.join(" — ");
+        if (looksLikeDutyLine(joined) && roles.length) {
+          for (const p of pendingMeta) {
+            if (p?.trim()) roles[roles.length - 1].bullets.push(p.trim());
+          }
+          pendingMeta = [];
+        } else {
+          const { title, company } = splitTitleCompany(joined);
+          startRole(title, company, null, pendingMeta.join(" | "));
+          pendingMeta = [];
+        }
       }
       if (!current) {
         current = {
@@ -667,55 +714,130 @@ function parseRoles(sectionLines, section = "experience") {
         current.company = line;
         continue;
       }
-      // Soft bullets: short prose under a dated role (no marker) → bullet if role already has title
+
+      // Soft bullets: prose under a dated role (no marker) — no hard cap at 6
       if (
         current &&
         current.startYear &&
         current.title &&
-        line.length >= 20 &&
-        line.length < 160 &&
-        !isSectionHeader({ text: line }) &&
-        !/^[A-ZÀ-Ü][a-zà-ü]+(\s+[A-ZÀ-Ü][a-zà-ü'-]+){1,3}$/.test(line)
+        line.length >= 12 &&
+        line.length < 180 &&
+        !isSectionHeader({ text: line })
       ) {
-        // Likely achievement / duty line without bullet marker
-        if (current.bullets.length < 6 && !/—|–/.test(line.split(/\s+/).slice(0, 4).join(" "))) {
-          const looksLikeNewRole =
-            JOB_TITLE_REJECT.test(line) && line.length < 70 && !/[.!?]$/.test(line);
-          if (!looksLikeNewRole) {
-            current.bullets.push(line.replace(/^[-•●▪–—*]\s+/, "").trim());
-            continue;
-          }
+        if (looksLikeDutyLine(line) || !looksLikeRoleHeader(line)) {
+          absorbAsBullet(line);
+          continue;
         }
       }
-      // Buffer as potential role header until a date line appears
-      if (!current || (current.startYear && current.bullets.length > 0)) {
-        if (current?.startYear && current.bullets.length > 0) {
-          // New role likely starting
+
+      // Strong signal only to open a new undated role header
+      if (!current || (current.startYear && (current.bullets.length > 0 || current.company))) {
+        if (current?.startYear && (current.bullets.length > 0 || current.company)) {
+          if (looksLikeDutyLine(line) || !looksLikeRoleHeader(line)) {
+            absorbAsBullet(line);
+            continue;
+          }
+          // Credible new role header → buffer until dates
           pendingMeta = [line];
           flush();
           pendingMeta = [line];
           current = null;
+        } else if (!current) {
+          if (looksLikeDutyLine(line) && roles.length) {
+            roles[roles.length - 1].bullets.push(line.trim());
+          } else {
+            pendingMeta.push(line);
+            if (pendingMeta.length > 3) pendingMeta = pendingMeta.slice(-2);
+          }
         } else {
           pendingMeta.push(line);
           if (pendingMeta.length > 3) pendingMeta = pendingMeta.slice(-2);
         }
       } else if (current && !current.title) {
-        current.title = line;
+        if (looksLikeDutyLine(line)) {
+          absorbAsBullet(line);
+        } else {
+          current.title = line;
+        }
       } else if (current && !current.company) {
-        current.company = line;
+        if (looksLikeDutyLine(line)) {
+          absorbAsBullet(line);
+        } else {
+          current.company = line;
+        }
       } else {
-        pendingMeta.push(line);
-        if (pendingMeta.length > 3) pendingMeta = pendingMeta.slice(-2);
+        if (current?.startYear && (looksLikeDutyLine(line) || !looksLikeRoleHeader(line))) {
+          absorbAsBullet(line);
+        } else {
+          pendingMeta.push(line);
+          if (pendingMeta.length > 3) pendingMeta = pendingMeta.slice(-2);
+        }
       }
     }
   }
 
   if (pendingMeta.length && !current) {
-    const { title, company } = splitTitleCompany(pendingMeta.join(" — "));
-    startRole(title, company, null, pendingMeta.join(" | "));
+    const joined = pendingMeta.join(" — ");
+    if (looksLikeDutyLine(joined) || !looksLikeRoleHeader(joined)) {
+      // Attach leftover mission lines to last dated role — never invent a phantom poste
+      const last = roles[roles.length - 1];
+      if (last) {
+        for (const p of pendingMeta) {
+          if (p?.trim()) last.bullets.push(p.trim());
+        }
+      }
+      pendingMeta = [];
+    } else {
+      const { title, company } = splitTitleCompany(joined);
+      startRole(title, company, null, pendingMeta.join(" | "));
+    }
   }
   flush();
   return roles;
+}
+
+/**
+ * Mission / duty / tools line — not a job header.
+ * @param {string} line
+ */
+function looksLikeDutyLine(line) {
+  const s = String(line || "").trim();
+  if (!s || s.length < 8) return false;
+  // Explicit tool / reporting lists
+  if (/[;|]/.test(s) && s.length >= 20) return true;
+  if (/\b(ATS|SIRH|Excel|PowerPoint|Word|CRM|ERP|KPI|reporting|reportings?|pipeline|sourcing|onboarding)\b/i.test(s) && s.length >= 18) {
+    if (!/—|–/.test(s) || s.split(/—|–/).length > 2) return true;
+  }
+  // Long prose without title—company separator
+  if (s.length >= 45 && !/—|–/.test(s) && /[a-záàâäéèêëíìîïóòôöúùûüç]{4,}/i.test(s)) {
+    if (!/^[A-ZÀ-Ü][^a-z]{0,3}[A-Za-zÀ-ü/ ]{2,40}\s+[—–-]\s+/.test(s)) return true;
+  }
+  // Ends with period / colon-led description
+  if (/[.!?]$/.test(s) && s.length >= 30) return true;
+  if (/^[A-ZÀ-Ü][^:]{5,60}\s*:\s+\S/.test(s) && s.length >= 35) return true;
+  return false;
+}
+
+/**
+ * Credible undated role header (title — company) before we promote it to a role.
+ * @param {string} line
+ */
+function looksLikeRoleHeader(line) {
+  const s = String(line || "").trim();
+  if (!s || s.length < 5 || s.length > 90) return false;
+  if (looksLikeDutyLine(s)) return false;
+  if (/[;|]/.test(s)) return false;
+  // Title — Company
+  if (/—|–/.test(s) || /\s[-—–]\s/.test(s)) {
+    const parts = s.split(/\s*[—–-]\s*/);
+    if (parts.length >= 2 && parts[0].length >= 3 && parts[1].length >= 2) return true;
+  }
+  // Short job-title-like line (known title tokens, no prose ending)
+  if (JOB_TITLE_REJECT.test(s) && s.length < 70 && !/[.!?]$/.test(s) && !/;/.test(s)) {
+    return true;
+  }
+  // Do NOT treat arbitrary capitalized prose as a role header
+  return false;
 }
 
 function extractSkillsList(lines) {

@@ -2080,4 +2080,145 @@ JavaScript, React, SQL
   });
 }
 
+// —— Faux poste (mission → dates) + sidebar ≠ tableau ——
+{
+  const lynaLike = `
+LYNA EXEMPLE
+HR Business Partner
+lyna@mail.com | 06 12 34 56 78
+Paris
+
+EXPÉRIENCE PROFESSIONNELLE
+2017 - 2022 : HR Business Partner / Talent Acquisition Officer
+Ingerop, 92500 Rueil-Malmaison
+Recrutement et sélection des profils cadres et non cadres
+Sélection, entretiens et présentation client aux managers
+Pipeline ATS, placements et reporting mensuel
+Suivi des indicateurs et tableaux de bord RH
+Relation écoles et cabinets partenaires
+Intégration et onboarding des nouveaux collaborateurs
+ATS/SIRH et Excel ; reportings volumes, demandes et indicateurs de suivi.
+Pilotage des process RH et relation managers
+
+2015 - 2017 : Consultante recrutement
+Cabinet XYZ, Paris
+Sourcing et approche directe
+
+FORMATION
+Master RH — Université (2013 - 2015)
+COMPÉTENCES
+ATS, SIRH, Excel
+LANGUES
+Français, Anglais
+`;
+  const pLyna = parseCv(lynaLike);
+  assert.equal(pLyna.roles.length, 2, "Lyna-like: 2 real roles only");
+  assert.ok(
+    pLyna.roles.every((r) => r.startYear),
+    "Lyna-like: both roles dated"
+  );
+  assert.ok(
+    pLyna.roles[0].bullets.some((b) => /ATS\/SIRH/i.test(b)),
+    "ATS/SIRH mission absorbed as bullet"
+  );
+  assert.ok(
+    !pLyna.roles.some((r) => /ATS\/SIRH/i.test(r.title || "")),
+    "ATS/SIRH is not a role title"
+  );
+  const rLyna = analyzeCv(lynaLike, { pages: 1, fileName: "lyna.pdf" });
+  assert.ok(
+    !rLyna.annotations.some(
+      (a) => a.kind === "missing_dates" && /ATS\/SIRH/i.test(a.title || a.quote || "")
+    ),
+    "no missing_dates on ATS/SIRH duty line"
+  );
+
+  // Explicit bullets then unmarked tools line mid-experience
+  const withBullets = `
+Pat Soft
+pat@mail.com | 01 23 45 67 89
+EXPÉRIENCE
+2018 - 2021 : Manager RH — Acme
+- Mission une
+- Mission deux
+- Mission trois
+- Mission quatre
+- Mission cinq
+- Mission six
+ATS/SIRH et Excel ; reportings volumes, demandes et indicateurs.
+- Mission sept
+FORMATION
+Master (2016)
+COMPÉTENCES
+Excel
+`;
+  const pB = parseCv(withBullets);
+  assert.equal(pB.roles.length, 1, "tools line after 6 bullets stays in same role");
+  assert.ok(pB.roles[0].bullets.some((b) => /ATS\/SIRH/i.test(b)));
+
+  // True undated roles still annotated
+  const noDatesCv2 = `
+Marie Dupont
+Développeuse Full Stack
+marie@x.com | 06 12 34 56 78
+Paris
+EXPÉRIENCE PROFESSIONNELLE
+Développeuse Full Stack — TechCorp
+- Développé une plateforme SaaS
+Lead Frontend — StartupXYZ
+- Créé le design system
+FORMATION
+Master Informatique
+COMPÉTENCES
+React, Node, Agile, management
+` + " texte extractible supplémentaire. ".repeat(10);
+  const rNoDates = analyzeCv(noDatesCv2, { pages: 1 });
+  assert.ok(
+    rNoDates.annotations.some((a) => a.kind === "missing_dates"),
+    "real undated roles still get missing_dates"
+  );
+
+  // Sidebar + two prose blocks in body → not a table
+  const { analyzePdfLayout, detectStrongTableGrid, isBimodalColumnLayout } = await import(
+    "./extract.js"
+  );
+  const sidebarProse = [];
+  for (let i = 0; i < 10; i++) {
+    const y = 0.2 + i * 0.06;
+    sidebarProse.push({
+      str: `Formation item ${i}`,
+      page: 1,
+      textStart: i * 80,
+      textEnd: i * 80 + 16,
+      rect: { x: 0.06, y, w: 0.22, h: 0.02 },
+    });
+    sidebarProse.push({
+      str: `Sélection, entretiens et présentation client bloc ${i}`,
+      page: 1,
+      textStart: i * 80 + 20,
+      textEnd: i * 80 + 55,
+      rect: { x: 0.38, y, w: 0.28, h: 0.03 },
+    });
+    sidebarProse.push({
+      str: `Pipeline ATS, placements et reporting mensuel ${i}`,
+      page: 1,
+      textStart: i * 80 + 56,
+      textEnd: i * 80 + 90,
+      rect: { x: 0.68, y, w: 0.26, h: 0.03 },
+    });
+  }
+  assert.equal(isBimodalColumnLayout(sidebarProse), true, "sidebar+prose is bimodal");
+  assert.equal(detectStrongTableGrid(sidebarProse), false, "prose columns not strong grid");
+  const sideLayout = analyzePdfLayout(
+    [{ page: 1, width: 600, height: 800, items: sidebarProse }],
+    { pdfCreator: "Microsoft Word", pdfProducer: "Word" }
+  );
+  assert.equal(sideLayout.tableHint, false, "sidebar CV must not set tableHint");
+
+  console.log("✓ faux poste / duty bullets + sidebar no table OK", {
+    roles: pLyna.roles.length,
+    bullets0: pLyna.roles[0].bullets.length,
+  });
+}
+
 console.log("Tous les tests OK");
