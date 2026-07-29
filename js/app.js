@@ -575,6 +575,16 @@ els.fileInput.addEventListener("change", () => {
 els.analyzeBtn.addEventListener("click", runAnalysis);
 els.btnNewTest.addEventListener("click", resetToUpload);
 
+// Logo (et texte de marque) = retour à l'accueil (vue upload), jamais une navigation externe.
+document.querySelectorAll("a.logo").forEach((a) => {
+  a.addEventListener("click", (e) => {
+    // L'UX attendue est un "reset" de l'application (SPA), pas un chargement d'un autre site.
+    e.preventDefault();
+    resetToUpload();
+    document.getElementById("top")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+});
+
 if (els.proConsent) {
   els.proConsent.checked = hasProConsent();
   els.proConsent.addEventListener("change", () => {

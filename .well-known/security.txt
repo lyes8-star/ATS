@@ -1,4 +1,4 @@
 Contact: mailto:dpo@testmoncv.fr
 Preferred-Languages: fr, en
-Canonical: https://www.testmoncv.fr/.well-known/security.txt
+Canonical: https://lyes8-star.github.io/ATS/.well-known/security.txt
 Expires: 2027-07-27T00:00:00.000Z
