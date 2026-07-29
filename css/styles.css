@@ -2586,6 +2586,22 @@ html.protect-lock body.page-legal .legal-article { -webkit-user-select: text; us
   color: #f5e6c8;
 }
 
+.ann-callout-example-label {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(245, 230, 200, 0.7);
+}
+
+.ann-callout-suggestion.is-example {
+  border-style: dashed;
+  font-weight: 500;
+  opacity: 0.95;
+}
+
 .ann-callout-actions {
   display: flex;
   flex-wrap: wrap;

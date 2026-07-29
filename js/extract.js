@@ -848,7 +848,9 @@ export async function extractFromDocx(file) {
     pdfDoc: null,
     pagesGeo: [],
     html,
-    approximate: true,
+    // Text is real — do not treat DOCX as scan via approximate flag
+    approximate: false,
+    geometryApproximate: true,
     tableCount: tables.tableCount,
     tableHint: tables.tableHint,
     layoutTableCount: tables.layoutTableCount,
@@ -873,7 +875,8 @@ export async function extractFromTxt(file) {
     pdfDoc: null,
     pagesGeo: [],
     html,
-    approximate: true,
+    approximate: false,
+    geometryApproximate: true,
     tableCount: 0,
     profilePhotoHint: false,
     originalBuffer: null,
@@ -907,7 +910,9 @@ export async function extractDocument(file) {
   if (name.endsWith(".txt") || file.type.startsWith("text/")) {
     return extractFromTxt(file);
   }
-  throw new Error("Format non supporté. Utilisez un PDF ou un DOCX.");
+  throw new Error(
+    "Format non supporté. Utilisez un PDF texte, un DOCX ou un fichier .txt (pas de scan photo)."
+  );
 }
 
 /**

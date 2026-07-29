@@ -405,10 +405,14 @@ async function runAnalysis() {
     await wait(300);
     setLoading(true, 1);
     const extracted = await extractDocument(selectedFile);
-    if (extracted.approximate && extracted.format === "pdf" && extracted.text.replace(/\s/g, "").length < 40) {
+    if (
+      extracted.format === "pdf" &&
+      (extracted.approximate || (extracted.imageOnlyPages || []).length > 0) &&
+      extracted.text.replace(/\s/g, "").length < 40
+    ) {
       throw new Error(
         window.ATSi18n?.t?.("errors.unextractable") ||
-          "Texte non extractible — le PDF semble être un scan image. Exportez un PDF texte ou un DOCX."
+          "Texte non extractible — le PDF semble être un scan image. Exportez un PDF texte ou un DOCX (pas une photo)."
       );
     }
     await wait(250);
@@ -420,6 +424,7 @@ async function runAnalysis() {
         fileName: selectedFile.name,
         pages: extracted.pages,
         fileType: selectedFile.type,
+        format: extracted.format,
         lang: window.ATSi18n?.getLang?.() || "fr",
         pagesGeo: extracted.pagesGeo,
         tableCount: extracted.tableCount || 0,
