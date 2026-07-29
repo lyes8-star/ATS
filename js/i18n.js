@@ -73,7 +73,7 @@
       "home.formulas.pro.cta": "Activer à l’upload",
       "loading.privacy": "Votre fichier reste sur votre appareil.",
       "upload.dropzone.title": "Déposez votre CV ici",
-      "upload.dropzone.hint": "PDF ou DOCX — 10 Mo max · traitement dans le navigateur",
+      "upload.dropzone.hint": "PDF texte, Word (.docx) ou .txt — pas de scan photo · 10 Mo max · navigateur",
       "upload.dropzone.button": "Parcourir mes fichiers",
       "upload.email.label": "E-mail (optionnel)",
       "upload.jd.label": "Offre d'emploi (active le matching)",
@@ -142,6 +142,7 @@
       "studio.hint": "Cliquez une zone numérotée sur le CV pour voir le conseil et le noter.",
       "studio.source.warnTitle": "Attention — outil graphique / IA détecté",
       "studio.source.warnBody": "CV probablement créé avec {{tool}}. Risque ATS et crédibilité importante : reprenez en Word ou Google Docs, texte linéaire, sans bandeaux.",
+      "studio.callout.example": "Exemple à adapter",
       "studio.score.initial": "Score initial",
       "studio.link.report": "Voir le rapport détaillé",
       "studio.axes.label": "Détail du score",
@@ -245,10 +246,10 @@
       "consent.modal.actions.save": "Enregistrer",
       "consent.modal.actions.acceptAll": "Tout accepter",
 
-      "errors.formatsAccepted": "Formats acceptés : PDF ou DOCX (max 10 Mo).",
+      "errors.formatsAccepted": "Formats acceptés : PDF texte, Word (.docx) ou .txt (max 10 Mo) — pas de scan photo.",
       "errors.fileTooLarge": "Fichier trop volumineux (max 10 Mo).",
       "errors.unextractable":
-        "Texte non extractible — le PDF semble être un scan image. Exportez un PDF texte ou un DOCX.",
+        "Texte non extractible — le PDF semble être un scan image. Exportez un PDF texte ou un DOCX (pas une photo).",
 
       "errors.unexpected": "Une erreur est survenue pendant l'analyse.",
 
@@ -329,7 +330,7 @@
       "home.formulas.pro.cta": "Enable on upload",
       "loading.privacy": "Your file stays on your device.",
       "upload.dropzone.title": "Drop your CV here",
-      "upload.dropzone.hint": "PDF or DOCX — up to 10 MB · processed in the browser",
+      "upload.dropzone.hint": "Text PDF, Word (.docx) or .txt — no photo scan · 10 MB max · browser",
       "upload.dropzone.button": "Browse files",
       "upload.email.label": "Email (optional)",
       "upload.jd.label": "Job description (enables matching)",
@@ -397,6 +398,7 @@
       "studio.hint": "Click a numbered zone on the CV to see advice and mark it.",
       "studio.source.warnTitle": "Warning — design / AI tool detected",
       "studio.source.warnBody": "CV likely built with {{tool}}. ATS and credibility risk: rewrite in Word or Google Docs as linear plain text, no graphic banners.",
+      "studio.callout.example": "Example to adapt",
       "studio.score.initial": "Initial score",
       "studio.link.report": "View detailed report",
       "studio.axes.label": "Score breakdown",
@@ -500,10 +502,10 @@
       "consent.modal.actions.save": "Save",
       "consent.modal.actions.acceptAll": "Accept all",
 
-      "errors.formatsAccepted": "Accepted formats: PDF or DOCX (max 10 MB).",
+      "errors.formatsAccepted": "Accepted formats: text PDF, Word (.docx) or .txt (max 10 MB) — no photo scan.",
       "errors.fileTooLarge": "File too large (max 10 MB).",
       "errors.unextractable":
-        "Unable to extract text — the PDF looks like an image scan. Export a text-based PDF or a DOCX.",
+        "Unable to extract text — the PDF looks like an image scan. Export a text-based PDF or a DOCX (not a photo).",
 
       "errors.unexpected": "An error occurred while analyzing your CV.",
 

@@ -507,76 +507,182 @@ function sectionAnchor(text, kind, parsed) {
 }
 
 /**
- * Détecte l'outil d'origine du CV (Canva, IA, builders en ligne…) via metadata PDF / nom de fichier.
- * @param {{ fileName?: string, pdfCreator?: string|null, pdfProducer?: string|null }} fileMeta
- * @returns {{ id: string, label: string, hostile: boolean, evidence: string }}
+ * Détecte l'outil d'origine du CV (Canva, IA, builders en ligne…) via metadata PDF /
+ * nom de fichier / watermarks texte (pieds de page).
+ * @param {{ fileName?: string, pdfCreator?: string|null, pdfProducer?: string|null, text?: string }} fileMeta
+ * @returns {{ id: string, label: string, hostile: boolean, evidence: string, via?: string }}
  */
 export function detectCvSource(fileMeta = {}) {
-  const blob = [
-    fileMeta.pdfCreator,
-    fileMeta.pdfProducer,
-    fileMeta.fileName,
-  ]
+  const metaBlob = [fileMeta.pdfCreator, fileMeta.pdfProducer, fileMeta.fileName]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+  const rawText = String(fileMeta.text || "");
+  // Sample head + tail — watermarks often live in footers
+  const textBlob =
+    rawText.length > 0
+      ? `${rawText.slice(0, 2000)} ${rawText.slice(-1200)}`.toLowerCase()
+      : "";
 
-  const hit = (re) => {
-    const m = blob.match(re);
+  const hitMeta = (re) => {
+    const m = metaBlob.match(re);
+    return m ? m[0] : null;
+  };
+  const hitText = (re) => {
+    if (!textBlob) return null;
+    const m = textBlob.match(re);
     return m ? m[0] : null;
   };
 
-  if (hit(/\bcanva\b/)) {
-    return { id: "canva", label: "Canva", hostile: true, evidence: hit(/\bcanva\b/) };
+  const canva =
+    hitMeta(/\bcanva\b/) ||
+    hitText(/made\s+with\s+canva|cr[ée]{1,2}\s+avec\s+canva|designed\s+with\s+canva|\bcanva\.com\b/);
+  if (canva) {
+    return {
+      id: "canva",
+      label: "Canva",
+      hostile: true,
+      evidence: canva,
+      via: hitMeta(/\bcanva\b/) ? "meta" : "text",
+    };
   }
 
   const ai =
-    hit(/\bchatgpt\b/) ||
-    hit(/\bgpt-?\d*\b/) ||
-    hit(/\bopenai\b/) ||
-    hit(/\bclaude\b/) ||
-    hit(/\banthropic\b/) ||
-    hit(/\bcopilot\b/) ||
-    hit(/\bgemini\b/) ||
-    hit(/\bnotion\s*ai\b/) ||
-    hit(/\bgamma\b/) ||
-    hit(/\bbeautiful\.?ai\b/);
+    hitMeta(/\bchatgpt\b/) ||
+    hitMeta(/\bgpt-?\d*\b/) ||
+    hitMeta(/\bopenai\b/) ||
+    hitMeta(/\bclaude\b/) ||
+    hitMeta(/\banthropic\b/) ||
+    hitMeta(/\bcopilot\b/) ||
+    hitMeta(/\bgemini\b/) ||
+    hitMeta(/\bnotion\s*ai\b/) ||
+    hitMeta(/\bgamma\b/) ||
+    hitMeta(/\bbeautiful\.?ai\b/) ||
+    hitText(
+      /generated\s+by\s+chatgpt|g[ée]n[ée]r[ée]\s+par\s+chatgpt|chatgpt\.com|openai\.com|claude\.ai|made\s+with\s+gamma|beautiful\.ai/
+    );
   if (ai) {
-    return { id: "ai_builder", label: ai, hostile: true, evidence: ai };
+    return {
+      id: "ai_builder",
+      label: /chatgpt|gpt|openai/i.test(ai)
+        ? "ChatGPT"
+        : /claude|anthropic/i.test(ai)
+          ? "Claude"
+          : /gemini/i.test(ai)
+            ? "Gemini"
+            : /gamma/i.test(ai)
+              ? "Gamma"
+              : ai,
+      hostile: true,
+      evidence: ai,
+      via: hitMeta(/\b(chatgpt|openai|claude|gemini|gamma|copilot)\b/) ? "meta" : "text",
+    };
   }
 
   const builder =
-    hit(/\bkickresume\b/) ||
-    hit(/\bnovoresume\b/) ||
-    hit(/\benhancv\b/) ||
-    hit(/\bteal\b/) ||
-    hit(/\bresume\.io\b/) ||
-    hit(/\bvisualcv\b/) ||
-    hit(/\bflowcv\b/) ||
-    hit(/\bcvmaker\b/) ||
-    hit(/\bresumegenius\b/) ||
-    hit(/\bzety\b/) ||
-    hit(/\brezi\b/);
+    hitMeta(/\bkickresume\b/) ||
+    hitMeta(/\bnovoresume\b/) ||
+    hitMeta(/\benhancv\b/) ||
+    hitMeta(/\bteal\b/) ||
+    hitMeta(/\bresume\.io\b/) ||
+    hitMeta(/\bvisualcv\b/) ||
+    hitMeta(/\bflowcv\b/) ||
+    hitMeta(/\bcvmaker\b/) ||
+    hitMeta(/\bresumegenius\b/) ||
+    hitMeta(/\bzety\b/) ||
+    hitMeta(/\brezi\b/) ||
+    hitText(
+      /\bkickresume\b|\bnovoresume\b|\benhancv\b|\bresume\.io\b|\bvisualcv\b|\bflowcv\b|\bzety\b|\brezi\.ai\b/
+    );
   if (builder) {
     return {
       id: "online_builder",
       label: builder,
       hostile: true,
       evidence: builder,
+      via: hitMeta(/\bkickresume|novoresume|enhancv|resume\.io|zety|rezi\b/) ? "meta" : "text",
     };
   }
 
-  if (hit(/\blatex\b/) || hit(/\btex\b/) || hit(/\bxelatex\b/) || hit(/\bpdftitlefont\b/)) {
-    return { id: "latex", label: "LaTeX", hostile: false, evidence: "latex" };
+  // Favorable sources — metadata / filename only (avoid matching body text like "context")
+  if (hitMeta(/\blatex\b/) || hitMeta(/\bxelatex\b/) || hitMeta(/\bpdftitlefont\b/) || hitMeta(/\btex\b/)) {
+    return { id: "latex", label: "LaTeX", hostile: false, evidence: "latex", via: "meta" };
   }
-  if (hit(/\bmicrosoft\b/) || hit(/\bword\b/) || hit(/\bwps\b/) || hit(/\blibreoffice\b/)) {
-    return { id: "word", label: "Word", hostile: false, evidence: "word" };
+  if (hitMeta(/\bmicrosoft\b/) || hitMeta(/\bword\b/) || hitMeta(/\bwps\b/) || hitMeta(/\blibreoffice\b/)) {
+    return { id: "word", label: "Word", hostile: false, evidence: "word", via: "meta" };
   }
-  if (hit(/\bgoogle\b/) || hit(/\bdocs\b/)) {
-    return { id: "google_docs", label: "Google Docs", hostile: false, evidence: "google" };
+  if (hitMeta(/\bgoogle\b/) || hitMeta(/\bdocs\b/)) {
+    return { id: "google_docs", label: "Google Docs", hostile: false, evidence: "google", via: "meta" };
   }
 
-  return { id: "unknown", label: "", hostile: false, evidence: "" };
+  return { id: "unknown", label: "", hostile: false, evidence: "", via: "" };
+}
+
+/**
+ * Profil document unifié : format, origine, extractibilité, layout.
+ * @param {object} fileMeta
+ * @param {object|null} [layout]
+ * @param {string} [text]
+ */
+export function detectDocumentProfile(fileMeta = {}, layout = null, text = "") {
+  const name = String(fileMeta.fileName || "").toLowerCase();
+  const ft = String(fileMeta.fileType || fileMeta.format || "").toLowerCase();
+  let format = "unknown";
+  if (fileMeta.format === "pdf" || ft.includes("pdf") || name.endsWith(".pdf")) format = "pdf";
+  else if (fileMeta.format === "docx" || ft.includes("wordprocessingml") || name.endsWith(".docx"))
+    format = "docx";
+  else if (fileMeta.format === "txt" || ft.startsWith("text/") || name.endsWith(".txt")) format = "txt";
+
+  const origin = detectCvSource({ ...fileMeta, text });
+  const len = String(text || "").replace(/\s/g, "").length;
+  const weirdChars = (String(text || "").match(/[□�]|[\uFFFD]/g) || []).length;
+  const imageOnlyPages = Array.isArray(fileMeta.imageOnlyPages)
+    ? fileMeta.imageOnlyPages
+    : Array.isArray(layout?.imageOnlyPages)
+      ? layout.imageOnlyPages
+      : [];
+
+  const hasColumnsSmell = layout
+    ? !!layout.columnSmell
+    : (String(text || "").match(/\t{2,}| {8,}/g) || []).length > 12;
+  const hasTables = !!(layout?.tableHint || fileMeta.tableHint);
+  const headerSparse = !!(layout?.headerSparse || fileMeta.headerSparse);
+  const readingOrderOk = layout?.readingOrderOk !== false && fileMeta.readingOrderOk !== false;
+
+  /** PDF scan signal only — DOCX/TXT approximate must not imply scan */
+  const pdfScanSignal =
+    format === "pdf" && !!fileMeta.approximate && len < 120 && imageOnlyPages.length === 0;
+
+  let extractability = "text";
+  // Image pages / PDF scan take priority over generic "unreadable"
+  if (imageOnlyPages.length > 0 || pdfScanSignal) extractability = "scan_like";
+  else if (len < 40 || weirdChars >= 10) extractability = "unreadable";
+  else if (len < 80) extractability = "sparse";
+
+  let confidence = "medium";
+  const hasMeta = !!(fileMeta.pdfCreator || fileMeta.pdfProducer);
+  if (extractability === "text" && (hasMeta || origin.id !== "unknown" || format === "docx")) {
+    confidence = "high";
+  } else if (extractability === "scan_like" || extractability === "unreadable") {
+    confidence = "low";
+  } else if (origin.via === "text" || origin.via === "meta") {
+    confidence = "high";
+  }
+
+  return {
+    format,
+    origin,
+    extractability,
+    layoutFlags: {
+      hasTables,
+      hasColumnsSmell,
+      headerSparse,
+      readingOrderOk,
+    },
+    confidence,
+    imageOnlyPages,
+    weirdChars,
+  };
 }
 
 /**
@@ -819,6 +925,24 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
     ) {
       continue;
     }
+    const lineStart = text.lastIndexOf("\n", idx) + 1;
+    const lineEndIdx = text.indexOf("\n", idx);
+    const fullLine = text.slice(lineStart, lineEndIdx < 0 ? undefined : lineEndIdx).trim();
+    const replacement = String(
+      (wh.suggestion || "").replace(/\s*…\s*$/, "").trim() || (isEn ? "Led" : "Piloté")
+    );
+    const weakTok = String(wh.weak || quote).trim();
+    let suggestion = fullLine;
+    if (weakTok && fullLine) {
+      const re = new RegExp(escapeReg(weakTok), "i");
+      if (re.test(fullLine)) {
+        suggestion = fullLine.replace(re, replacement).replace(/^./, (c) => c.toUpperCase());
+      } else {
+        suggestion = fullLine.replace(quote, replacement);
+      }
+    } else {
+      suggestion = String(wh.suggestion || (isEn ? "Led …" : "Piloté …"));
+    }
     push({
       kind: "passive_verb",
       axis: "content",
@@ -826,14 +950,14 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       severity: "warning",
       textStart: idx,
       textEnd: idx + quote.length,
-      quote,
+      quote: fullLine.slice(0, 120) || quote,
       title: isEn
-        ? `Weak verb « ${quote} » — prefer an action verb`
-        : `Verbe faible « ${quote} » — préférez un verbe d'action`,
+        ? `Weak verb « ${weakTok || quote} » — prefer an action verb`
+        : `Verbe faible « ${weakTok || quote} » — préférez un verbe d'action`,
       detail: isEn
-        ? `« ${wh.weak || quote} » is a weak formulation in Experience. Replace with a concrete action verb (led, built, delivered…).`
-        : `« ${wh.weak || quote} » est une formulation faible en Expérience. Remplacez par un verbe d'action concret (piloté, développé, livré…).`,
-      suggestion: String(wh.suggestion || (isEn ? "Led …" : "Piloté …")),
+        ? `« ${weakTok || quote} » is a weak formulation in Experience. Replace with a concrete action verb keeping the rest of the bullet.`
+        : `« ${weakTok || quote} » est une formulation faible en Expérience. Remplacez par un verbe d'action en gardant le reste de la puce.`,
+      suggestion,
       applyMode: "replace",
       approximate: false,
       checkId: "weak_verbs",
@@ -846,12 +970,22 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
     const metricHay = expBlob && expBlob.length >= 40 ? expBlob : text;
     let bm;
     let metricAnns = 0;
+    const roleForBullet = (line) =>
+      (parsed?.roles || []).find((r) => (r.bullets || []).some((b) => b.includes(line.slice(0, 40))));
     while ((bm = bulletRe.exec(metricHay)) !== null && metricAnns < 4) {
       const line = bm[1].trim();
       if (bulletHasResultMetric(line)) continue;
       if (!/[a-záàâäéèêëíìîïóòôöúùûüç]/i.test(line)) continue;
+      const role = roleForBullet(line);
+      const roleHint = role?.title
+        ? isEn
+          ? ` for « ${role.title} »`
+          : ` pour « ${role.title} »`
+        : "";
       const suggestion = `${line.replace(/\.$/, "")} [${
-        isEn ? "metric: % or volume you owned" : "chiffre : % ou volume dont vous êtes responsable"
+        isEn
+          ? `metric${roleHint}: % or volume you owned`
+          : `chiffre${roleHint} : % ou volume dont vous êtes responsable`
       }]`;
       const loc = locateQuote(text, line) || {
         textStart: bm.index,
@@ -868,8 +1002,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         quote: loc.quote.slice(0, 100),
         title: isEn ? "Add a metric to this experience bullet" : "Ajouter un chiffre à cette puce d'expérience",
         detail: isEn
-          ? "This experience bullet has no number. Replace the bracket with a real KPI from that role (%, €, headcount, delay)."
-          : "Cette puce d'expérience n'a aucun chiffre. Remplacez le crochet par un vrai KPI de ce poste (%, €, effectif, délai).",
+          ? `This experience bullet has no number${roleHint}. Replace the bracket with a real KPI from that role (%, €, headcount, delay).`
+          : `Cette puce d'expérience n'a aucun chiffre${roleHint}. Remplacez le crochet par un vrai KPI de ce poste (%, €, effectif, délai).`,
         suggestion,
         applyMode: "replace",
         approximate: false,
@@ -884,6 +1018,7 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
           textEnd: Math.min(60, text.length),
           quote: text.slice(0, 40),
         };
+      const topRole = parsed?.roles?.[0]?.title;
       push({
         kind: "missing_metric",
         axis: "content",
@@ -895,13 +1030,125 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
           ? "No metrics detected on experience bullets. Pick 2–3 recent bullets and add a real KPI you can defend in interview."
           : "Aucun chiffre détecté sur les puces d'expérience. Choisissez 2–3 puces récentes et ajoutez un KPI réel que vous pouvez défendre en entretien.",
         suggestion: isEn
-          ? "- [Action] … ([metric: % / volume / €])"
-          : "- [Action] … ([chiffre : % / volume / €])",
+          ? `- [${topRole ? `Action as ${topRole}` : "Action"}] … ([metric: % / volume / €])`
+          : `- [${topRole ? `Action en tant que ${topRole}` : "Action"}] … ([chiffre : % / volume / €])`,
         applyMode: "insert_after",
         approximate: true,
         checkId: "metrics",
       });
     }
+  }
+
+  // Bridge: action verbs without metrics on recent bullets
+  const actionWithout = (scores.content?.checks || []).find(
+    (c) => c.id === "action_without_metric" && c.ok === false
+  );
+  if (actionWithout) {
+    const ACTION_LINE =
+      /\b(pilot[ée]|dirig[ée]|d[ée]velopp[ée]|optimis[ée]|augment[ée]|r[ée]duit[e]?|lanc[ée]|cr[ée][ée]|mis en place|led|managed|developed|designed|created|launched|improved|optimized|increased|reduced|built|delivered|achieved)\b/i;
+    let bridged = 0;
+    for (const role of (parsed?.roles || []).slice(0, 2)) {
+      for (const b of role.bullets || []) {
+        if (bridged >= 2) break;
+        if (!ACTION_LINE.test(b) || bulletHasResultMetric(b)) continue;
+        if (annotations.some((a) => a.checkId === "metrics" && a.quote && b.includes(a.quote.slice(0, 30))))
+          continue;
+        const loc = locateQuote(text, b) || {
+          textStart: 0,
+          textEnd: Math.min(40, text.length),
+          quote: b.slice(0, 100),
+        };
+        push({
+          kind: "missing_metric",
+          axis: "content",
+          shortLabel: isEn ? "Impact" : "Impact",
+          severity: "warning",
+          textStart: loc.textStart,
+          textEnd: loc.textEnd,
+          quote: loc.quote.slice(0, 100),
+          title: isEn
+            ? "Action verb without a metric — credit the impact"
+            : "Verbe d'action sans chiffre — créditez l'impact",
+          detail: isEn
+            ? `This bullet starts strong but lacks a KPI${role.title ? ` (« ${role.title} »)` : ""}. Add %, €, volume or delay you can defend.`
+            : `Cette puce démarre bien mais sans KPI${role.title ? ` (« ${role.title} »)` : ""}. Ajoutez %, €, volume ou délai défendable.`,
+          suggestion: `${b.replace(/\.$/, "")} [${isEn ? "metric: % / volume / €" : "chiffre : % / volume / €"}]`,
+          applyMode: "replace",
+          approximate: false,
+          checkId: "action_without_metric",
+        });
+        bridged += 1;
+      }
+      if (bridged >= 2) break;
+    }
+  }
+
+  // Bridge: too few action verbs overall
+  const actionVerbsKo = (scores.content?.checks || []).find(
+    (c) => c.id === "action_verbs" && c.ok === false
+  );
+  if (actionVerbsKo && !annotations.some((a) => a.checkId === "weak_verbs" || a.kind === "passive_verb")) {
+    const exp =
+      sectionAnchor(text, "experience", parsed) || {
+        textStart: 0,
+        textEnd: Math.min(60, text.length),
+        quote: text.slice(0, 40),
+      };
+    push({
+      kind: "passive_verb",
+      axis: "content",
+      shortLabel: isEn ? "Verbs" : "Verbes",
+      severity: "warning",
+      ...exp,
+      title: isEn ? "Strengthen action verbs in Experience" : "Renforcer les verbes d'action en Expérience",
+      detail: isEn
+        ? "Few strong action verbs detected. Start recent bullets with led / built / delivered / improved + a real outcome."
+        : "Peu de verbes d'action forts détectés. Commencez les puces récentes par piloté / développé / livré / amélioré + un résultat réel.",
+      suggestion: isEn
+        ? "- Led / Built / Delivered … ([metric])"
+        : "- Piloté / Développé / Livré … ([chiffre])",
+      applyMode: "insert_after",
+      approximate: true,
+      checkId: "action_verbs",
+    });
+  }
+
+  // Bridge: concision
+  const concisionKo = (scores.content?.checks || []).find((c) => c.id === "concision" && c.ok === false);
+  if (concisionKo) {
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+    const tooShort = wordCount < 200;
+    push({
+      kind: "length",
+      axis: "content",
+      shortLabel: isEn ? "Length" : "Longueur",
+      severity: "info",
+      textStart: tooShort ? 0 : Math.max(0, text.length - 80),
+      textEnd: tooShort ? Math.min(60, text.length) : text.length,
+      quote: (tooShort ? text.slice(0, 60) : text.slice(Math.max(0, text.length - 80))).trim(),
+      title: tooShort
+        ? isEn
+          ? `Content too short (~${wordCount} words)`
+          : `Contenu trop court (~${wordCount} mots)`
+        : isEn
+          ? `Dense content (~${wordCount} words) — streamline`
+          : `Contenu dense (~${wordCount} mots) — allégez`,
+      detail: tooShort
+        ? isEn
+          ? "Add 2–4 concrete bullets under recent roles (verb + metric + context)."
+          : "Ajoutez 2–4 puces concrètes sous les rôles récents (verbe + chiffre + contexte)."
+        : isEn
+          ? "Cut older roles to title + 1 bullet; drop redundant soft-skill lists."
+          : "Réduisez les postes anciens à intitulé + 1 puce ; retirez les listes soft redondantes.",
+      suggestion: tooShort
+        ? isEn
+          ? "- [Action verb] … ([metric])"
+          : "- [Verbe d'action] … ([chiffre])"
+        : "",
+      applyMode: tooShort ? "insert_after" : "replace",
+      approximate: true,
+      checkId: "concision",
+    });
   }
 
   // Role pack hard keywords missing
@@ -968,6 +1215,7 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
   ) {
     const skills = sectionAnchor(text, "skills", parsed);
     const jd = scores.keywords.jdOverlap;
+    const roleGaps = scores.keywords?.roleKeywordGaps;
     let terms = [];
     const lower = text.toLowerCase();
     const hasTerm = (t) => {
@@ -981,9 +1229,12 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       terms = jd.mustMissing.filter((t) => !hasTerm(t)).slice(0, 5);
     } else if (jd?.jdTerms?.length) {
       terms = jd.jdTerms.filter((t) => !hasTerm(t)).slice(0, 5);
+    } else if (roleGaps?.missing?.length) {
+      terms = roleGaps.missing.filter((t) => !hasTerm(t)).slice(0, 5);
     }
     if (!terms.length) {
-      terms = PROFESSIONAL_KEYWORDS.filter((k) => k.length >= 3 && !hasTerm(k)).slice(0, 5);
+      // Hard-only fallback — never suggest soft stuffing as "required skills"
+      terms = HARD_FALLBACK_KEYWORDS.filter((k) => k.length >= 3 && !hasTerm(k)).slice(0, 5);
     }
     if (terms.length) {
       const anchor =
@@ -1011,13 +1262,74 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
               ? `Job↔CV overlap ${jd.score}%${mustCov != null ? ` (must-have coverage ${mustCov}%)` : ""}. Missing required terms: ${terms.join(", ")}. Only keep terms you actually master.`
               : `Alignement offre↔CV ${jd.score} %${mustCov != null ? ` (couverture must ${mustCov} %)` : ""}. Termes requis absents : ${terms.join(", ")}. Ne gardez que ceux que vous maîtrisez vraiment.`
             : isEn
-              ? "These terms are weak or missing vs. typical target roles. Append only those you use."
-              : "Ces termes sont absents ou faibles par rapport aux offres types. N'ajoutez que ceux que vous utilisez.",
+              ? "These hard skills are weak or missing vs. typical target roles. Append only those you use."
+              : "Ces compétences hard sont absentes ou faibles par rapport aux offres types. N'ajoutez que celles que vous utilisez.",
         suggestion: isEn ? `Skills: ${line}` : `Compétences : ${line}`,
         applyMode: "insert_after",
         section: "Compétences",
         approximate: !skills,
-        checkId: "keyword_density",
+        checkId: jd?.mustMissing?.length ? "jd_overlap" : "keyword_density",
+      });
+    }
+  }
+
+  // One annotation per top must-missing (cap 3) — weave into recent experience / skills
+  {
+    const jd = scores.keywords?.jdOverlap;
+    const musts = (jd?.mustMissing || []).slice(0, 3);
+    const skills = sectionAnchor(text, "skills", parsed);
+    const recentRole = parsed?.roles?.[0];
+    let mustIdx = 0;
+    for (const term of musts) {
+      mustIdx += 1;
+      const already =
+        annotations.some(
+          (a) =>
+            (a.checkId === "jd_overlap" || a.kind === "keyword") &&
+            String(a.suggestion || a.title || "")
+              .toLowerCase()
+              .includes(String(term).toLowerCase())
+        ) && mustIdx === 1;
+      // Still emit focused must tips; skip only pure duplicates of same title
+      if (
+        annotations.some(
+          (a) => a.kind === "jd_must" && String(a.title || "").toLowerCase().includes(String(term).toLowerCase())
+        )
+      ) {
+        continue;
+      }
+      void already;
+      const anchorBullet = (recentRole?.bullets || []).find((b) => b && b.length > 20);
+      const loc = anchorBullet
+        ? locateQuote(text, anchorBullet) || skills
+        : skills || {
+            textStart: Math.max(0, text.length - 1),
+            textEnd: text.length,
+            quote: "(compétences)",
+          };
+      const weave = anchorBullet
+        ? `${anchorBullet.replace(/\.$/, "")} — ${term}`
+        : isEn
+          ? `Skills: ${term}`
+          : `Compétences : ${term}`;
+      push({
+        kind: "jd_must",
+        axis: "keywords",
+        shortLabel: isEn ? "Must" : "Must",
+        severity: "warning",
+        textStart: loc?.textStart ?? 0,
+        textEnd: loc?.textEnd ?? Math.min(40, text.length),
+        quote: (loc?.quote || String(term)).slice(0, 100),
+        title: isEn
+          ? `Missing must-have « ${term} » — weave into Experience if true`
+          : `Must absent « ${term} » — intégrez-le en Expérience s'il est vrai`,
+        detail: isEn
+          ? `Job match lists « ${term} » as a missing must-have. Add it only if you actually used it — do not invent experience.`
+          : `Le matching liste « ${term} » comme must absent. Ajoutez-le uniquement si vous l'avez réellement utilisé — n'inventez pas d'expérience.`,
+        suggestion: weave,
+        applyMode: "replace",
+        approximate: !loc || loc.quote === "(compétences)",
+        checkId: "jd_overlap",
       });
     }
   }
@@ -1027,6 +1339,12 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
   if (softStuff) {
     const skills = sectionAnchor(text, "skills", parsed);
     const softList = (scores.keywords?.softHits || []).slice(0, 5);
+    const jd = scores.keywords?.jdOverlap;
+    const roleGaps = scores.keywords?.roleKeywordGaps;
+    const hardFill =
+      (jd?.mustMissing || []).slice(0, 4).join(" · ") ||
+      (roleGaps?.missing || []).slice(0, 4).join(" · ") ||
+      HARD_FALLBACK_KEYWORDS.slice(0, 4).join(" · ");
     push({
       kind: "keyword",
       axis: "keywords",
@@ -1041,9 +1359,7 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       detail: isEn
         ? `Soft terms dominate (${softList.join(", ") || "soft skills"}). ATS Boolean filters look for concrete tools/methods — add hard skills you use daily.`
         : `Les termes soft dominent (${softList.join(", ") || "soft skills"}). Les filtres booléens ATS cherchent des outils/méthodes concrets — ajoutez des hard skills de votre quotidien.`,
-      suggestion: isEn
-        ? "Skills: [tool] · [method] · [platform]"
-        : "Compétences : [outil] · [méthode] · [plateforme]",
+      suggestion: isEn ? `Skills: ${hardFill}` : `Compétences : ${hardFill}`,
       applyMode: "insert_after",
       approximate: !skills,
       checkId: "keyword_soft_stuffing",
@@ -1558,6 +1874,7 @@ function shortLabelFor(kind) {
     missing_metric: "Chiffre",
     gap: "Gap",
     keyword: "Mots-clés",
+    jd_must: "Must",
     role_keywords: "Pack métier",
     length: "Longueur",
     layout: "Mise en page",
@@ -1656,19 +1973,40 @@ function scoreReadability(text, fileMeta) {
   const checks = [];
   let score = 0;
   const len = text.replace(/\s/g, "").length;
-  const extractable = len > 80;
-  if (extractable) {
+  const layout = fileMeta.parsed?.layout;
+  const profile = detectDocumentProfile(fileMeta, layout, text);
+  const extractable = profile.extractability === "text" || profile.extractability === "sparse";
+  if (profile.extractability === "text") {
     score += 10;
     checks.push({
       id: "extractable_text",
       ok: true,
       label: "Texte correctement extractible par les ATS.",
     });
+  } else if (profile.extractability === "sparse") {
+    score += 6;
+    checks.push({
+      id: "extractable_text",
+      ok: false,
+      label: "Texte extractible mais sparse — complétez le contenu ou vérifiez l'export.",
+    });
+  } else if (profile.extractability === "scan_like") {
+    checks.push({
+      id: "extractable_text",
+      ok: false,
+      label:
+        profile.imageOnlyPages.length > 0
+          ? `Page(s) quasi image/scan détectée(s) : ${profile.imageOnlyPages.join(", ")}.`
+          : "Texte difficilement extractible — le CV semble scanné ou en image.",
+    });
   } else {
     checks.push({
       id: "extractable_text",
       ok: false,
-      label: "Texte difficilement extractible — le CV semble scanné ou en image.",
+      label:
+        profile.weirdChars >= 10
+          ? "Caractères illisibles détectés (encodage ou OCR défaillant)."
+          : "Texte difficilement extractible — le CV semble scanné ou en image.",
     });
   }
 
@@ -1695,37 +2033,18 @@ function scoreReadability(text, fileMeta) {
     });
   }
 
-  const weirdChars = (text.match(/[□�]|[\uFFFD]/g) || []).length;
-  const layout = fileMeta.parsed?.layout;
-  const hasColumnsSmell = layout
-    ? !!layout.columnSmell
-    : (text.match(/\t{2,}| {8,}/g) || []).length > 12;
-  const hasTables = !!(layout?.tableHint || fileMeta.tableHint);
-  const headerSparse = !!(layout?.headerSparse || fileMeta.headerSparse);
-  const readingOrderOk = layout?.readingOrderOk !== false && fileMeta.readingOrderOk !== false;
-  const imageOnlyPages = Array.isArray(fileMeta.imageOnlyPages)
-    ? fileMeta.imageOnlyPages
-    : Array.isArray(layout?.imageOnlyPages)
-      ? layout.imageOnlyPages
-      : [];
-  const imageOnly =
-    imageOnlyPages.length > 0 ||
-    (!!fileMeta.approximate && len < 120) ||
-    !extractable;
+  const weirdChars = profile.weirdChars;
+  const hasColumnsSmell = profile.layoutFlags.hasColumnsSmell;
+  const hasTables = profile.layoutFlags.hasTables;
+  const headerSparse = profile.layoutFlags.headerSparse;
+  const readingOrderOk = profile.layoutFlags.readingOrderOk;
+  const imageOnlyPages = profile.imageOnlyPages;
+  const imageOnly = profile.extractability === "scan_like";
 
   if (imageOnlyPages.length > 0) {
     score = Math.max(0, score - 4);
-    const extractCheck = checks.find((c) => c.id === "extractable_text");
-    if (extractCheck) {
-      extractCheck.ok = false;
-      extractCheck.label = `Page(s) quasi image/scan détectée(s) : ${imageOnlyPages.join(", ")}.`;
-    } else {
-      checks.push({
-        id: "extractable_text",
-        ok: false,
-        label: `Page(s) quasi image/scan détectée(s) : ${imageOnlyPages.join(", ")}.`,
-      });
-    }
+  } else if (imageOnly) {
+    score = Math.max(0, score - 3);
   }
 
   if (weirdChars === 0 && !hasColumnsSmell && !hasTables && readingOrderOk) {
@@ -1895,7 +2214,7 @@ function scoreReadability(text, fileMeta) {
     }
   }
 
-  const cvSource = detectCvSource(fileMeta);
+  const cvSource = profile.origin;
   if (cvSource.hostile) {
     score = Math.max(0, score - 3);
     score = Math.min(score, 16);
@@ -1931,6 +2250,7 @@ function scoreReadability(text, fileMeta) {
     imageOnlyPages,
     imageOnly,
     cvSource,
+    documentProfile: profile,
   };
 }
 
@@ -3019,6 +3339,27 @@ export function analyzeCv(rawText, fileMeta = {}) {
       m = s.match(/^Grammaire : (\d+) tournure\(s\) à corriger\.$/);
       if (m) return `Grammar: ${m[1]} wording issue(s) to fix.`;
 
+      m = s.match(/^Page\(s\) quasi image\/scan détectée\(s\) : (.+)\.$/);
+      if (m) return `Near image/scan page(s) detected: ${m[1]}.`;
+
+      m = s.match(/^CV probablement créé avec (.+) — risque ATS et crédibilité\.$/);
+      if (m) return `CV likely built with ${m[1]} — ATS and credibility risk.`;
+
+      m = s.match(/^Source favorable détectée \((.+)\)\.$/);
+      if (m) return `Favourable source detected (${m[1]}).`;
+
+      m = s.match(/^Métriques insuffisantes \((\d+)\/(\d+) sur 2 rôles récents — seuil 50 %\)\.$/);
+      if (m) return `Insufficient metrics (${m[1]}/${m[2]} on 2 recent roles — 50% threshold).`;
+
+      m = s.match(/^(\d+) verbe\(s\) d'action sans chiffre — créditez l'impact avec une métrique\.$/);
+      if (m) return `${m[1]} action verb(s) without a metric — credit the impact with a KPI.`;
+
+      m = s.match(/^Trop de formulations faibles \((\d+)\) — remplacez par des verbes d'action\.$/);
+      if (m) return `Too many weak formulations (${m[1]}) — replace with action verbs.`;
+
+      m = s.match(/^Texte extractible mais sparse — complétez le contenu ou vérifiez l'export\.$/);
+      if (m) return `Extractable but sparse text — add content or check the export.`;
+
       return s;
     };
 
@@ -3114,6 +3455,21 @@ export function analyzeCv(rawText, fileMeta = {}) {
             "Beyond 2 pages, the signal dilutes and some parsers truncate content.",
           tip: "→ Condense older experiences and remove non-relevant details.",
         },
+        "Tableaux hostiles aux ATS": {
+          title: "Tables hostile to ATS",
+          body: "Table grids often make ATS read cells out of order.",
+          tip: "→ Convert tables to single-column lists or paragraphs in your original file.",
+        },
+        "Colonnes potentiellement hostiles ATS": {
+          title: "Columns potentially hostile to ATS",
+          body: "A multi-column layout can reverse reading order for bots.",
+          tip: "→ Prefer linear reading (one column) for ATS applications.",
+        },
+        "CV image / scan peu extractible": {
+          title: "Image / scan CV — little extractable text",
+          body: "Little selectable text — ATS cannot read image pages.",
+          tip: "→ Export a text PDF or DOCX (not a photo or flattened export).",
+        },
         "Formulations passives ou descriptives": {
           title: "Passive or descriptive wording",
           body:
@@ -3133,6 +3489,14 @@ export function analyzeCv(rawText, fileMeta = {}) {
         d.title = repl.title;
         d.body = repl.body;
         d.tip = repl.tip;
+      } else {
+        const hostile = d.title?.match(/^CV créé avec (.+) — crédibilité en jeu$/);
+        if (hostile) {
+          d.title = `CV built with ${hostile[1]} — credibility at risk`;
+          d.body =
+            "Canva, AI builders and graphic templates often scramble ATS parsing and can look generic to recruiters.";
+          d.tip = "→ Rewrite in Word/Google Docs as linear single-column text.";
+        }
       }
 
       void from;
@@ -3182,6 +3546,9 @@ export function analyzeCv(rawText, fileMeta = {}) {
       b.category = translateCategory(b.category);
       b.label = translateCheckLabel(b.label);
     });
+    checklist.forEach((c) => {
+      c.label = translateCheckLabel(c.label);
+    });
   }
 
   const emailOk = structure.checks.some((c) => c.id === "email" && c.ok === true);
@@ -3220,6 +3587,7 @@ export function analyzeCv(rawText, fileMeta = {}) {
     passes,
     tags,
     cvSource: readability.cvSource || detectCvSource(fileMeta),
+    documentProfile: readability.documentProfile || null,
     categories: {
       readability: {
         name: uiLang === "en" ? "ATS readability" : "Lisibilité ATS",

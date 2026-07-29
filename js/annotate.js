@@ -493,10 +493,8 @@ function buildCallout(ann, extraClass = "", onAction = null) {
   const detail = String(ann.detail || "").trim();
   const quote = String(ann.quote || "").trim();
   const suggestion = String(ann.suggestion || "").trim();
-  const showSug =
-    Boolean(suggestion) &&
-    suggestion !== quote &&
-    !/^\[.+\]$/.test(suggestion);
+  const isPlaceholder = /^\[.+\]$/.test(suggestion);
+  const showSug = Boolean(suggestion) && suggestion !== quote;
   if (!title && !detail && !showSug) return null;
 
   const tip = document.createElement("span");
@@ -512,8 +510,15 @@ function buildCallout(ann, extraClass = "", onAction = null) {
     parts.push(`<span class="ann-callout-detail">${escapeHtml(detail)}</span>`);
   }
   if (showSug) {
+    const sugLabel = isPlaceholder
+      ? `<span class="ann-callout-example-label">${escapeHtml(
+          t("studio.callout.example")
+        )}</span>`
+      : "";
     parts.push(
-      `<span class="ann-callout-suggestion">${escapeHtml(suggestion)}</span>`
+      `${sugLabel}<span class="ann-callout-suggestion${
+        isPlaceholder ? " is-example" : ""
+      }">${escapeHtml(suggestion)}</span>`
     );
   }
   tip.innerHTML = parts.join("");
