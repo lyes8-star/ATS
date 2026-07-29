@@ -62,6 +62,20 @@ Ton : professionnel, direct, sans jargon inutile. Émotions visées : contrôle,
 5. **Normes FR / UE** — CMP Consent Mode v2, pages LCEN/RGPD/cookies/a11y, PWA.
 6. **Identité visuelle Test2** — forêt / papier crème / or, Quattrocento + Josefin Sans, FR/EN i18n (pas de /en routes), footer discret « Édité par Crevia ».
 
+## Diagnostic ATS — Précision
+
+Le moteur d'analyse (`analyzer.js`) évalue 4 axes à 25 pts (lisibilité, structure, contenu, mots-clés). Critères de passage renforcés :
+
+- **Passes gate** : score ≥ 72, lisibilité ≥ 15, pas de colonnes/tableaux, nom complet, email, téléphone, rôle complet, métriques, verbes d'action, sections éducation + compétences.
+- **Détection téléphone** : FR (`06 XX`…), international (`+44`…), US `(555) 123-4567`.
+- **Mots-clés** : cap sans offre à 12/25 ; ~60 keywords techniques hard ; blocklist soft skills.
+- **Verbes d'action** : ~75 FR/EN ; pénalité renforcée si ≥ 4 formulations faibles.
+- **Métriques** : exclusion faux positifs (durées, numéros de page, petites équipes ≤ 5).
+- **Sections supplémentaires** : certifications, projets, publications, bénévolat, références.
+- **Checks ATS** : dates overlapping, chronologie inversée, ordre sections (expérience avant formation si ≥ 3 rôles).
+- **Orthographe/grammaire** : ~45 typos + ~23 règles grammaticales FR/EN.
+- **Tests de régression** : score goodCv pinné, CV anglais, anti-gaming, dates overlapping, phone international.
+
 ## Accessibility & Inclusion
 
 Panneau d’accessibilité (contraste, taille de texte, soulignement, espacement, réduction de mouvement). Cibles : WCAG 2.2 AA / RGAA 4.1 / EAA. Skip link, focus visible, dialogues clavier.
