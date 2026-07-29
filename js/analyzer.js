@@ -5,16 +5,22 @@
 import { parseCv } from "./parse-cv.js";
 
 const ACTION_VERBS = [
-  "dirigé", "dirigée", "dirigé", "piloté", "pilotée", "géré", "gérée", "coordonné", "coordonnée",
+  "dirigé", "dirigée", "piloté", "pilotée", "géré", "gérée", "coordonné", "coordonnée",
   "développé", "développée", "conçu", "conçue", "créé", "créée", "lancé", "lancée", "mis en place",
   "amélioré", "améliorée", "optimisé", "optimisée", "augmenté", "augmentée", "réduit", "réduite",
   "négocié", "négociée", "supervisé", "supervisée", "formé", "formée", "recruté", "recrutée",
   "analysé", "analysée", "implémenté", "implémentée", "déployé", "déployée", "automatisé",
+  "assuré", "assurée", "réalisé", "réalisée", "conduit", "conduite", "élaboré", "élaborée",
+  "structuré", "structurée", "renforcé", "renforcée", "accompagné", "accompagnée",
+  "transformé", "transformée", "modernisé", "modernisée", "configuré", "configurée",
+  "consolidé", "consolidée", "initié", "initiée", "sécurisé", "sécurisée", "accéléré", "accélérée",
+  "résolu", "résolue", "établi", "établie", "généré", "générée", "contribué",
   "led", "managed", "developed", "designed", "created", "launched", "improved", "optimized",
   "increased", "reduced", "negotiated", "supervised", "trained", "recruited", "analyzed",
   "implemented", "deployed", "automated", "built", "delivered", "achieved", "drove",
-  "assuré", "assurée", "réalisé", "réalisée", "conduit", "conduite", "élaboré", "élaborée",
-  "structuré", "structurée", "renforcé", "renforcée", "accompagné", "accompagnée",
+  "spearheaded", "streamlined", "mentored", "facilitated", "orchestrated", "engineered",
+  "executed", "initiated", "established", "resolved", "secured", "accelerated", "generated",
+  "contributed", "coordinated", "integrated", "configured", "modernized", "transformed",
 ];
 
 const SECTION_PATTERNS = {
@@ -23,10 +29,15 @@ const SECTION_PATTERNS = {
   skills: /\b(comp[ée]tences?|skills?|savoir[-\s]?faire|technologies|outils|hard\s+skills)\b/i,
   languages: /\b(langues?|languages?)\b/i,
   summary: /\b(profil|r[ée]sum[ée]|objective|objectif|about|à propos|synth[èe]se)\b/i,
+  certifications: /\b(certifications?|habilitations?|accréditations?|licences?)\b/i,
+  projects: /\b(projets?|projects?|réalisations?)\b/i,
+  publications: /\b(publications?|articles?|communications?)\b/i,
+  volunteering: /\b(bénévolat|volontariat|volunteering|associatif|engagement)\b/i,
+  references: /\b(références?|references?|recommandations?)\b/i,
 };
 
 const JOB_TITLE_HINTS =
-  /\b(d[ée]veloppeur|developer|ing[ée]nieur|engineer|manager|chef de projet|consultant|analyst|analyste|responsable|directeur|directrice|assistant|assistante|commercial|marketing|comptable|rh|ressources humaines|designer|product owner|devops|data scientist|architecte|juriste|avocat|infirmier|enseignant)\b/i;
+  /\b(d[ée]veloppeur|developer|ing[ée]nieur|engineer|manager|chef de projet|consultant|analyst|analyste|responsable|directeur|directrice|assistant|assistante|commercial|marketing|comptable|rh|ressources humaines|designer|product owner|devops|data scientist|architecte|juriste|avocat|infirmier|enseignant|product manager|scrum master|business analyst|chef de produit|technicien|technicienne|coordinateur|coordinatrice|charg[ée]e?\s+de\s+mission|data analyst|ux designer|project manager)\b/i;
 
 const PROFESSIONAL_KEYWORDS = [
   "gestion", "projet", "équipe", "client", "stratégie", "budget", "performance",
@@ -37,6 +48,9 @@ const PROFESSIONAL_KEYWORDS = [
   "compliance", "audit", "formation", "recrutement", "vente", "commercial",
   "marketing", "finance", "comptable", "logistique", "supply chain", "ops",
   "product", "ux", "ui", "devops", "cloud", "aws", "azure", "api", "saas",
+  "docker", "kubernetes", "git", "react", "angular", "node", "typescript",
+  "terraform", "ci/cd", "machine learning", "power bi", "tableau", "jira",
+  "figma", "salesforce", "mongodb", "postgresql", "redis", "graphql", "rest",
 ];
 
 /** Soft skills — never count as hard keyword density (fallback path). */
@@ -127,6 +141,21 @@ const COMMON_TYPOS = [
   { wrong: /\bparceque\b/gi, right: "parce que" },
   { wrong: /\bquelque\s+soit\b/gi, right: "quel que soit" },
   { wrong: /\bai\s+eu\s+l'?occasion\b/gi, right: "j'ai eu l'occasion" },
+  { wrong: /\bcurriculum\s+vitea\b/gi, right: "curriculum vitae" },
+  { wrong: /\bdipl[oô]me\b/gi, right: "diplôme", skipIfEn: true },
+  { wrong: /\bmaitrise\b/gi, right: "maîtrise", skipIfEn: true },
+  { wrong: /\bbaccalaureat\b/gi, right: "baccalauréat", skipIfEn: true },
+  { wrong: /\bcompétance(s)?\b/gi, right: "compétence$1" },
+  { wrong: /\breussit\b/gi, right: "réussi", skipIfEn: true },
+  { wrong: /\bresposable\b/gi, right: "responsable" },
+  { wrong: /\bcommerçial(e)?\b/gi, right: "commercial$1" },
+  { wrong: /\badminsitratif\b/gi, right: "administratif" },
+  { wrong: /\binformatque\b/gi, right: "informatique" },
+  { wrong: /\bengieneer\b/gi, right: "engineer" },
+  { wrong: /\bacheived\b/gi, right: "achieved" },
+  { wrong: /\bcommited\b/gi, right: "committed" },
+  { wrong: /\bliason\b/gi, right: "liaison" },
+  { wrong: /\benviromental\b/gi, right: "environmental" },
 ];
 
 const COMMON_GRAMMAR = [
@@ -144,6 +173,14 @@ const COMMON_GRAMMAR = [
   { wrong: /\bça\s+a\s+été\b/gi, right: "cela a été" },
   { wrong: /\bje\s+me\s+suis\s+occupé\s+de\s+de\b/gi, right: "je me suis occupé de" },
   { wrong: /\bresponsable\s+des?\s+suivis?\s+des?\s+dossiers\b/gi, right: "assuré le suivi des dossiers" },
+  { wrong: /\bà\s+[A-Z]/g, right: null, skipCheck: true },
+  { wrong: /\ba\s+(été|permis|contribué|favorisé|facilité)\b/gi, right: "a $1", noFire: true },
+  { wrong: /\btout\s+les\b/gi, right: "tous les" },
+  { wrong: /\bj['']ai\s+pu\s+développé\b/gi, right: "j'ai pu développer" },
+  { wrong: /\bj['']ai\s+pu\s+géré\b/gi, right: "j'ai pu gérer" },
+  { wrong: /\bj['']ai\s+pu\s+réalisé\b/gi, right: "j'ai pu réaliser" },
+  { wrong: /\bles\s+erreur\b/gi, right: "les erreurs" },
+  { wrong: /\bplusieurs\s+année\b/gi, right: "plusieurs années" },
 ];
 
 function findGrammarIssues(text, lang) {
@@ -216,14 +253,14 @@ function detectEmail(text) {
 }
 
 function detectPhone(text) {
-  return /(\+?\d[\d\t .,\-]{7,}\d)|(\b0[1-9](?:[.\-\t ]?\d{2}){4}\b)/.test(text);
+  return /(\+?\d[\d\t .,\-]{7,}\d)|(\b0[1-9](?:[.\-\t ]?\d{2}){4}\b)|(\(\d{3}\)\s?\d{3}[-.\s]?\d{4})|(\+\d{2,3}[\s.\-]?\d[\d\s.\-]{7,14}\d)/.test(text);
 }
 
 function detectLinkedIn(text) {
   return /linkedin\.com\/in\/[\w\-.%]+/i.test(text || "");
 }
 
-const PHONE_LIKE_RE = /(\+?\d[\d\t .,\-]{7,}\d)|(\b0[1-9](?:[.\-\t ]?\d{2}){4}\b)/;
+const PHONE_LIKE_RE = /(\+?\d[\d\t .,\-]{7,}\d)|(\b0[1-9](?:[.\-\t ]?\d{2}){4}\b)|(\(\d{3}\)\s?\d{3}[-.\s]?\d{4})|(\+\d{2,3}[\s.\-]?\d[\d\s.\-]{7,14}\d)/;
 
 /** Métriques « résultat » uniquement (pas dates / tél / CP). */
 function countResultMetrics(text) {
@@ -248,6 +285,10 @@ function countResultMetrics(text) {
       if (/^(19|20)\d{2}$/.test(t.replace(/\s/g, ""))) continue;
       if (PHONE_LIKE_RE.test(t) && t.replace(/\D/g, "").length >= 10) continue;
       if (/^\d{5}$/.test(t.replace(/\s/g, ""))) continue;
+      if (/^\d+\s*(ans?|mois|jours?)\b/i.test(t)) continue;
+      if (/\b(page|phase|lot|poste|niveau|étape)\s+\d+/i.test(t)) continue;
+      const teamMatch = t.match(/\b(?:équipe|team)\s*(?:de\s+)?(\d+)/i);
+      if (teamMatch && Number(teamMatch[1]) <= 5) continue;
       seen.add(t.toLowerCase());
       count += 1;
     }
@@ -295,6 +336,41 @@ function findEmploymentGap(years) {
     return { months: maxGap * 12, years: maxGap, from: gapStart, to: gapStart + maxGap };
   }
   return null;
+}
+
+/** Detect overlapping role dates. */
+function findOverlappingDates(roles) {
+  const dated = (roles || [])
+    .filter((r) => r.startYear && r.endYear && r.section !== "education")
+    .map((r) => ({
+      start: r.startYear,
+      end: r.ongoing ? new Date().getFullYear() : r.endYear,
+      title: r.title || "",
+    }))
+    .sort((a, b) => a.start - b.start);
+  const overlaps = [];
+  for (let i = 1; i < dated.length; i++) {
+    if (dated[i].start < dated[i - 1].end) {
+      overlaps.push({
+        role1: dated[i - 1].title,
+        role2: dated[i].title,
+        overlapYears: dated[i - 1].end - dated[i].start,
+      });
+    }
+  }
+  return overlaps;
+}
+
+/** Check if roles are in reverse chronological order (most recent first). */
+function isReverseChronological(roles) {
+  const dated = (roles || [])
+    .filter((r) => r.startYear && r.section !== "education")
+    .map((r) => r.startYear);
+  if (dated.length < 2) return true;
+  for (let i = 1; i < dated.length; i++) {
+    if (dated[i] > dated[i - 1]) return false;
+  }
+  return true;
 }
 
 function detectLanguage(text) {
@@ -1128,6 +1204,82 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
     });
   }
 
+  // Section ordering: Education before Experience for experienced candidates
+  const expAnchor = sectionAnchor(text, "experience", parsed);
+  const eduAnchor = sectionAnchor(text, "education", parsed);
+  const rolesCount = (parsed?.roles || []).filter((r) => r.section !== "education").length;
+  if (expAnchor && eduAnchor && rolesCount >= 3 && eduAnchor.textStart < expAnchor.textStart) {
+    push({
+      kind: "section_order",
+      axis: "structure",
+      shortLabel: isEn ? "Order" : "Ordre",
+      severity: "info",
+      textStart: eduAnchor.textStart,
+      textEnd: eduAnchor.textEnd,
+      quote: eduAnchor.quote,
+      title: isEn
+        ? "Put Experience before Education"
+        : "Placer Expérience avant Formation",
+      detail: isEn
+        ? "With 3+ roles, recruiters and ATS expect Experience first — move Education after."
+        : "Avec 3+ postes, les recruteurs et ATS s'attendent à voir l'Expérience en premier — déplacez la Formation après.",
+      suggestion: "",
+      applyMode: "replace",
+      approximate: true,
+      checkId: "section_order",
+    });
+  }
+
+  // Overlapping dates
+  const dateOverlaps = findOverlappingDates(parsed?.roles);
+  if (dateOverlaps.length > 0) {
+    const first = dateOverlaps[0];
+    const exp2 = sectionAnchor(text, "experience", parsed) || { textStart: 0, textEnd: 30, quote: "(expérience)" };
+    push({
+      kind: "overlapping_dates",
+      axis: "structure",
+      shortLabel: isEn ? "Dates" : "Dates",
+      severity: "warning",
+      textStart: exp2.textStart,
+      textEnd: exp2.textEnd,
+      quote: exp2.quote,
+      title: isEn
+        ? `Overlapping dates (${first.overlapYears}y between roles)`
+        : `Dates qui se chevauchent (${first.overlapYears} an(s) entre postes)`,
+      detail: isEn
+        ? "Some roles have overlapping date ranges — ATS may flag inconsistency."
+        : "Certains postes ont des plages de dates qui se chevauchent — un ATS peut signaler une incohérence.",
+      suggestion: "",
+      applyMode: "replace",
+      approximate: true,
+      checkId: "overlapping_dates",
+    });
+  }
+
+  // Reverse chronology
+  if (!isReverseChronological(parsed?.roles) && (parsed?.roles || []).length >= 2) {
+    const exp3 = sectionAnchor(text, "experience", parsed) || { textStart: 0, textEnd: 30, quote: "(expérience)" };
+    push({
+      kind: "reverse_chronology",
+      axis: "structure",
+      shortLabel: isEn ? "Chrono" : "Chrono",
+      severity: "info",
+      textStart: exp3.textStart,
+      textEnd: exp3.textEnd,
+      quote: exp3.quote,
+      title: isEn
+        ? "List roles in reverse chronological order"
+        : "Classez les postes du plus récent au plus ancien",
+      detail: isEn
+        ? "ATS and recruiters expect the most recent role first."
+        : "Les ATS et recruteurs s'attendent à voir le poste le plus récent en premier.",
+      suggestion: "",
+      applyMode: "replace",
+      approximate: true,
+      checkId: "reverse_chronology",
+    });
+  }
+
   return annotations
     .map((a) => {
       const q = String(a.quote || "").trim();
@@ -1429,6 +1581,11 @@ function scoreReadability(text, fileMeta) {
     });
   }
 
+  // Colonnes = cap sévère (ATS réels échouent à parser les colonnes)
+  if (hasColumnsSmell) {
+    score = Math.min(score, 12);
+  }
+
   // Exigeant: pas de lisibilité « parfaite » si headings ATS non parsables
   const parsed = fileMeta.parsed;
   const hasExp = hasParsedSection(parsed, "experience");
@@ -1699,6 +1856,30 @@ function scoreStructure(text, fileMeta = {}) {
     checks.push({ id: "section_skills", ok: false, label: "Section Compétences manquante." });
   }
 
+  const hasCerts = hasParsedSection(parsed, "certifications") ||
+    SECTION_PATTERNS.certifications.test(text.slice(0, 3000));
+  if (hasCerts) {
+    score += 1;
+    checks.push({ id: "section_certifications", ok: true, label: "Section Certifications présente." });
+  }
+
+  const overlaps = findOverlappingDates(parsed?.roles);
+  if (overlaps.length > 0) {
+    checks.push({
+      id: "overlapping_dates",
+      ok: false,
+      label: `Dates de postes qui se chevauchent (${overlaps.length}) — vérifiez la chronologie.`,
+    });
+  }
+
+  if (!isReverseChronological(parsed?.roles)) {
+    checks.push({
+      id: "reverse_chronology",
+      ok: false,
+      label: "Postes non classés du plus récent au plus ancien — les ATS attendent un ordre anti-chronologique.",
+    });
+  }
+
   const standardHeadings = hasExp && hasEdu && hasSkills;
   checks.push({
     id: "standard_headings",
@@ -1746,7 +1927,14 @@ function scoreContent(text, fileMeta = {}) {
     });
   }
 
-  if (weakHits >= 3) {
+  if (weakHits >= 4) {
+    score = Math.max(0, score - 3);
+    checks.push({
+      id: "weak_verbs",
+      ok: false,
+      label: `Trop de formulations faibles (${weakHits}) — remplacez par des verbes d'action.`,
+    });
+  } else if (weakHits >= 3) {
     score = Math.max(0, score - 2);
     checks.push({
       id: "weak_verbs",
@@ -1847,10 +2035,10 @@ function scoreContent(text, fileMeta = {}) {
   }
 
   const wordCount = words.length;
-  if (wordCount >= 250 && wordCount <= 900) {
+  if (wordCount >= 200 && wordCount <= 1000) {
     score += 7;
     checks.push({ id: "concision", ok: true, label: `Concision correcte (~${wordCount} mots).` });
-  } else if (wordCount < 250) {
+  } else if (wordCount < 200) {
     checks.push({ id: "concision", ok: false, label: `Contenu trop court (~${wordCount} mots).` });
   } else {
     checks.push({
@@ -2002,8 +2190,8 @@ function scoreKeywords(text, fileMeta = {}) {
       });
     }
   } else {
-    // Cap without JD — Excellent needs offer or strong hard density
-    score = Math.min(score, 15);
+    // Cap without JD — cannot validate keyword alignment without an offer
+    score = Math.min(score, 12);
   }
 
   return {
@@ -2645,18 +2833,24 @@ export function analyzeCv(rawText, fileMeta = {}) {
 
   const emailOk = structure.checks.some((c) => c.id === "email" && c.ok === true);
   const phoneOk = structure.checks.some((c) => c.id === "phone" && c.ok === true);
+  const nameOk = structure.checks.some((c) => c.id === "identity_name" && c.ok === true);
   const completeRoleOk = structure.checks.some((c) => c.id === "complete_role" && c.ok === true);
   const roleDatesOk = structure.checks.some((c) => c.id === "role_dates" && c.ok === true);
   const metricsOk = content.checks.some((c) => c.id === "metrics" && c.ok === true);
   const actionVerbsOk = content.checks.some((c) => c.id === "action_verbs" && c.ok === true);
   const eduOk = structure.checks.some((c) => c.id === "section_education" && c.ok === true);
   const skillsOk = structure.checks.some((c) => c.id === "section_skills" && c.ok === true);
+  const noColumnIssue = !readability.hasColumnsSmell;
+  const noTableIssue = !readability.hasTables;
   const passes =
-    total >= 70 &&
+    total >= 72 &&
     readability.score >= 15 &&
     !!structure.hasExp &&
     emailOk &&
     phoneOk &&
+    nameOk &&
+    noColumnIssue &&
+    noTableIssue &&
     (completeRoleOk || roleDatesOk) &&
     metricsOk &&
     actionVerbsOk &&

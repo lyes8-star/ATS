@@ -1047,4 +1047,155 @@ Java
   console.log("✓ NA checks not counted as strengths");
 }
 
+// ── Pinned goodCv score (catches silent threshold drift) ──
+{
+  const r = analyzeCv(goodCv, { fileName: "marie.pdf", pages: 1 });
+  assert.equal(r.total, 80, `Pinned goodCv score expected 80, got ${r.total}`);
+  assert.equal(r.categories.keywords.score, 12, "Keyword cap without JD should be 12");
+  console.log("✓ Pinned goodCv score OK", r.total);
+}
+
+// ── English CV ──
+{
+  const enCv = `John Smith
+Software Engineer
+john.smith@example.com · +44 7700 900 123
+linkedin.com/in/johnsmith · London, UK
+
+EXPERIENCE
+
+Senior Software Engineer — Acme Corp (2020 – present)
+- Led migration of monolith to microservices, reducing deploy time by 60%.
+- Built real-time analytics pipeline processing 2,000,000 events/day.
+- Managed 12 engineers across 3 time zones with $800k annual budget.
+- Delivered 15 features in Q3 sprint cycle, increasing user retention by 22%.
+- Implemented automated alerting system cutting incident response by 45%.
+- Designed CI/CD pipeline reducing release cycle from 2 weeks to 1 day.
+
+Junior Developer — StartupABC (2018 – 2020)
+- Developed REST API serving 50k daily users using Python and PostgreSQL.
+- Improved test coverage from 30% to 85% via automated integration tests.
+- Automated deployment scripts saving 8 hours per week for the ops team.
+- Created internal dashboard tracking 12 KPIs for product team using React and D3.
+
+Software Intern — TechStartup (2017 – 2018)
+- Built internal tooling for data ingestion, processing 500 records per minute.
+- Contributed to open-source monitoring library, now used by 200 companies.
+- Designed database schema supporting multi-tenant architecture.
+
+EDUCATION
+BSc Computer Science — University of Manchester (2015 – 2018)
+First class honours. Thesis on distributed systems performance optimization.
+Relevant coursework: algorithms, databases, operating systems, machine learning.
+
+SKILLS
+Python, Java, AWS, Docker, Kubernetes, React, PostgreSQL, Redis, CI/CD, Terraform, Git, TypeScript, GraphQL, MongoDB
+
+LANGUAGES
+English (native), French (B2)
+
+CERTIFICATIONS
+AWS Solutions Architect Associate (2022)
+Kubernetes Administrator (CKA, 2023)
+
+INTERESTS
+Open source contributing, technical blogging, marathon running
+`;
+  const enR = analyzeCv(enCv, { fileName: "john.pdf", pages: 1 });
+  assert.ok(enR.total >= 72, `English CV should pass, got ${enR.total}`);
+  assert.ok(enR.passes, "English CV should pass gate");
+  const phoneCheck = enR.checklist.find((c) => c.id === "phone");
+  assert.equal(phoneCheck?.ok, true, "UK phone +44 should be detected");
+  console.log("✓ English CV OK score", enR.total, "passes", enR.passes);
+}
+
+// ── Anti-gaming: soft skills + weak verbs only → fails ──
+{
+  const weakCv = `Pierre Martin
+pierre@test.com · 06 12 34 56 78
+EXPÉRIENCE PROFESSIONNELLE
+Chargé de mission — Entreprise A (2020 – 2023)
+- Responsable de la gestion des projets
+- Chargé de la coordination des équipes
+- Travaillé sur l'amélioration des processus
+- Participé à la mise en place de solutions
+- Responsable de la communication interne
+Assistante — Entreprise B (2018 – 2020)
+- Aidé à la gestion du planning
+- Responsable de l'accueil
+FORMATION
+Licence — Université (2015 – 2018)
+COMPÉTENCES
+Communication, leadership, collaboration, management, qualité, stratégie, innovation
+`;
+  const weakR = analyzeCv(weakCv, { fileName: "weak.pdf", pages: 1 });
+  assert.ok(!weakR.passes, `Weak verbs + soft skills CV should NOT pass, got ${weakR.total}`);
+  console.log("✓ Anti-gaming: soft+weak CV does not pass", weakR.total);
+}
+
+// ── Section ordering: Education before Experience for experienced candidate ──
+{
+  const orderCv = `Alice Martin
+alice@test.com · 06 12 34 56 78
+FORMATION
+Master — Université (2010 – 2012)
+EXPÉRIENCE PROFESSIONNELLE
+Senior Dev — Corp A (2020 – 2023)
+- Piloté la refonte du SI.
+Dev — Corp B (2017 – 2020)
+- Développé le module analytics.
+Dev Junior — Corp C (2012 – 2017)
+- Implémenté les tests automatisés.
+COMPÉTENCES
+Python, SQL, Docker, React
+`;
+  const orderR = analyzeCv(orderCv, { fileName: "order.pdf", pages: 1 });
+  const orderAnn = orderR.annotations.find((a) => a.kind === "section_order");
+  assert.ok(orderAnn, "Section ordering annotation should be generated");
+  console.log("✓ Section ordering annotation OK");
+}
+
+// ── Phone international: US format detected ──
+{
+  const usCv = `Jane Doe
+jane@example.com · (555) 123-4567
+linkedin.com/in/janedoe · New York, NY
+EXPERIENCE
+Manager — Corp (2020 – 2023)
+- Led team of 12 engineers, delivered $2M project.
+- Increased revenue by 35% through process automation.
+EDUCATION
+MBA — NYU (2018 – 2020)
+SKILLS
+Python, SQL, Excel, Salesforce, Tableau
+`;
+  const usR = analyzeCv(usCv, { fileName: "us.pdf", pages: 1 });
+  const usPhone = usR.checklist.find((c) => c.id === "phone");
+  assert.equal(usPhone?.ok, true, "US phone (555) 123-4567 should be detected");
+  console.log("✓ Phone international US OK");
+}
+
+// ── Overlapping dates detected ──
+{
+  const overlapCv = `Test User
+test@mail.com · 06 11 22 33 44
+EXPÉRIENCE PROFESSIONNELLE
+Dev A — Corp A (2018 – 2023)
+- Développé le backend.
+Dev B — Corp B (2020 – 2024)
+- Piloté le frontend.
+FORMATION
+Licence (2015 – 2018)
+COMPÉTENCES
+Python, SQL, Docker
+`;
+  const oR = analyzeCv(overlapCv, { fileName: "overlap.pdf", pages: 1 });
+  const overlapCheck = oR.checklist.find((c) => c.id === "overlapping_dates");
+  assert.ok(overlapCheck, "Overlapping dates checklist should exist");
+  assert.equal(overlapCheck.ok, false, "Overlapping dates should be flagged");
+  const overlapAnn = oR.annotations.find((a) => a.kind === "overlapping_dates");
+  assert.ok(overlapAnn, "Overlapping dates annotation should be generated");
+  console.log("✓ Overlapping dates detection OK");
+}
+
 console.log("Tous les tests OK");
