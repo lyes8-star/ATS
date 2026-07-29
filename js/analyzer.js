@@ -767,55 +767,109 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
   const passiveRe = /\bresponsable\s+de\s+[^.!\n]{8,120}/gi;
   let pm;
   let passiveCount = 0;
-  while ((pm = passiveRe.exec(text)) !== null && passiveCount < 6) {
+  const expBlob = (parsed?.sections?.experience || []).join("\n");
+  const passiveHay = expBlob && expBlob.length >= 40 ? expBlob : text;
+  while ((pm = passiveRe.exec(passiveHay)) !== null && passiveCount < 6) {
     const quote = pm[0].trim();
     const suggestion = quote
       .replace(/^responsable\s+de\s+/i, isEn ? "Led " : "Piloté ")
       .replace(/^./, (c) => c.toUpperCase());
+    const loc = locateQuote(text, quote) || {
+      textStart: pm.index,
+      textEnd: pm.index + pm[0].length,
+      quote,
+    };
     push({
       kind: "passive_verb",
       axis: "content",
       shortLabel: isEn ? "Verb" : "Verbe",
       severity: "warning",
-      textStart: pm.index,
-      textEnd: pm.index + pm[0].length,
-      quote,
+      textStart: loc.textStart,
+      textEnd: loc.textEnd,
+      quote: loc.quote,
       title: isEn
         ? `Replace « ${quote.slice(0, 42)}${quote.length > 42 ? "…" : ""} »`
         : `Remplacer « ${quote.slice(0, 42)}${quote.length > 42 ? "…" : ""} »`,
       detail: isEn
-        ? "This line describes a duty, not an action. Swap to a strong verb on the same task."
-        : "Cette ligne décrit une tâche, pas une action. Remplacez par un verbe d'action sur la même mission.",
+        ? "This experience line describes a duty, not an action. Swap to a strong verb on the same task."
+        : "Cette ligne d'expérience décrit une tâche, pas une action. Remplacez par un verbe d'action sur la même mission.",
       suggestion,
       applyMode: "replace",
       approximate: false,
+      checkId: "weak_verbs",
+    });
+    passiveCount += 1;
+  }
+
+  const weakFromLex = scores.content?.verbWeakHits || [];
+  for (const wh of weakFromLex.slice(0, 4)) {
+    if (passiveCount >= 6) break;
+    const quote = String(wh.quote || "").trim();
+    if (!quote) continue;
+    const idx = typeof wh.index === "number" ? wh.index : text.toLowerCase().indexOf(quote.toLowerCase());
+    if (idx < 0) continue;
+    // Skip if we already annotated overlapping span
+    if (
+      annotations.some(
+        (a) =>
+          a.kind === "passive_verb" &&
+          idx < a.textEnd &&
+          idx + quote.length > a.textStart
+      )
+    ) {
+      continue;
+    }
+    push({
+      kind: "passive_verb",
+      axis: "content",
+      shortLabel: isEn ? "Verb" : "Verbe",
+      severity: "warning",
+      textStart: idx,
+      textEnd: idx + quote.length,
+      quote,
+      title: isEn
+        ? `Weak verb « ${quote} » — prefer an action verb`
+        : `Verbe faible « ${quote} » — préférez un verbe d'action`,
+      detail: isEn
+        ? `« ${wh.weak || quote} » is a weak formulation in Experience. Replace with a concrete action verb (led, built, delivered…).`
+        : `« ${wh.weak || quote} » est une formulation faible en Expérience. Remplacez par un verbe d'action concret (piloté, développé, livré…).`,
+      suggestion: String(wh.suggestion || (isEn ? "Led …" : "Piloté …")),
+      applyMode: "replace",
+      approximate: false,
+      checkId: "weak_verbs",
     });
     passiveCount += 1;
   }
 
   if (!scores.content.hasMetrics) {
     const bulletRe = /^[\s•\-\*]+(.{20,160})$/gm;
+    const metricHay = expBlob && expBlob.length >= 40 ? expBlob : text;
     let bm;
     let metricAnns = 0;
-    while ((bm = bulletRe.exec(text)) !== null && metricAnns < 4) {
+    while ((bm = bulletRe.exec(metricHay)) !== null && metricAnns < 4) {
       const line = bm[1].trim();
       if (bulletHasResultMetric(line)) continue;
       if (!/[a-záàâäéèêëíìîïóòôöúùûüç]/i.test(line)) continue;
       const suggestion = `${line.replace(/\.$/, "")} [${
         isEn ? "metric: % or volume you owned" : "chiffre : % ou volume dont vous êtes responsable"
       }]`;
+      const loc = locateQuote(text, line) || {
+        textStart: bm.index,
+        textEnd: bm.index + bm[0].length,
+        quote: line.slice(0, 100),
+      };
       push({
         kind: "missing_metric",
         axis: "content",
         shortLabel: isEn ? "Metric" : "Chiffre",
         severity: "warning",
-        textStart: bm.index,
-        textEnd: bm.index + bm[0].length,
-        quote: line.slice(0, 100),
-        title: isEn ? "Add a metric to this bullet" : "Ajouter un chiffre à cette puce",
+        textStart: loc.textStart,
+        textEnd: loc.textEnd,
+        quote: loc.quote.slice(0, 100),
+        title: isEn ? "Add a metric to this experience bullet" : "Ajouter un chiffre à cette puce d'expérience",
         detail: isEn
-          ? "This bullet has no number. Replace the bracket with a real KPI from that role (%, €, headcount, delay)."
-          : "Cette puce n'a aucun chiffre. Remplacez le crochet par un vrai KPI de ce poste (%, €, effectif, délai).",
+          ? "This experience bullet has no number. Replace the bracket with a real KPI from that role (%, €, headcount, delay)."
+          : "Cette puce d'expérience n'a aucun chiffre. Remplacez le crochet par un vrai KPI de ce poste (%, €, effectif, délai).",
         suggestion,
         applyMode: "replace",
         approximate: false,
@@ -838,8 +892,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ...exp,
         title: isEn ? "Add quantified results to recent roles" : "Chiffrer les expériences récentes",
         detail: isEn
-          ? "No metrics detected on the CV. Pick 2–3 recent bullets and add a real KPI you can defend in interview."
-          : "Aucun chiffre détecté sur le CV. Choisissez 2–3 puces récentes et ajoutez un KPI réel que vous pouvez défendre en entretien.",
+          ? "No metrics detected on experience bullets. Pick 2–3 recent bullets and add a real KPI you can defend in interview."
+          : "Aucun chiffre détecté sur les puces d'expérience. Choisissez 2–3 puces récentes et ajoutez un KPI réel que vous pouvez défendre en entretien.",
         suggestion: isEn
           ? "- [Action] … ([metric: % / volume / €])"
           : "- [Action] … ([chiffre : % / volume / €])",
@@ -923,7 +977,9 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       const re = new RegExp(`\\b${escapeReg(k)}\\b`, "i");
       return re.test(lower);
     };
-    if (jd?.jdTerms?.length) {
+    if (jd?.mustMissing?.length) {
+      terms = jd.mustMissing.filter((t) => !hasTerm(t)).slice(0, 5);
+    } else if (jd?.jdTerms?.length) {
       terms = jd.jdTerms.filter((t) => !hasTerm(t)).slice(0, 5);
     }
     if (!terms.length) {
@@ -937,22 +993,23 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
           quote: "(compétences)",
         };
       const line = terms.join(" · ");
+      const mustCov = jd?.mustCoverage;
       push({
         kind: "keyword",
         axis: "keywords",
         shortLabel: isEn ? "Keywords" : "Mots-clés",
-        severity: "info",
+        severity: jd?.mustMissing?.length ? "warning" : "info",
         textStart: anchor.textStart,
         textEnd: anchor.textEnd,
         quote: anchor.quote,
         title: isEn
-          ? `Add missing skills: ${terms.slice(0, 3).join(", ")}`
-          : `Ajouter les compétences manquantes : ${terms.slice(0, 3).join(", ")}`,
+          ? `Add required skills: ${terms.slice(0, 3).join(", ")}`
+          : `Ajouter les compétences requises : ${terms.slice(0, 3).join(", ")}`,
         detail:
           jd?.score != null
             ? isEn
-              ? `Job↔CV overlap is ${jd.score}%. Only keep terms you actually master.`
-              : `Alignement offre↔CV à ${jd.score} %. Ne gardez que les termes que vous maîtrisez vraiment.`
+              ? `Job↔CV overlap ${jd.score}%${mustCov != null ? ` (must-have coverage ${mustCov}%)` : ""}. Missing required terms: ${terms.join(", ")}. Only keep terms you actually master.`
+              : `Alignement offre↔CV ${jd.score} %${mustCov != null ? ` (couverture must ${mustCov} %)` : ""}. Termes requis absents : ${terms.join(", ")}. Ne gardez que ceux que vous maîtrisez vraiment.`
             : isEn
               ? "These terms are weak or missing vs. typical target roles. Append only those you use."
               : "Ces termes sont absents ou faibles par rapport aux offres types. N'ajoutez que ceux que vous utilisez.",
@@ -963,6 +1020,34 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         checkId: "keyword_density",
       });
     }
+  }
+
+  // Soft-stuffing annotation
+  const softStuff = (scores.keywords?.checks || []).find((c) => c.id === "keyword_soft_stuffing" && c.ok === false);
+  if (softStuff) {
+    const skills = sectionAnchor(text, "skills", parsed);
+    const softList = (scores.keywords?.softHits || []).slice(0, 5);
+    push({
+      kind: "keyword",
+      axis: "keywords",
+      shortLabel: isEn ? "Soft stuffing" : "Soft stuffing",
+      severity: "warning",
+      textStart: skills?.textStart ?? 0,
+      textEnd: skills?.textEnd ?? Math.min(40, text.length),
+      quote: skills?.quote || softList.join(", ") || "(compétences)",
+      title: isEn
+        ? "Too many soft skills, too few hard tools"
+        : "Trop de soft skills, trop peu d'outils hard",
+      detail: isEn
+        ? `Soft terms dominate (${softList.join(", ") || "soft skills"}). ATS Boolean filters look for concrete tools/methods — add hard skills you use daily.`
+        : `Les termes soft dominent (${softList.join(", ") || "soft skills"}). Les filtres booléens ATS cherchent des outils/méthodes concrets — ajoutez des hard skills de votre quotidien.`,
+      suggestion: isEn
+        ? "Skills: [tool] · [method] · [platform]"
+        : "Compétences : [outil] · [méthode] · [plateforme]",
+      applyMode: "insert_after",
+      approximate: !skills,
+      checkId: "keyword_soft_stuffing",
+    });
   }
 
   if (scores.readability.pages > 2) {
@@ -2298,6 +2383,7 @@ function scoreContent(text, fileMeta = {}) {
     checks,
     hasMetrics: metrics >= 2 || bulletsWithMetrics >= 2,
     weakHits,
+    verbWeakHits: Array.isArray(verbInfo?.weakHits) ? verbInfo.weakHits : [],
   };
 }
 
@@ -2308,9 +2394,12 @@ function scoreKeywords(text, fileMeta = {}) {
   const jd = fileMeta.jdOverlap;
   const roleGaps = fileMeta.roleKeywordGaps;
 
-  // Hard skills only for density (soft skills excluded from scoring)
+  // Prefer hard hits from skills section + recent experience when available
   let hardFound = [];
-  if (skillsMatch?.hardHits?.length) {
+  const sectionHard = skillsMatch?.sectionHardHits;
+  if (Array.isArray(sectionHard) && sectionHard.length) {
+    hardFound = sectionHard.filter((k) => String(k).length >= 3 && !isSoftKeyword(k));
+  } else if (skillsMatch?.hardHits?.length) {
     hardFound = skillsMatch.hardHits.filter((k) => String(k).length >= 3 && !isSoftKeyword(k));
   } else if (skillsMatch && Array.isArray(skillsMatch.hardHits)) {
     // Lexicon loaded but no hard hits — do not fall back to soft hits
@@ -2326,6 +2415,7 @@ function scoreKeywords(text, fileMeta = {}) {
     });
   }
   const unique = new Set(hardFound);
+  const softCount = Array.isArray(skillsMatch?.softHits) ? skillsMatch.softHits.length : 0;
 
   if (unique.size >= 12) {
     score += 12;
@@ -2349,6 +2439,16 @@ function scoreKeywords(text, fileMeta = {}) {
     });
   }
 
+  // Soft-stuffing: many soft skills, few hard → ATS Boolean noise
+  if (softCount >= 5 && unique.size < 4) {
+    score = Math.max(0, score - 2);
+    checks.push({
+      id: "keyword_soft_stuffing",
+      ok: false,
+      label: `Sur-représentation soft (${softCount}) vs hard (${unique.size}) — privilégiez outils et méthodes.`,
+    });
+  }
+
   const diversity = unique.size;
   // Informative only — same signal as density; no extra points
   if (diversity >= 8) {
@@ -2365,7 +2465,7 @@ function scoreKeywords(text, fileMeta = {}) {
     });
   }
 
-  // Role pack gaps
+  // Role pack gaps (only when confidence / margin OK — matcher already gates)
   if (roleGaps?.role && roleGaps.missing?.length) {
     checks.push({
       id: "role_keywords",
@@ -2383,19 +2483,23 @@ function scoreKeywords(text, fileMeta = {}) {
   }
 
   if (jd && jd.score != null) {
-    if (jd.score >= 50) {
+    const mustMiss = Array.isArray(jd.mustMissing) ? jd.mustMissing : [];
+    const mustCov = jd.mustCoverage != null ? jd.mustCoverage : jd.score;
+    if (jd.score >= 50 && mustMiss.length <= 2) {
       score += 5;
       checks.push({
         id: "jd_overlap",
         ok: true,
-        label: `Alignement offre ↔ CV : ${jd.score}% (${jd.overlap.length} termes communs).`,
+        label: `Alignement offre ↔ CV : ${jd.score}% (must ${mustCov}%, ${jd.overlap?.length || 0} termes communs).`,
       });
     } else {
       score += 1;
       checks.push({
         id: "jd_overlap",
         ok: false,
-        label: `Faible alignement avec l'offre (${jd.score}%) — reprenez les termes clés.`,
+        label: mustMiss.length
+          ? `Faible alignement offre (${jd.score}%) — must absents : ${mustMiss.slice(0, 4).join(", ")}.`
+          : `Faible alignement avec l'offre (${jd.score}%) — reprenez les termes clés.`,
       });
     }
   } else {
@@ -2409,6 +2513,7 @@ function scoreKeywords(text, fileMeta = {}) {
     keywords: [...unique].slice(0, 24),
     jdOverlap: jd || null,
     roleKeywordGaps: roleGaps || null,
+    softHits: skillsMatch?.softHits || [],
   };
 }
 
@@ -2875,11 +2980,20 @@ export function analyzeCv(rawText, fileMeta = {}) {
       m = s.match(/^Formulations faibles détectées \((\d+)\) — préférez des verbes d'action\.$/);
       if (m) return `Weak wording detected (${m[1]}) — prefer action verbs.`;
 
-      m = s.match(/^Alignement offre ↔ CV : (\d+)% \((\d+) termes communs\)\.$/);
-      if (m) return `Job ↔ CV alignment: ${m[1]}% (${m[2]} shared terms).`;
+      m = s.match(/^Alignement offre ↔ CV : (\d+)% \(must (\d+)%, (\d+) termes communs\)\.$/);
+      if (m) return `Job ↔ CV alignment: ${m[1]}% (must ${m[2]}%, ${m[3]} shared terms).`;
+
+      m = s.match(/^Faible alignement offre \((\d+)%\) — must absents : (.+)\.$/);
+      if (m) return `Weak job alignment (${m[1]}%) — missing must-haves: ${m[2]}.`;
 
       m = s.match(/^Faible alignement avec l'offre \((\d+)%\) — reprenez les termes clés\.$/);
       if (m) return `Weak job alignment (${m[1]}%) — reuse key terms.`;
+
+      m = s.match(/^Sur-représentation soft \((\d+)\) vs hard \((\d+)\) — privilégiez outils et méthodes\.$/);
+      if (m) return `Soft skills dominate (${m[1]}) vs hard (${m[2]}) — prefer tools and methods.`;
+
+      m = s.match(/^Alignement offre ↔ CV : (\d+)% \((\d+) termes communs\)\.$/);
+      if (m) return `Job ↔ CV alignment: ${m[1]}% (${m[2]} shared terms).`;
 
       m = s.match(/^Concision correcte \(~(\d+) mots\)\.$/);
       if (m) return `Proper concision (~${m[1]} words).`;
@@ -3217,14 +3331,29 @@ export async function analyzeCvAsync(rawText, fileMeta = {}, opts = {}) {
     profilePhotoHint: fileMeta.profilePhotoHint,
   });
   const detectedLang = detectLanguage(normalizeText(rawText));
-  const [skillsMatch, verbStats, roleKeywordGaps] = await Promise.all([
+  const expScope = (parsed?.sections?.experience || []).join("\n");
+  const skillsScope = (parsed?.sections?.skills || []).join("\n");
+  const recentBullets = (parsed?.roles || [])
+    .slice(0, 2)
+    .flatMap((r) => r.bullets || [])
+    .join("\n");
+  const focusedSkillsText = [skillsScope, recentBullets].filter((s) => s && s.trim()).join("\n");
+
+  const [skillsMatch, sectionSkills, verbStats, roleKeywordGaps] = await Promise.all([
     matchSkills(rawText),
-    countVerbs(rawText, detectedLang === "en" ? "en" : "fr"),
+    focusedSkillsText.trim().length >= 20 ? matchSkills(focusedSkillsText) : Promise.resolve(null),
+    countVerbs(rawText, detectedLang === "en" ? "en" : "fr", {
+      scope: expScope && expScope.length >= 40 ? expScope : undefined,
+    }),
     matchRoleKeywordGaps(rawText, {
       headline: parsed?.headline || "",
       roleTitle: parsed?.roles?.[0]?.title || "",
     }),
   ]);
+
+  if (sectionSkills?.hardHits?.length) {
+    skillsMatch.sectionHardHits = sectionSkills.hardHits;
+  }
 
   let jdOverlap = null;
   const jd = (opts.jobDescription || fileMeta.jobDescription || "").trim();
