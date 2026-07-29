@@ -1763,16 +1763,90 @@ communication, leadership, collaboration, teamwork, créativité, autonomie
   assert.ok(!promptFr.includes("IGNORE_ME_SUGGESTION"), "ignored suggestion excluded");
   assert.ok(/Contraintes de sortie|CV source/i.test(promptFr), "FR section headers");
   assert.ok(/Consigne finale/i.test(promptFr), "FR final instruction");
+  assert.ok(/adapte mon CV à cette offre/i.test(promptFr), "FR JD mode role mentions offre");
+  assert.ok(/matching prioritaire|offre d.emploi/i.test(promptFr), "FR JD section present");
 
   const promptEn = buildAiCvPrompt(session, { lang: "en" });
   assert.ok(/Output constraints/i.test(promptEn), "EN section headers");
   assert.ok(/Final instruction/i.test(promptEn), "EN final instruction");
   assert.ok(/Marie Dupont/i.test(promptEn), "EN prompt keeps identity");
+  assert.ok(/Adapt my CV to this job offer/i.test(promptEn), "EN JD mode role mentions job");
+  assert.ok(!promptEn.includes("IGNORED_SHOULD_NOT_APPEAR"), "EN ignored excluded");
+
+  // With jdOverlap mustMissing — appears early in prompt
+  session.report = {
+    ...report,
+    jdOverlap: {
+      overlap: ["react"],
+      score: 42,
+      jdTerms: ["react", "kubernetes", "terraform"],
+      mustTerms: ["react", "kubernetes", "terraform"],
+      mustMissing: ["kubernetes", "terraform"],
+      mustCoverage: 33,
+      niceTerms: [],
+    },
+  };
+  const promptJdFr = buildAiCvPrompt(session, { lang: "fr" });
+  const promptJdEn = buildAiCvPrompt(session, { lang: "en" });
+  assert.ok(/kubernetes/i.test(promptJdFr) && /terraform/i.test(promptJdFr), "FR mustMissing in prompt");
+  assert.ok(/kubernetes/i.test(promptJdEn) && /terraform/i.test(promptJdEn), "EN mustMissing in prompt");
+  const missIdxFr = promptJdFr.toLowerCase().indexOf("kubernetes");
+  const sourceIdxFr = promptJdFr.indexOf("## CV source");
+  const jdIdxFr = promptJdFr.indexOf("matching prioritaire");
+  assert.ok(missIdxFr >= 0 && sourceIdxFr >= 0 && missIdxFr < sourceIdxFr, "mustMissing before source CV (FR)");
+  assert.ok(jdIdxFr >= 0 && jdIdxFr < sourceIdxFr, "JD matching section before source CV");
+  assert.ok(/crédibles|vrais/i.test(promptJdFr), "FR credibility constraint for musts");
+  assert.ok(/credible|true/i.test(promptJdEn), "EN credibility constraint for musts");
 
   const meta = promptMeta(session, { lang: "fr" });
   assert.ok(meta.corrections >= 1, "meta counts actionable corrections");
+  assert.ok(meta.hasJd === true, "meta.hasJd when JD present");
   assert.ok(meta.chars > 200, "meta reports prompt length");
-  console.log("✓ AI CV rebuild prompt OK", { corrections: meta.corrections, chars: meta.chars });
+
+  // Without JD — generic role (no offre / job tailor)
+  const noJdSession = {
+    report: { ...report, jdOverlap: null },
+    annotations: session.annotations,
+    jobDescription: "",
+  };
+  const genericFr = buildAiCvPrompt(noJdSession, { lang: "fr" });
+  assert.ok(!/adapte mon CV à cette offre/i.test(genericFr), "no-JD keeps generic FR role");
+  assert.ok(/Réécris mon CV en version parfaite/i.test(genericFr), "generic FR role");
+  const metaNoJd = promptMeta(noJdSession, { lang: "fr" });
+  assert.ok(metaNoJd.hasJd === false, "meta.hasJd false without JD");
+
+  // Pro merge must preserve local must*
+  const localJd = {
+    overlap: ["react"],
+    score: 55,
+    jdTerms: ["react", "kubernetes"],
+    mustTerms: ["react", "kubernetes"],
+    mustMissing: ["kubernetes"],
+    mustCoverage: 50,
+    niceTerms: [],
+  };
+  const proSk = { score: 88, overlap: ["react", "leadership"] };
+  const merged = {
+    ...localJd,
+    mustTerms: localJd.mustTerms || [],
+    mustMissing: localJd.mustMissing || [],
+    mustCoverage: localJd.mustCoverage != null ? localJd.mustCoverage : null,
+    niceTerms: localJd.niceTerms || [],
+    jdTerms: localJd.jdTerms || [],
+    overlap: localJd.overlap?.length ? localJd.overlap : proSk.overlap || [],
+    score: localJd.score != null ? localJd.score : proSk.score,
+    proScore: proSk.score,
+  };
+  assert.deepEqual(merged.mustMissing, ["kubernetes"], "Pro merge keeps mustMissing");
+  assert.equal(merged.mustCoverage, 50, "Pro merge keeps mustCoverage");
+  assert.equal(merged.score, 55, "Pro merge keeps local score");
+  assert.equal(merged.proScore, 88, "Pro merge stores proScore secondary");
+
+  console.log("✓ AI CV rebuild prompt OK", {
+    corrections: meta.corrections,
+    chars: meta.chars,
+    hasJd: meta.hasJd,
+  });
 }
 
 console.log("Tous les tests OK");

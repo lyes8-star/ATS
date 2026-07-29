@@ -518,7 +518,19 @@ async function runAnalysis() {
           session.selectedId = session.annotations[0]?.id || null;
         }
         if (proSk && proSk.score != null) {
-          report.jdOverlap = proSk;
+          const local = report.jdOverlap || {};
+          report.jdOverlap = {
+            ...local,
+            // Keep local must* / coverage; Pro score is secondary only
+            mustTerms: local.mustTerms || [],
+            mustMissing: local.mustMissing || [],
+            mustCoverage: local.mustCoverage != null ? local.mustCoverage : null,
+            niceTerms: local.niceTerms || [],
+            jdTerms: local.jdTerms || [],
+            overlap: local.overlap?.length ? local.overlap : proSk.overlap || local.overlap || [],
+            score: local.score != null ? local.score : proSk.score,
+            proScore: proSk.score,
+          };
           session.report = report;
         }
         window.ATSAnalytics?.track?.("ats_pro_enabled", { anns: proAnns?.annotations?.length || 0 });
