@@ -31,9 +31,12 @@ export function promptMeta(session, opts = {}) {
  */
 export function buildAiCvPrompt(session, opts = {}) {
   const lang = opts.lang === "en" ? "en" : "fr";
-  const L = labels(lang);
   const report = session?.report || {};
   const parsed = report.parsed || null;
+  const jdText = String(session?.jobDescription || "").trim();
+  const jd = report.jdOverlap;
+  const hasJd = !!(jdText || (jd && (jd.score != null || jd.mustMissing?.length)));
+  const L = labels(lang, { hasJd });
   const parts = [];
 
   parts.push(L.role);
@@ -41,6 +44,29 @@ export function buildAiCvPrompt(session, opts = {}) {
   parts.push(`## ${L.constraintsTitle}`);
   parts.push(L.constraintsBody);
   parts.push("");
+
+  // Matching prioritaire quand une offre est présente
+  if (hasJd) {
+    parts.push(`## ${L.jdTitle}`);
+    if (jd && jd.score != null) {
+      parts.push(
+        L.jdScore
+          .replace("{{score}}", String(jd.score))
+          .replace("{{must}}", jd.mustCoverage != null ? String(jd.mustCoverage) : "—")
+      );
+    }
+    if (jd?.mustMissing?.length) {
+      parts.push(`${L.jdMustMissing}: ${jd.mustMissing.slice(0, 12).join(", ")}`);
+    }
+    if (jd?.overlap?.length) {
+      parts.push(`${L.jdOverlap}: ${jd.overlap.slice(0, 16).join(", ")}`);
+    }
+    if (jdText) {
+      parts.push(`${L.jdOffer}:`);
+      parts.push(jdText.slice(0, 4000));
+    }
+    parts.push("");
+  }
 
   parts.push(`## ${L.sourceTitle}`);
   parts.push(formatSourceCv(parsed, report.text || session?.extracted?.text || "", L));
@@ -74,30 +100,6 @@ export function buildAiCvPrompt(session, opts = {}) {
     }
   }
   parts.push("");
-
-  const jdText = String(session?.jobDescription || "").trim();
-  const jd = report.jdOverlap;
-  if (jdText || (jd && jd.score != null)) {
-    parts.push(`## ${L.jdTitle}`);
-    if (jd && jd.score != null) {
-      parts.push(
-        L.jdScore
-          .replace("{{score}}", String(jd.score))
-          .replace("{{must}}", jd.mustCoverage != null ? String(jd.mustCoverage) : "—")
-      );
-      if (jd.mustMissing?.length) {
-        parts.push(`${L.jdMustMissing}: ${jd.mustMissing.slice(0, 12).join(", ")}`);
-      }
-      if (jd.overlap?.length) {
-        parts.push(`${L.jdOverlap}: ${jd.overlap.slice(0, 16).join(", ")}`);
-      }
-    }
-    if (jdText) {
-      parts.push(`${L.jdOffer}:`);
-      parts.push(jdText.slice(0, 4000));
-    }
-    parts.push("");
-  }
 
   if (report.total != null) {
     parts.push(`## ${L.scoreTitle}`);
@@ -223,17 +225,30 @@ function axisLabel(axis, L) {
   return map[axis] || axis;
 }
 
-function labels(lang) {
+function labels(lang, opts = {}) {
+  const hasJd = !!opts.hasJd;
   if (lang === "en") {
+    const role = hasJd
+      ? "You are an expert ATS resume writer. Adapt my CV to this job offer so it is recruiter-ready and ATS-friendly — without inventing experience."
+      : "You are an expert ATS resume writer. Rewrite my CV into a perfect, recruiter-ready, ATS-friendly version.";
+    const constraintsExtra = hasJd
+      ? [
+          "- Prioritize missing must-have terms from the job match section — weave them in only when they are true and credible given my source CV.",
+          "- Do not invent tools, certifications, or responsibilities just to match the offer.",
+        ]
+      : [];
+    const finalBody = hasJd
+      ? "Rewrite the entire CV tailored to the job offer above. Apply every correction. Integrate missing must-haves only when truthful. Preserve true facts only. Prefer concrete tools/methods over soft-skill stuffing. Return only the finished Markdown CV."
+      : "Rewrite the entire CV applying every correction above. Preserve true facts only. Prefer concrete tools/methods over soft-skill stuffing. Return only the finished Markdown CV.";
     return {
-      role:
-        "You are an expert ATS resume writer. Rewrite my CV into a perfect, recruiter-ready, ATS-friendly version.",
+      role,
       constraintsTitle: "Output constraints",
       constraintsBody: [
         "- Single column only; selectable plain text (no tables, sidebars, multi-column layouts, icons, skill bars, or Canva-style banners).",
         "- Standard headings: Contact, Summary (optional), Experience, Education, Skills (and Languages if relevant).",
         "- Reverse-chronological experience; each bullet starts with a strong action verb and includes a real metric when possible.",
         "- Keep only true facts from my source CV — do not invent jobs, degrees, employers, or numbers.",
+        ...constraintsExtra,
         "- Ready to paste into Word / Google Docs, then export as a text PDF.",
         "- Output ONLY the final CV in clean Markdown (headings + bullets). No preamble, no commentary.",
       ].join("\n"),
@@ -247,16 +262,15 @@ function labels(lang) {
       fix: "Suggested fix",
       checklistTitle: "Failed checklist items",
       checklistEmpty: "(No failed checks.)",
-      jdTitle: "Target job description",
+      jdTitle: "Target job offer — match first",
       jdScore: "Job↔CV overlap: {{score}}% (must-have coverage {{must}}%)",
-      jdMustMissing: "Missing must-have terms",
+      jdMustMissing: "Missing must-have terms (priority)",
       jdOverlap: "Shared terms",
       jdOffer: "Offer text",
       scoreTitle: "Current Test Mon CV score",
       scoreLine: "Score {{total}}/100 — {{label}}",
       finalTitle: "Final instruction",
-      finalBody:
-        "Rewrite the entire CV applying every correction above. Preserve true facts only. Prefer concrete tools/methods over soft-skill stuffing. Return only the finished Markdown CV.",
+      finalBody,
       secExperience: "Experience",
       secEducation: "Education",
       secSkills: "Skills",
@@ -270,15 +284,27 @@ function labels(lang) {
       axisKeywords: "Keywords",
     };
   }
+  const role = hasJd
+    ? "Tu es un expert en rédaction de CV compatibles ATS. Adapte mon CV à cette offre d’emploi pour qu’il soit prêt pour un recruteur et lisible par les logiciels ATS — sans inventer d’expérience."
+    : "Tu es un expert en rédaction de CV compatibles ATS. Réécris mon CV en version parfaite, prête pour un recruteur et lisible par les logiciels ATS.";
+  const constraintsExtra = hasJd
+    ? [
+        "- Priorise les termes must absents de la section matching — intègre-les uniquement s’ils sont vrais et crédibles au regard de mon CV source.",
+        "- N’invente ni outil, ni certification, ni responsabilité juste pour matcher l’offre.",
+      ]
+    : [];
+  const finalBody = hasJd
+    ? "Réécris le CV intégralement en l’adaptant à l’offre ci-dessus. Applique toutes les corrections. Intègre les must absents uniquement s’ils sont vrais. Conserve uniquement les faits vrais. Privilégie outils/méthodes concrets plutôt que le stuffing soft skills. Renvoie uniquement le CV Markdown final."
+    : "Réécris le CV intégralement en appliquant toutes les corrections. Conserve uniquement les faits vrais. Privilégie outils/méthodes concrets plutôt que le stuffing soft skills. Renvoie uniquement le CV Markdown final.";
   return {
-    role:
-      "Tu es un expert en rédaction de CV compatibles ATS. Réécris mon CV en version parfaite, prête pour un recruteur et lisible par les logiciels ATS.",
+    role,
     constraintsTitle: "Contraintes de sortie",
     constraintsBody: [
       "- Une seule colonne ; texte sélectionnable (pas de tableaux, colonnes, sidebar, icônes, barres de compétences, ni bandeaux type Canva).",
       "- Titres standards : Coordonnées, Profil (optionnel), Expérience, Formation, Compétences (et Langues si pertinent).",
       "- Expériences en anti-chronologique ; chaque puce commence par un verbe d’action fort et inclut un chiffre réel quand c’est possible.",
       "- Ne garde que des faits vrais issus de mon CV source — n’invente ni poste, ni diplôme, ni employeur, ni métrique.",
+      ...constraintsExtra,
       "- Prêt à coller dans Word / Google Docs, puis export PDF texte.",
       "- Sortie UNIQUEMENT le CV final en Markdown clair (titres + puces). Aucune intro, aucun commentaire.",
     ].join("\n"),
@@ -292,16 +318,15 @@ function labels(lang) {
     fix: "Correction proposée",
     checklistTitle: "Contrôles en échec",
     checklistEmpty: "(Aucun contrôle en échec.)",
-    jdTitle: "Offre d’emploi cible",
+    jdTitle: "Offre d’emploi cible — matching prioritaire",
     jdScore: "Alignement offre↔CV : {{score}} % (couverture must {{must}} %)",
-    jdMustMissing: "Termes must absents",
+    jdMustMissing: "Termes must absents (priorité)",
     jdOverlap: "Termes communs",
     jdOffer: "Texte de l’offre",
     scoreTitle: "Score Test Mon CV actuel",
     scoreLine: "Score {{total}}/100 — {{label}}",
     finalTitle: "Consigne finale",
-    finalBody:
-      "Réécris le CV intégralement en appliquant toutes les corrections. Conserve uniquement les faits vrais. Privilégie outils/méthodes concrets plutôt que le stuffing soft skills. Renvoie uniquement le CV Markdown final.",
+    finalBody,
     secExperience: "Expérience",
     secEducation: "Formation",
     secSkills: "Compétences",

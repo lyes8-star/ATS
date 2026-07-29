@@ -828,6 +828,214 @@ html.a11y-motion .ats-ticker-slide { animation: none !important; }
   color: var(--ink-soft);
 }
 
+.studio-match {
+  margin: 1.25rem 0 0;
+  padding: 1.05rem 1.15rem 1rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--ink);
+  background: linear-gradient(165deg, rgba(30, 51, 41, 0.05), rgba(250, 248, 245, 0.96));
+  border-radius: 12px;
+}
+
+.studio-match--empty {
+  border-left-color: var(--border);
+  background: rgba(250, 248, 245, 0.7);
+  padding: 0.85rem 1.1rem;
+}
+
+.studio-match-cta {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.studio-match-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 0.85rem;
+}
+
+.studio-match-kicker {
+  margin: 0 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.studio-match-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  color: var(--ink-deep);
+  letter-spacing: 0.01em;
+}
+
+.studio-match-scores {
+  text-align: right;
+}
+
+.studio-match-score-main {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-deep);
+}
+
+.studio-match-score-main strong {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.studio-match-score-main > span:first-of-type {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-left: 0.1rem;
+}
+
+.studio-match-score-caption {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.studio-match-score-pro {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.studio-match-bars {
+  display: grid;
+  gap: 0.45rem;
+  margin-bottom: 0.9rem;
+}
+
+.studio-match-bar {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 8.5rem) 1fr auto;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.studio-match-bar-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.studio-match-bar-track {
+  display: block;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: rgba(30, 51, 41, 0.1);
+  overflow: hidden;
+}
+
+.studio-match-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ink);
+  min-width: 0;
+}
+
+.studio-match-bar-fill--must {
+  background: var(--signal);
+}
+
+.studio-match-bar-val {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink-deep);
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+.studio-match-group {
+  margin-top: 0.7rem;
+}
+
+.studio-match-group-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+
+.studio-match-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.studio-match-chip {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.22rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--ink-deep);
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-match-chip--ok {
+  border-color: rgba(30, 51, 41, 0.35);
+  background: rgba(30, 51, 41, 0.07);
+}
+
+.studio-match-chip--miss {
+  border-color: rgba(180, 83, 9, 0.45);
+  background: rgba(251, 191, 36, 0.18);
+}
+
+.studio-match-chip--overlap {
+  border-color: rgba(196, 163, 90, 0.55);
+  background: rgba(196, 163, 90, 0.12);
+}
+
+.studio-match-chip--more {
+  border-style: dashed;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-match-prompt-note {
+  margin: 0.85rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--ink);
+  border-top: 1px dashed var(--border);
+  padding-top: 0.65rem;
+}
+
+@media (max-width: 640px) {
+  .studio-match-bar {
+    grid-template-columns: 1fr auto;
+  }
+
+  .studio-match-bar-label {
+    grid-column: 1 / -1;
+  }
+
+  .studio-match-scores {
+    text-align: left;
+  }
+}
+
 .analyze-btn {
   width: 100%;
   margin-top: 1.15rem;

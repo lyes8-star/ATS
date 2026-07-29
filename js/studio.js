@@ -200,6 +200,7 @@ function studioShell(session) {
         <div id="cv-preview" class="cv-preview" tabindex="0" aria-label="Prévisualisation du CV annoté"></div>
       </div>
     </div>
+    ${matchPanelBlock(session)}
     ${aiPromptBlock(session)}
     <div class="studio-bar" role="region" aria-label="Actions">
       <p id="studio-bar-count" class="studio-bar-count"></p>
@@ -208,8 +209,118 @@ function studioShell(session) {
       </div>
     </div>
     <div id="studio-toast" class="studio-toast hidden" role="status" aria-live="polite"></div>
-    <p id="studio-jd-overlap" class="studio-jd-overlap hidden" role="status"></p>
   </div>`;
+}
+
+/**
+ * Panneau Matching CV ↔ offre (must / nice / score) sous la preview.
+ * @param {StudioSession} session
+ */
+function matchPanelBlock(session) {
+  const t = window.ATSi18n?.t || ((k) => k);
+  const jd = session.report?.jdOverlap || session.retestReport?.jdOverlap;
+  const hasJdText = String(session.jobDescription || "").trim().length >= 20;
+  const hasMatch = jd && (jd.score != null || (jd.mustTerms && jd.mustTerms.length));
+
+  if (!hasJdText && !hasMatch) {
+    return `
+    <aside id="studio-jd-overlap" class="studio-match studio-match--empty" role="status">
+      <p class="studio-match-cta">${escapeHtml(t("studio.match.empty"))}</p>
+    </aside>`;
+  }
+
+  if (!hasMatch) {
+    return `
+    <aside id="studio-jd-overlap" class="studio-match studio-match--empty" role="status">
+      <p class="studio-match-cta">${escapeHtml(t("studio.match.pending"))}</p>
+    </aside>`;
+  }
+
+  const mustTerms = jd.mustTerms || [];
+  const mustMissing = jd.mustMissing || [];
+  const missingSet = new Set(mustMissing.map((x) => String(x).toLowerCase()));
+  const mustPresent = mustTerms.filter((term) => !missingSet.has(String(term).toLowerCase()));
+  const overlap = jd.overlap || [];
+  const score = jd.score != null ? jd.score : "—";
+  const mustCov = jd.mustCoverage != null ? jd.mustCoverage : null;
+  const proScore =
+    jd.proScore != null && jd.proScore !== jd.score ? jd.proScore : null;
+
+  const chipRow = (label, terms, mod) => {
+    if (!terms.length) return "";
+    const chips = terms
+      .slice(0, 14)
+      .map(
+        (term) =>
+          `<span class="studio-match-chip studio-match-chip--${mod}">${escapeHtml(String(term))}</span>`
+      )
+      .join("");
+    const more =
+      terms.length > 14
+        ? `<span class="studio-match-chip studio-match-chip--more">+${terms.length - 14}</span>`
+        : "";
+    return `<div class="studio-match-group">
+      <p class="studio-match-group-label">${escapeHtml(label)}</p>
+      <div class="studio-match-chips">${chips}${more}</div>
+    </div>`;
+  };
+
+  return `
+    <section id="studio-jd-overlap" class="studio-match" aria-labelledby="studio-match-title">
+      <div class="studio-match-head">
+        <div>
+          <p class="studio-match-kicker">${escapeHtml(t("studio.match.kicker"))}</p>
+          <h2 id="studio-match-title" class="studio-match-title">${escapeHtml(t("studio.match.title"))}</h2>
+        </div>
+        <div class="studio-match-scores" aria-label="${escapeHtml(t("studio.jd.overlap"))}">
+          <p class="studio-match-score-main">
+            <strong>${escapeHtml(String(score))}</strong><span>%</span>
+            <span class="studio-match-score-caption">${escapeHtml(t("studio.match.score"))}</span>
+          </p>
+          ${
+            proScore != null
+              ? `<p class="studio-match-score-pro">${escapeHtml(
+                  t("studio.match.proScore", { score: proScore })
+                )}</p>`
+              : ""
+          }
+        </div>
+      </div>
+      <div class="studio-match-bars">
+        <div class="studio-match-bar" title="${escapeHtml(t("studio.match.score"))}">
+          <span class="studio-match-bar-label">${escapeHtml(t("studio.match.score"))}</span>
+          <span class="studio-match-bar-track"><span class="studio-match-bar-fill" style="width:${Math.max(0, Math.min(100, Number(score) || 0))}%"></span></span>
+          <span class="studio-match-bar-val">${escapeHtml(String(score))}%</span>
+        </div>
+        ${
+          mustCov != null
+            ? `<div class="studio-match-bar" title="${escapeHtml(t("studio.match.mustCoverage"))}">
+          <span class="studio-match-bar-label">${escapeHtml(t("studio.match.mustCoverage"))}</span>
+          <span class="studio-match-bar-track"><span class="studio-match-bar-fill studio-match-bar-fill--must" style="width:${Math.max(0, Math.min(100, mustCov))}%"></span></span>
+          <span class="studio-match-bar-val">${mustCov}%</span>
+        </div>`
+            : ""
+        }
+      </div>
+      ${chipRow(t("studio.match.mustPresent"), mustPresent, "ok")}
+      ${chipRow(t("studio.match.mustMissing"), mustMissing, "miss")}
+      ${chipRow(t("studio.match.overlap"), overlap, "overlap")}
+      ${
+        mustMissing.length
+          ? `<p class="studio-match-prompt-note">${escapeHtml(t("studio.match.promptNote"))}</p>`
+          : ""
+      }
+    </section>`;
+}
+
+function aiPromptLeadText(meta) {
+  const t = window.ATSi18n?.t || ((k) => k);
+  const vars = {
+    n: meta.corrections,
+    plural: meta.corrections > 1 ? "s" : "",
+  };
+  if (meta.hasJd) return t("studio.aiPrompt.leadJd", vars);
+  return t("studio.aiPrompt.lead", vars);
 }
 
 function aiPromptBlock(session) {
@@ -217,10 +328,7 @@ function aiPromptBlock(session) {
   const lang = window.ATSi18n?.getLang?.() === "en" ? "en" : "fr";
   const prompt = buildAiCvPrompt(session, { lang });
   const meta = promptMeta(session);
-  const lead = t("studio.aiPrompt.lead", {
-    n: meta.corrections,
-    plural: meta.corrections > 1 ? "s" : "",
-  });
+  const lead = aiPromptLeadText(meta);
   return `
     <section class="studio-ai-prompt" aria-labelledby="studio-ai-prompt-title">
       <div class="studio-ai-prompt-head">
@@ -245,12 +353,7 @@ function refreshAiPrompt(root, session) {
   const prompt = buildAiCvPrompt(session, { lang });
   ta.value = prompt;
   if (lead) {
-    const t = window.ATSi18n?.t || ((k) => k);
-    const meta = promptMeta(session);
-    lead.textContent = t("studio.aiPrompt.lead", {
-      n: meta.corrections,
-      plural: meta.corrections > 1 ? "s" : "",
-    });
+    lead.textContent = aiPromptLeadText(promptMeta(session));
   }
 }
 
@@ -367,7 +470,6 @@ function bindStudio(root, session, hooks) {
   }
 
   bindZoomControls(root, session);
-  showJdOverlap(root, session);
   void hooks;
 }
 
@@ -418,17 +520,6 @@ function updateZoomLabel(root, session) {
   const cur = session._resolvedScale || DEFAULT_SCALE;
   if (out) out.disabled = cur <= MIN_SCALE + 0.001;
   if (inn) inn.disabled = cur >= MAX_SCALE - 0.001;
-}
-
-function showJdOverlap(root, session) {
-  const el = root.querySelector("#studio-jd-overlap");
-  if (!el) return;
-  const jd = session.report?.jdOverlap || session.retestReport?.jdOverlap;
-  if (jd && jd.score != null) {
-    el.classList.remove("hidden");
-    const t = window.ATSi18n?.t || ((k) => k);
-    el.textContent = `${t("studio.jd.overlap")}: ${jd.score}% (${(jd.overlap || []).length})`;
-  }
 }
 
 async function runProAnalyze(root, session) {
