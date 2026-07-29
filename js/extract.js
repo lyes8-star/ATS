@@ -376,10 +376,11 @@ export function analyzePdfLayout(pagesGeo, opts = {}) {
 
   const fromWord = isWordPdfSource(opts.pdfCreator, opts.pdfProducer);
 
-  // Table detection across all pages — require strong grid; Word PDFs are stricter
+  // Table detection across all pages — require strong grid; never flag 2-column layouts
   let tablePages = 0;
   for (const pg of pages) {
     const pgItems = (pg.items || []).filter((it) => it.str?.trim() && it.rect);
+    if (isBimodalColumnLayout(pgItems)) continue;
     if (detectTableHint(pgItems, { requireStrongGrid: fromWord })) tablePages += 1;
   }
   let tableHint = tablePages > 0;
@@ -450,7 +451,55 @@ function detectImageOnlyPages(pagesGeo) {
 }
 
 /**
- * Vraie grille tableau : ≥3 colonnes X récurrentes sur ≥4 lignes body (hors bandeau contact).
+ * Mise en page bi-colonne (sidebar + corps) — pas une grille tableau.
+ * Deux pics X (gauche <0.38, droite ≥0.40), éventuellement un 3e pic dates à droite.
+ * Une vraie grille ≥4 colonnes n'est PAS bimodale.
+ * @param {TextItem[]} items
+ * @returns {boolean}
+ */
+export function isBimodalColumnLayout(items) {
+  const body = (items || []).filter(
+    (it) => it.str?.trim() && it.rect && (it.rect.y ?? 0) >= 0.15
+  );
+  if (body.length < 14) return false;
+
+  const SNAP = 0.04;
+  const xs = body.map((it) => it.rect.x).sort((a, b) => a - b);
+  /** @type {{ sum: number, n: number }[]} */
+  const clusters = [];
+  for (const x of xs) {
+    const last = clusters[clusters.length - 1];
+    if (last && Math.abs(last.sum / last.n - x) < SNAP) {
+      last.sum += x;
+      last.n += 1;
+    } else {
+      clusters.push({ sum: x, n: 1 });
+    }
+  }
+  const minN = Math.max(4, Math.floor(body.length * 0.12));
+  const significant = clusters
+    .filter((c) => c.n >= minN)
+    .map((c) => ({ x: c.sum / c.n, n: c.n }))
+    .sort((a, b) => a.x - b.x);
+
+  // 4+ vertical columns spanning the page → data grid, not 2-col layout
+  if (significant.length >= 4) return false;
+  if (significant.length < 2 || significant.length > 3) return false;
+
+  const left = significant.filter((c) => c.x < 0.38);
+  const right = significant.filter((c) => c.x >= 0.4);
+  if (!left.length || !right.length) return false;
+
+  const leftN = left.reduce((s, c) => s + c.n, 0);
+  const rightN = right.reduce((s, c) => s + c.n, 0);
+  if (leftN < 6 || rightN < 6) return false;
+  const ratio = Math.min(leftN, rightN) / Math.max(leftN, rightN, 1);
+  return ratio > 0.3;
+}
+
+/**
+ * Vraie grille tableau : colonnes X récurrentes denses (hors bandeau contact).
+ * Rejette les layouts 2 colonnes (sidebar) même si des fragments créent 3+ X.
  * @param {TextItem[]} items
  * @returns {boolean}
  */
@@ -469,18 +518,20 @@ export function detectStrongTableGrid(items) {
   }
 
   // Collect candidate column X from rows with ≥3 cells spanning width
-  /** @type {number[][]} */
-  const rowXs = [];
+  /** @type {{ xs: number[], items: TextItem[] }[]} */
+  const rowData = [];
   for (const row of rows.values()) {
     if (row.length < 3) continue;
     const xs = row.map((r) => r.rect.x).sort((a, b) => a - b);
     if (xs[xs.length - 1] - xs[0] < 0.45) continue;
-    rowXs.push(xs);
+    rowData.push({ xs, items: row });
   }
-  if (rowXs.length < 4) return false;
+  if (rowData.length < 4) {
+    return false;
+  }
 
   // Cluster X positions across those rows → recurring columns
-  const allX = rowXs.flat().sort((a, b) => a - b);
+  const allX = rowData.flatMap((r) => r.xs).sort((a, b) => a - b);
   const clusters = [];
   for (const x of allX) {
     const last = clusters[clusters.length - 1];
@@ -496,31 +547,55 @@ export function detectStrongTableGrid(items) {
     .filter((c) => c.n >= 4)
     .map((c) => c.sum / c.n)
     .sort((a, b) => a - b);
-  if (recurring.length < 3) return false;
+  if (recurring.length < 3) {
+    // Two-column CV layout is NOT a data table
+    return false;
+  }
   if (recurring[recurring.length - 1] - recurring[0] < 0.45) return false;
 
-  // Count body rows that hit ≥3 recurring columns
+  // Count body rows that hit ≥3 recurring columns + short-cell density
   let alignedRows = 0;
-  for (const xs of rowXs) {
+  let shortCellHits = 0;
+  let cellHits = 0;
+  for (const { xs, items: rowItems } of rowData) {
     let hits = 0;
     for (const col of recurring) {
       if (xs.some((x) => Math.abs(x - col) < SNAP)) hits += 1;
     }
-    if (hits >= 3) alignedRows += 1;
+    if (hits >= 3) {
+      alignedRows += 1;
+      for (const it of rowItems) {
+        const nearCol = recurring.some((col) => Math.abs((it.rect?.x ?? 0) - col) < SNAP);
+        if (!nearCol) continue;
+        cellHits += 1;
+        if ((it.str || "").trim().length <= 18) shortCellHits += 1;
+      }
+    }
   }
-  return alignedRows >= 4;
+  if (alignedRows < 4) return false;
+
+  // True data grid: ≥4 recurring columns always counts
+  if (recurring.length >= 4) return true;
+
+  // Two-column CV (sidebar + body, optionally dates) often yields 3 X peaks —
+  // that is layout, not a data table
+  if (isBimodalColumnLayout(items)) return false;
+
+  // ≥3 columns with mostly short cell-like fragments
+  const shortRatio = cellHits ? shortCellHits / cellHits : 0;
+  return shortRatio >= 0.55;
 }
 
 /**
- * Indices de tableau PDF — grille forte uniquement (évite faux positifs Word texte).
+ * Indices de tableau PDF — grille forte uniquement (évite faux positifs Word texte / 2 cols).
  * @param {TextItem[]} items
  * @param {{ requireStrongGrid?: boolean }} [opts]
  */
 export function detectTableHint(items, opts = {}) {
   if (!items || items.length < 12) return false;
+  if (isBimodalColumnLayout(items)) return false;
   const strong = detectStrongTableGrid(items);
   if (opts.requireStrongGrid) return strong;
-  // Default path: only strong grid (shortFrag / micro alone removed — Word-fragile)
   return strong;
 }
 

@@ -440,7 +440,12 @@ Lead Frontend — StartupXYZ
 }
 
 {
-  const { analyzePdfLayout, detectTableHint, detectStrongTableGrid } = await import("./extract.js");
+  const {
+    analyzePdfLayout,
+    detectTableHint,
+    detectStrongTableGrid,
+    isBimodalColumnLayout,
+  } = await import("./extract.js");
 
   // Real 4×6 grid in body → table
   const gridLayout = analyzePdfLayout([
@@ -465,6 +470,41 @@ Lead Frontend — StartupXYZ
   assert.equal(gridLayout.tableHint, true, "aligned 4-col grid should flag tables");
   assert.ok(gridLayout.tableCount >= 1);
   console.log("✓ PDF layout heuristics OK", gridLayout);
+
+  // Two-column CV (skills left / experience + dates right) — not a table
+  const twoColItems = [];
+  for (let i = 0; i < 8; i++) {
+    const y = 0.18 + i * 0.08;
+    twoColItems.push({
+      str: `Skill line number ${i}`,
+      page: 1,
+      textStart: i * 40,
+      textEnd: i * 40 + 18,
+      rect: { x: 0.08, y, w: 0.22, h: 0.02 },
+    });
+    twoColItems.push({
+      str: `Job Title Role ${i}`,
+      page: 1,
+      textStart: i * 40 + 20,
+      textEnd: i * 40 + 34,
+      rect: { x: 0.42, y, w: 0.28, h: 0.02 },
+    });
+    twoColItems.push({
+      str: `2020-202${i}`,
+      page: 1,
+      textStart: i * 40 + 35,
+      textEnd: i * 40 + 44,
+      rect: { x: 0.75, y, w: 0.15, h: 0.02 },
+    });
+  }
+  assert.equal(isBimodalColumnLayout(twoColItems), true, "2-col CV is bimodal");
+  assert.equal(detectStrongTableGrid(twoColItems), false, "2-col CV must not be strong grid");
+  assert.equal(detectTableHint(twoColItems), false, "2-col CV must not set tableHint");
+  const twoColLayout = analyzePdfLayout([
+    { page: 1, width: 600, height: 800, items: twoColItems },
+  ]);
+  assert.equal(twoColLayout.tableHint, false, "analyzePdfLayout skips 2-col as tables");
+  console.log("✓ PDF 2-col layout no false table OK");
 
   // Word-like linear CV: contact 3-frag line + left-aligned body (no grid)
   const wordLikeItems = [];
