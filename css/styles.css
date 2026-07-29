@@ -603,41 +603,26 @@ button:focus-visible {
 
 .ats-ticker-slide {
   display: flex;
-  gap: 1.5rem;
+  align-items: center;
+  gap: 0;
   padding-left: 1.5rem;
   width: max-content;
   animation: ats-ticker-scroll 28s linear infinite;
 }
 
-.ats-logo {
+.ats-name {
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  white-space: nowrap;
-}
-
-.ats-logo svg {
-  width: 1.65rem;
-  height: 1.65rem;
-  flex-shrink: 0;
-  border-radius: 6px;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
-}
-
-.ats-logo span {
   font-family: var(--font);
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: rgba(250, 248, 245, 0.92);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  padding: 0 1rem;
 }
 
-.ats-logo + .ats-logo::before {
-  content: "·";
-  margin-right: 0.5rem;
-  color: rgba(196, 163, 90, 0.5);
-  font-size: 1.1rem;
+.ats-name + .ats-name {
+  border-left: 1px solid rgba(196, 163, 90, 0.4);
 }
 
 @keyframes ats-ticker-scroll {
