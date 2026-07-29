@@ -139,7 +139,9 @@
 
       "studio.title": "Corrections proposées",
       "studio.kicker": "Corrections sur votre document",
-      "studio.hint": "Zones à corriger dans votre fichier d’origine. Copiez la proposition, puis modifiez votre CV vous-même.",
+      "studio.hint": "Cliquez une zone numérotée sur le CV pour voir le conseil et le noter.",
+      "studio.source.warnTitle": "Attention — outil graphique / IA détecté",
+      "studio.source.warnBody": "CV probablement créé avec {{tool}}. Risque ATS et crédibilité importante : reprenez en Word ou Google Docs, texte linéaire, sans bandeaux.",
       "studio.score.initial": "Score initial",
       "studio.link.report": "Voir le rapport détaillé",
       "studio.axes.label": "Détail du score",
@@ -374,7 +376,9 @@
 
       "studio.title": "Proposed corrections",
       "studio.kicker": "Edits on your document",
-      "studio.hint": "Passages to fix in your original file. Copy the suggestion, then edit your CV yourself.",
+      "studio.hint": "Click a numbered zone on the CV to see advice and mark it.",
+      "studio.source.warnTitle": "Warning — design / AI tool detected",
+      "studio.source.warnBody": "CV likely built with {{tool}}. ATS and credibility risk: rewrite in Word or Google Docs as linear plain text, no graphic banners.",
       "studio.score.initial": "Initial score",
       "studio.link.report": "View detailed report",
       "studio.axes.label": "Score breakdown",

@@ -507,6 +507,79 @@ function sectionAnchor(text, kind, parsed) {
 }
 
 /**
+ * Détecte l'outil d'origine du CV (Canva, IA, builders en ligne…) via metadata PDF / nom de fichier.
+ * @param {{ fileName?: string, pdfCreator?: string|null, pdfProducer?: string|null }} fileMeta
+ * @returns {{ id: string, label: string, hostile: boolean, evidence: string }}
+ */
+export function detectCvSource(fileMeta = {}) {
+  const blob = [
+    fileMeta.pdfCreator,
+    fileMeta.pdfProducer,
+    fileMeta.fileName,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  const hit = (re) => {
+    const m = blob.match(re);
+    return m ? m[0] : null;
+  };
+
+  if (hit(/\bcanva\b/)) {
+    return { id: "canva", label: "Canva", hostile: true, evidence: hit(/\bcanva\b/) };
+  }
+
+  const ai =
+    hit(/\bchatgpt\b/) ||
+    hit(/\bgpt-?\d*\b/) ||
+    hit(/\bopenai\b/) ||
+    hit(/\bclaude\b/) ||
+    hit(/\banthropic\b/) ||
+    hit(/\bcopilot\b/) ||
+    hit(/\bgemini\b/) ||
+    hit(/\bnotion\s*ai\b/) ||
+    hit(/\bgamma\b/) ||
+    hit(/\bbeautiful\.?ai\b/);
+  if (ai) {
+    return { id: "ai_builder", label: ai, hostile: true, evidence: ai };
+  }
+
+  const builder =
+    hit(/\bkickresume\b/) ||
+    hit(/\bnovoresume\b/) ||
+    hit(/\benhancv\b/) ||
+    hit(/\bteal\b/) ||
+    hit(/\bresume\.io\b/) ||
+    hit(/\bvisualcv\b/) ||
+    hit(/\bflowcv\b/) ||
+    hit(/\bcvmaker\b/) ||
+    hit(/\bresumegenius\b/) ||
+    hit(/\bzety\b/) ||
+    hit(/\brezi\b/);
+  if (builder) {
+    return {
+      id: "online_builder",
+      label: builder,
+      hostile: true,
+      evidence: builder,
+    };
+  }
+
+  if (hit(/\blatex\b/) || hit(/\btex\b/) || hit(/\bxelatex\b/) || hit(/\bpdftitlefont\b/)) {
+    return { id: "latex", label: "LaTeX", hostile: false, evidence: "latex" };
+  }
+  if (hit(/\bmicrosoft\b/) || hit(/\bword\b/) || hit(/\bwps\b/) || hit(/\blibreoffice\b/)) {
+    return { id: "word", label: "Word", hostile: false, evidence: "word" };
+  }
+  if (hit(/\bgoogle\b/) || hit(/\bdocs\b/)) {
+    return { id: "google_docs", label: "Google Docs", hostile: false, evidence: "google" };
+  }
+
+  return { id: "unknown", label: "", hostile: false, evidence: "" };
+}
+
+/**
  * Construit des annotations localisées (offsets + quote) à partir du rapport.
  * Titres / details / suggestions concrets — pas de faux chiffres ni phrases bateau.
  * Les rects PDF sont enrichis plus tard via attachGeometry().
@@ -530,6 +603,30 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       ...partial,
     });
   };
+
+  const cvSource = scores.readability?.cvSource;
+  if (cvSource?.hostile) {
+    const tool = cvSource.label || cvSource.id;
+    push({
+      kind: "cv_source",
+      axis: "readability",
+      shortLabel: isEn ? "Source" : "Source",
+      severity: "critical",
+      textStart: 0,
+      textEnd: Math.min(40, text.length),
+      quote: text.slice(0, Math.min(40, text.length)).trim() || "CV",
+      title: isEn
+        ? `CV likely built with ${tool} — credibility & ATS risk`
+        : `CV probablement créé avec ${tool} — risque ATS et crédibilité`,
+      detail: isEn
+        ? `Design tools and AI resume builders often produce graphic layouts ATS cannot parse reliably, and recruiters may distrust generic AI-looking CVs. Rebuild in Word or Google Docs as plain selectable text, single column, no banners.`
+        : `Les outils de design et builders IA produisent souvent des mises en page graphiques mal lues par les ATS, et les recruteurs peuvent douter d’un CV « généré ». Reprenez sous Word ou Google Docs en texte sélectionnable, une colonne, sans bandeaux.`,
+      suggestion: "",
+      applyMode: "replace",
+      approximate: true,
+      checkId: "cv_source",
+    });
+  }
 
   for (const s of spelling) {
     const ctx = (s.context || "").replace(/\s+/g, " ").trim();
@@ -1382,6 +1479,7 @@ function shortLabelFor(kind) {
     no_tables: "Tableaux",
     single_column: "Colonnes",
     image_scan: "Scan",
+    cv_source: "Source",
     reading_order: "Ordre",
     header_sparse: "En-tête",
     graphic_skills: "Compétences",
@@ -1712,6 +1810,30 @@ function scoreReadability(text, fileMeta) {
     }
   }
 
+  const cvSource = detectCvSource(fileMeta);
+  if (cvSource.hostile) {
+    score = Math.max(0, score - 3);
+    score = Math.min(score, 16);
+    checks.push({
+      id: "cv_source",
+      ok: false,
+      label: `CV probablement créé avec ${cvSource.label} — risque ATS et crédibilité.`,
+    });
+  } else if (cvSource.id === "word" || cvSource.id === "google_docs" || cvSource.id === "latex") {
+    checks.push({
+      id: "cv_source",
+      ok: true,
+      label: `Source favorable détectée (${cvSource.label}).`,
+    });
+  } else {
+    checks.push({
+      id: "cv_source",
+      ok: null,
+      na: true,
+      label: "Source du fichier : non identifiée.",
+    });
+  }
+
   return {
     score: Math.min(25, score),
     checks,
@@ -1723,6 +1845,7 @@ function scoreReadability(text, fileMeta) {
     standardHeadings,
     imageOnlyPages,
     imageOnly,
+    cvSource,
   };
 }
 
@@ -2470,6 +2593,17 @@ function buildDiagnostics(text, scores) {
     });
   }
 
+  if (scores.readability?.cvSource?.hostile) {
+    const tool = scores.readability.cvSource.label || scores.readability.cvSource.id;
+    diagnostics.push({
+      severity: "critical",
+      title: `CV créé avec ${tool} — crédibilité en jeu`,
+      body: "Canva, builders IA et templates graphiques brouillent souvent le parsing ATS et peuvent paraître génériques aux recruteurs.",
+      tip: "→ Reprenez le contenu en Word/Google Docs, texte linéaire mono-colonne.",
+      checkId: "cv_source",
+    });
+  }
+
   if (diagnostics.length === 0) {
     diagnostics.push({
       severity: "info",
@@ -2947,6 +3081,7 @@ export function analyzeCv(rawText, fileMeta = {}) {
   const skillsOk = structure.checks.some((c) => c.id === "section_skills" && c.ok === true);
   const noColumnIssue = !readability.hasColumnsSmell;
   const noTableIssue = !readability.hasTables;
+  const noHostileSource = !readability.cvSource?.hostile;
   const passes =
     total >= 72 &&
     readability.score >= 15 &&
@@ -2956,6 +3091,7 @@ export function analyzeCv(rawText, fileMeta = {}) {
     nameOk &&
     noColumnIssue &&
     noTableIssue &&
+    noHostileSource &&
     (completeRoleOk || roleDatesOk) &&
     metricsOk &&
     actionVerbsOk &&
@@ -2969,6 +3105,7 @@ export function analyzeCv(rawText, fileMeta = {}) {
     label,
     passes,
     tags,
+    cvSource: readability.cvSource || detectCvSource(fileMeta),
     categories: {
       readability: {
         name: uiLang === "en" ? "ATS readability" : "Lisibilité ATS",
@@ -3032,7 +3169,11 @@ export function analyzeCv(rawText, fileMeta = {}) {
     parsed: parsed || null,
     skillsMatch: fileMeta.skillsMatch || null,
     jdOverlap: fileMeta.jdOverlap || keywords.jdOverlap || null,
-    layoutHostile: !!(readability.hasColumnsSmell || readability.hasTables),
+    layoutHostile: !!(
+      readability.hasColumnsSmell ||
+      readability.hasTables ||
+      readability.cvSource?.hostile
+    ),
   };
 }
 

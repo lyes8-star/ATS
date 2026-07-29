@@ -62,8 +62,6 @@ export async function mountStudio(root, session, hooks = {}) {
   root.innerHTML = studioShell(session);
   bindStudio(root, session, hooks);
   await refreshPreview(root, session);
-  renderList(root, session);
-  renderDetail(root, session);
   updateBar(root, session);
   highlightSelection(root, session);
   if (session.selectedId) {
@@ -74,6 +72,7 @@ export async function mountStudio(root, session, hooks = {}) {
 
 /** Quote utilisable pour cibler dans le fichier d'origine */
 function hasUsableQuote(a) {
+  if (a?.kind === "cv_source") return true;
   const q = String(a.quote || "").trim();
   if (!q) return false;
   if (/^\([^)]*\)$/.test(q)) return false; // placeholders "(document)", "(début)", …
@@ -153,8 +152,19 @@ function studioShell(session) {
       </div>`
     : "";
 
+  const src = report.cvSource || {};
+  const sourceWarn =
+    src.hostile && src.label
+      ? `<div class="studio-source-warn" role="alert">
+          <strong>${escapeHtml(t("studio.source.warnTitle"))}</strong>
+          <span>${escapeHtml(
+            t("studio.source.warnBody", { tool: src.label })
+          )}</span>
+        </div>`
+      : "";
+
   return `
-  <div class="studio" id="studio">
+  <div class="studio studio--preview-first" id="studio">
     <div class="studio-score-strip studio-report-strip">
       <div class="studio-score-row studio-score-row--hero">
         <div class="studio-score-main">
@@ -167,6 +177,7 @@ function studioShell(session) {
           <p class="studio-hint">${escapeHtml(t("studio.hint"))}</p>
         </div>
       </div>
+      ${sourceWarn}
       <div class="studio-score-row studio-score-row--meta">
         <div class="studio-axes" aria-label="${escapeHtml(t("studio.axes.label"))}">
           ${axisBar("readability")}
@@ -177,7 +188,7 @@ function studioShell(session) {
         ${checklistBlock}
       </div>
     </div>
-    <div class="studio-split">
+    <div class="studio-split studio-split--solo">
       <div class="studio-preview-col">
         <div class="cv-preview-toolbar" role="toolbar" aria-label="${escapeHtml(t("studio.zoom.label"))}">
           <button type="button" class="cv-zoom-btn" id="btn-zoom-fit" title="${escapeHtml(t("studio.zoom.fit"))}">${escapeHtml(t("studio.zoom.fit"))}</button>
@@ -187,14 +198,6 @@ function studioShell(session) {
         </div>
         <div id="cv-preview" class="cv-preview" tabindex="0" aria-label="Prévisualisation du CV annoté"></div>
       </div>
-      <aside class="studio-side" aria-label="Suggestions">
-        <div class="studio-side-head">
-          <h2>${escapeHtml(t("studio.side.title"))}</h2>
-          <p id="studio-side-count" class="studio-side-count"></p>
-        </div>
-        <div id="ann-list" class="ann-list" role="listbox" aria-label="Liste des annotations"></div>
-        <div id="ann-detail" class="ann-detail"></div>
-      </aside>
     </div>
     <div class="studio-bar" role="region" aria-label="Actions">
       <p id="studio-bar-count" class="studio-bar-count"></p>
@@ -238,6 +241,7 @@ function focusFailedChecklist(root, session, preferredCheckId = null) {
         single_column: "single_column",
         image_scan: "extractable_text",
         profile_photo: "profile_photo",
+        cv_source: "cv_source",
         missing_section:
           /expérience|experience/i.test(a.title || "")
             ? "section_experience"
@@ -254,19 +258,14 @@ function focusFailedChecklist(root, session, preferredCheckId = null) {
     session.annotations.find((a) => a.status === "pending");
   if (!ann) return;
   session.selectedId = ann.id;
-  renderList(root, session);
-  renderDetail(root, session);
   highlightSelection(root, session);
   const preview = root.querySelector("#cv-preview");
   if (preview) {
-    syncPreviewSelection(preview, ann.id, session.annotations);
+    syncPreviewSelection(preview, ann.id, session.annotations, {
+      onAction: (id, action) => handleBubbleAction(root, session, id, action),
+    });
     scrollPreviewToAnnotation(preview, ann.id);
   }
-  root.querySelector(`.ann-item[data-id="${ann.id}"]`)?.scrollIntoView({
-    behavior: "smooth",
-    block: "nearest",
-  });
-  root.querySelector("#ann-list")?.focus?.();
 }
 
 function bindStudio(root, session, hooks) {
@@ -378,9 +377,8 @@ async function runProAnalyze(root, session) {
     const geo = attachGeometry(anns, session.extracted?.pagesGeo || [], extractApi);
     session.annotations = [...(session.annotations || []), ...geo];
     session.selectedId = session.annotations.find((a) => a.status === "pending")?.id || session.selectedId;
-    renderList(root, session);
-    renderDetail(root, session);
     updateBar(root, session);
+    await refreshPreview(root, session);
     showToast(root, data.source === "heuristic" ? t("studio.pro.heuristic") : t("studio.pro.done"));
   } catch (err) {
     console.error(err);
@@ -391,17 +389,14 @@ async function runProAnalyze(root, session) {
 async function refreshPreview(root, session) {
   const preview = root.querySelector("#cv-preview");
   if (!preview) return;
+
+  const onAction = (id, action) => handleBubbleAction(root, session, id, action);
+
   const onSelect = (id) => {
     session.selectedId = id;
-    renderList(root, session);
-    renderDetail(root, session);
     highlightSelection(root, session);
-    syncPreviewSelection(preview, id, session.annotations);
+    syncPreviewSelection(preview, id, session.annotations, { onAction });
     scrollPreviewToAnnotation(preview, id);
-    root.querySelector(`.ann-item[data-id="${id}"]`)?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-    });
   };
 
   const usePdf = session.extracted?.format === "pdf" && session.extracted?.pdfDoc;
@@ -421,6 +416,7 @@ async function refreshPreview(root, session) {
   if (usePdf) {
     await renderPdfPreview(preview, session.extracted.pdfDoc, session.annotations, {
       onSelect,
+      onAction,
       selectedId: session.selectedId,
       scale,
     });
@@ -429,6 +425,7 @@ async function refreshPreview(root, session) {
     const html = session.extracted?.html || `<pre class="cv-txt">${escapeHtml(plain)}</pre>`;
     renderHtmlPreview(preview, html, plain, session.annotations, {
       onSelect,
+      onAction,
       selectedId: session.selectedId,
       scale,
     });
@@ -437,246 +434,67 @@ async function refreshPreview(root, session) {
 }
 
 function highlightSelection(root, session) {
-  root.querySelectorAll(".ann-item").forEach((el) => {
-    el.classList.toggle("is-selected", el.dataset.id === session.selectedId);
-  });
   const preview = root.querySelector("#cv-preview");
-  if (preview) syncPreviewSelection(preview, session.selectedId, session.annotations);
-}
-
-function placementMeta(a, t) {
-  if (a.placement === "insert" || a.applyMode === "insert_header" || a.applyMode === "insert_after") {
-    return ` · ${t("studio.insertProposed")}`;
-  }
-  if (a.approximate) return ` · ${t("studio.zoneApprox")}`;
-  return "";
-}
-
-function renderList(root, session) {
-  const list = root.querySelector("#ann-list");
-  const sideCount = root.querySelector("#studio-side-count");
-  const barCount = root.querySelector("#studio-bar-count");
-  if (!list) return;
-  const t = window.ATSi18n?.t || ((k) => k);
-  const pending = session.annotations.filter((a) => a.status === "pending").length;
-  const noted = session.annotations.filter(
-    (a) => a.status === "noted" || a.status === "accepted"
-  ).length;
-  const spellN = session.report?.spelling?.length || 0;
-  const countText = t("studio.side.count", {
-    total: session.annotations.length,
-    accepted: noted,
-    pending,
-  });
-  const stripExtra =
-    spellN > 0
-      ? ` · ${t("studio.spell.count", { n: spellN, plural: spellN > 1 ? "s" : "" })}`
-      : "";
-  if (sideCount) sideCount.textContent = countText + stripExtra;
-  if (barCount) barCount.textContent = countText;
-
-  const axisOrder = ["readability", "structure", "content", "keywords"];
-  const axisLabel = {
-    readability: t("studio.axis.readability"),
-    structure: t("studio.axis.structure"),
-    content: t("studio.axis.content"),
-    keywords: t("studio.axis.keywords"),
-  };
-  const byAxis = new Map();
-  for (const a of session.annotations) {
-    const key = a.axis || "content";
-    if (!byAxis.has(key)) byAxis.set(key, []);
-    byAxis.get(key).push(a);
-  }
-
-  const blocks = [];
-  for (const axis of axisOrder) {
-    const items = byAxis.get(axis);
-    if (!items?.length) continue;
-    blocks.push(`<p class="ann-axis-head">${escapeHtml(axisLabel[axis] || axis)}</p>`);
-    for (const a of items) {
-      const num = a.id.replace("ann-", "");
-      const short = a.shortLabel || "";
-      const metaParts = [];
-      if (short) metaParts.push(short);
-      if (a.page) metaParts.push(`p.${a.page}`);
-      const meta = metaParts.join(" · ");
-      blocks.push(`
-      <button type="button" class="ann-item severity-${a.severity || "info"} status-${a.status}${
-        a.id === session.selectedId ? " is-selected" : ""
-      }" data-id="${a.id}" role="option" aria-selected="${a.id === session.selectedId}">
-        <span class="ann-num" title="${escapeHtml(short)}">${escapeHtml(num)}</span>
-        <span class="ann-item-body">
-          <strong>${escapeHtml(a.title)}</strong>
-          ${meta ? `<span class="ann-meta">${escapeHtml(meta)}</span>` : ""}
-        </span>
-        <span class="ann-status-pill">${statusLabel(a.status)}</span>
-      </button>`);
-    }
-  }
-  // Orphans
-  for (const [axis, items] of byAxis) {
-    if (axisOrder.includes(axis)) continue;
-    for (const a of items) {
-      const num = a.id.replace("ann-", "");
-      blocks.push(`
-      <button type="button" class="ann-item severity-${a.severity} status-${a.status}${
-        a.id === session.selectedId ? " is-selected" : ""
-      }" data-id="${a.id}" role="option">
-        <span class="ann-num">${escapeHtml(num)}</span>
-        <span class="ann-item-body"><strong>${escapeHtml(a.title)}</strong></span>
-        <span class="ann-status-pill">${statusLabel(a.status)}</span>
-      </button>`);
-    }
-  }
-
-  list.innerHTML = blocks.join("");
-
-  list.querySelectorAll(".ann-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      session.selectedId = btn.dataset.id;
-      renderList(root, session);
-      renderDetail(root, session);
-      highlightSelection(root, session);
-      const preview = root.querySelector("#cv-preview");
-      if (preview) scrollPreviewToAnnotation(preview, session.selectedId);
+  if (preview) {
+    syncPreviewSelection(preview, session.selectedId, session.annotations, {
+      onAction: (id, action) => handleBubbleAction(root, session, id, action),
     });
-  });
-}
-
-function statusLabel(s) {
-  const t = window.ATSi18n?.t || ((k) => k);
-  if (s === "noted" || s === "accepted") return t("studio.noted");
-  if (s === "ignored") return t("studio.ignored");
-  return t("studio.pending");
-}
-
-function renderDetail(root, session) {
-  const detail = root.querySelector("#ann-detail");
-  if (!detail) return;
-  const ann = session.annotations.find((a) => a.id === session.selectedId);
-  const t = window.ATSi18n?.t || ((k) => k);
-  if (!ann) {
-    detail.innerHTML = `<p class="ann-empty">${escapeHtml(
-      t("studio.detail.empty")
-    )}</p>`;
-    return;
   }
+}
 
-  const layoutKinds = new Set([
-    "layout",
-    "reading_order",
-    "header_sparse",
-    "profile_photo",
-    "graphic_skills",
-    "image_scan",
-    "no_tables",
-    "single_column",
-  ]);
-  const adviceInBubble = layoutKinds.has(ann.kind);
+async function handleBubbleAction(root, session, id, action) {
+  const t = window.ATSi18n?.t || ((k) => k);
+  const ann = session.annotations.find((a) => a.id === id);
+  if (!ann) return;
 
-  const placementNote =
-    ann.placement === "insert" ||
-    ann.applyMode === "insert_header" ||
-    ann.applyMode === "insert_after"
-      ? `<p class="ann-placement">${escapeHtml(t("studio.insertProposed"))}</p>`
-      : ann.approximate
-        ? `<p class="ann-placement">${escapeHtml(t("studio.zoneApprox"))}</p>`
-        : "";
-
-  const quote = String(ann.quote || "").trim();
-  const suggestion = String(ann.suggestion || "").trim();
-  const showReform =
-    !adviceInBubble &&
-    suggestion &&
-    suggestion !== quote &&
-    !/^\[.+\]$/.test(suggestion); /* skip bare placeholders like [email] alone if same as action */
-  const annNum = ann.id.replace("ann-", "");
-
-  detail.innerHTML = `
-    <div class="ann-detail-card severity-${ann.severity}">
-      <p class="ann-detail-num"><span class="ann-num">${escapeHtml(annNum)}</span> ${escapeHtml(
-        t("studio.detail.annotation", { n: annNum })
-      )}</p>
-      <p class="ann-where"><span>${escapeHtml(t("studio.detail.where"))}</span> ${
-        ann.page ? `Page ${ann.page}` : "Document"
-      }${ann.section ? ` · ${escapeHtml(ann.section)}` : ""}${
-        ann.shortLabel ? ` · ${escapeHtml(ann.shortLabel)}` : ""
-      }</p>
-      ${placementNote}
-      <p class="ann-quote-label">${escapeHtml(t("studio.detail.passage"))}</p>
-      <blockquote class="ann-quote">« ${escapeHtml(quote)} »</blockquote>
-      <h3>${escapeHtml(ann.title)}</h3>
-      ${
-        showReform
-          ? `<p class="ann-reform-label">${escapeHtml(t("studio.detail.reform"))}</p>
-             <p class="ann-reform-text">${escapeHtml(suggestion)}</p>`
-          : ""
-      }
-      <div class="ann-actions">
-        <button type="button" class="analyze-btn" id="btn-copy-passage">${escapeHtml(
-          t("studio.actions.copyPassage")
-        )}</button>
-        ${
-          showReform
-            ? `<button type="button" class="btn-ghost-text" id="btn-copy-reform">${escapeHtml(
-                t("studio.actions.copyReform")
-              )}</button>`
-            : ""
-        }
-        <button type="button" class="btn-secondary" id="btn-ignore">${escapeHtml(
-          t("studio.actions.ignore")
-        )}</button>
-      </div>
-      ${
-        adviceInBubble
-          ? ""
-          : `<p class="ann-why-label">${escapeHtml(t("studio.detail.why"))}</p>
-      <p class="ann-problem">${escapeHtml(ann.detail || "")}</p>
-      <p class="ann-self-edit">${escapeHtml(t("studio.detail.selfEdit"))}</p>`
-      }
-    </div>`;
-
-  const copyText = async (text, toastKey) => {
+  if (action === "copy" || action === "copy_reform") {
+    const text =
+      action === "copy_reform"
+        ? String(ann.suggestion || "").trim()
+        : String(ann.quote || "").trim();
     try {
       if (text && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
       } else {
         throw new Error("clipboard");
       }
-      session.annotations = updateAnnotation(session.annotations, ann.id, {
+      session.annotations = updateAnnotation(session.annotations, id, {
         status: "noted",
       });
-      showToast(root, t(toastKey));
-      window.ATSAnalytics?.track?.("ats_passage_copied", { id: ann.id });
-      afterDecision(root, session);
+      showToast(
+        root,
+        t(action === "copy_reform" ? "studio.copiedReform" : "studio.copiedPassage")
+      );
+      window.ATSAnalytics?.track?.("ats_passage_copied", { id, via: "bubble" });
+      await afterDecision(root, session);
     } catch (err) {
       console.warn(err);
       showToast(root, t("studio.copyFailed"));
     }
-  };
+    return;
+  }
 
-  detail.querySelector("#btn-copy-passage")?.addEventListener("click", () => {
-    copyText(quote, "studio.copiedPassage");
-  });
-  detail.querySelector("#btn-copy-reform")?.addEventListener("click", () => {
-    copyText(suggestion, "studio.copiedReform");
-  });
+  if (action === "noted") {
+    session.annotations = updateAnnotation(session.annotations, id, {
+      status: "noted",
+    });
+    showToast(root, t("studio.copiedPassage"));
+    await afterDecision(root, session);
+    return;
+  }
 
-  detail.querySelector("#btn-ignore")?.addEventListener("click", () => {
-    session.annotations = updateAnnotation(session.annotations, ann.id, {
+  if (action === "ignored") {
+    session.annotations = updateAnnotation(session.annotations, id, {
       status: "ignored",
     });
-    afterDecision(root, session);
-  });
+    await afterDecision(root, session);
+  }
 }
 
 async function afterDecision(root, session) {
   const next = session.annotations.find((a) => a.status === "pending");
   session.selectedId = next?.id || session.selectedId;
   await refreshPreview(root, session);
-  renderList(root, session);
-  renderDetail(root, session);
   updateBar(root, session);
 }
 
@@ -688,17 +506,12 @@ function updateBar(root, session) {
   const pending = session.annotations.filter((a) => a.status === "pending").length;
   const t = window.ATSi18n?.t || ((k) => k);
   const bar = root.querySelector("#studio-bar-count");
-  const sideCount = root.querySelector("#studio-side-count");
-  const label = t("studio.side.count", { total, accepted: noted, pending });
+  const spellN = session.report?.spelling?.length || 0;
+  let label = t("studio.side.count", { total, accepted: noted, pending });
+  if (spellN > 0) {
+    label += ` · ${t("studio.spell.count", { n: spellN, plural: spellN > 1 ? "s" : "" })}`;
+  }
   if (bar) bar.textContent = label;
-  if (sideCount) sideCount.textContent = label;
-}
-
-/** Libellé court pour chips checklist (max ~28 car.) */
-function shortCheckLabel(label) {
-  const s = String(label || "").trim();
-  if (s.length <= 28) return s;
-  return `${s.slice(0, 27)}…`;
 }
 
 function showToast(root, message) {
@@ -716,4 +529,11 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** Libellé court pour chips checklist (max ~28 car.) */
+function shortCheckLabel(label) {
+  const s = String(label || "").trim();
+  if (s.length <= 28) return s;
+  return `${s.slice(0, 27)}…`;
 }

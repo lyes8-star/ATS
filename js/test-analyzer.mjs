@@ -1,7 +1,7 @@
 /**
  * Tests du moteur ATS + annotations + optimize (Node)
  */
-import { analyzeCv, attachGeometry } from "./analyzer.js";
+import { analyzeCv, attachGeometry, detectCvSource } from "./analyzer.js";
 import { applyAll } from "./optimize.js";
 import { rectsForRange } from "./extract.js";
 import { parseCv, parseDateRange, findEmploymentGaps, normalizeHeading } from "./parse-cv.js";
@@ -1378,9 +1378,66 @@ Python, SQL, Docker
   assert.equal(clean.categories.readability.score, 25);
   assert.ok(clean.passes);
   assert.ok(!clean.annotations.some((a) =>
-    ["no_tables", "single_column", "image_scan", "header_sparse"].includes(a.kind)
+    ["no_tables", "single_column", "image_scan", "header_sparse", "cv_source"].includes(a.kind)
   ));
   console.log("✓ goodCv regression still clean OK");
+}
+
+{
+  const src = detectCvSource({ pdfCreator: "Canva", fileName: "cv.pdf" });
+  assert.equal(src.id, "canva");
+  assert.equal(src.hostile, true);
+
+  const canva = analyzeCv(goodCv, {
+    pages: 1,
+    pdfCreator: "Canva",
+    pdfProducer: "Canva",
+    fileName: "canva-cv.pdf",
+  });
+  assert.equal(canva.checklist.find((c) => c.id === "cv_source")?.ok, false);
+  const cAnn = canva.annotations.find((a) => a.kind === "cv_source");
+  assert.ok(cAnn, "cv_source annotation for Canva");
+  assert.equal(cAnn.severity, "critical");
+  assert.ok(canva.cvSource?.hostile);
+  assert.equal(canva.passes, false, "hostile source blocks pass");
+  console.log("✓ Canva source warning OK");
+}
+
+{
+  const ai = analyzeCv(goodCv, {
+    pages: 1,
+    pdfProducer: "ChatGPT",
+    fileName: "resume.pdf",
+  });
+  assert.ok(ai.cvSource?.hostile);
+  assert.equal(ai.cvSource.id, "ai_builder");
+  assert.ok(ai.annotations.some((a) => a.kind === "cv_source" && a.severity === "critical"));
+  console.log("✓ ChatGPT/AI source warning OK");
+}
+
+{
+  const kick = analyzeCv(goodCv, {
+    pages: 1,
+    pdfCreator: "Kickresume",
+    fileName: "kick.pdf",
+  });
+  assert.equal(kick.cvSource?.id, "online_builder");
+  assert.ok(kick.cvSource.hostile);
+  console.log("✓ Kickresume builder warning OK");
+}
+
+{
+  const word = analyzeCv(goodCv, {
+    pages: 1,
+    pdfCreator: "Microsoft Word",
+    pdfProducer: "Microsoft: Print To PDF",
+    fileName: "marie.docx.pdf",
+  });
+  assert.equal(word.cvSource?.id, "word");
+  assert.equal(word.cvSource?.hostile, false);
+  assert.ok(!word.annotations.some((a) => a.kind === "cv_source"));
+  assert.equal(word.checklist.find((c) => c.id === "cv_source")?.ok, true);
+  console.log("✓ Word source not hostile OK");
 }
 
 console.log("Tous les tests OK");

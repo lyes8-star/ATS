@@ -37,7 +37,7 @@ export function clampScale(n) {
  * @param {HTMLElement} container
  * @param {any} pdfDoc
  * @param {object[]} annotations
- * @param {{ onSelect?: (id: string) => void, selectedId?: string|null, scale?: number }} opts
+ * @param {{ onSelect?: (id: string) => void, onAction?: (id: string, action: string) => void, selectedId?: string|null, scale?: number }} opts
  */
 export async function renderPdfPreview(container, pdfDoc, annotations, opts = {}) {
   container.innerHTML = "";
@@ -46,6 +46,7 @@ export async function renderPdfPreview(container, pdfDoc, annotations, opts = {}
   const scale = clampScale(opts.scale || DEFAULT_SCALE);
   const selectedId = opts.selectedId || null;
   container.classList.toggle("has-selection", Boolean(selectedId));
+  container._annOnAction = opts.onAction || null;
   const t = window.ATSi18n?.t || ((k) => k);
 
   for (let i = 1; i <= pdfDoc.numPages; i++) {
@@ -118,7 +119,7 @@ export async function renderPdfPreview(container, pdfDoc, annotations, opts = {}
               : `<span class="ann-new">${escapeHtml(sug)}</span>`;
             box.appendChild(applied);
           } else if (ann.id === selectedId && (ann.title || ann.detail || ann.suggestion)) {
-            const tip = buildCallout(ann);
+            const tip = buildCallout(ann, "", opts.onAction);
             if (tip) box.appendChild(tip);
           }
         }
@@ -159,7 +160,7 @@ function buildTextIndex(root) {
 /**
  * Surligne un intervalle dans le DOM HTML DOCX.
  */
-function highlightRange(index, start, end, ann, onSelect, selectedId) {
+function highlightRange(index, start, end, ann, onSelect, selectedId, onAction) {
   for (const { node, start: ns, end: ne } of index.nodes) {
     if (ne <= start || ns >= end) continue;
     const localStart = Math.max(0, start - ns);
@@ -203,7 +204,7 @@ function highlightRange(index, start, end, ann, onSelect, selectedId) {
     wrapMark.className = "ann-mark-wrap";
     wrapMark.appendChild(mark);
     if (ann.id === selectedId) {
-      const tip = buildCallout(ann, "ann-callout-inline");
+      const tip = buildCallout(ann, "ann-callout-inline", onAction);
       if (tip) wrapMark.appendChild(tip);
     }
 
@@ -292,12 +293,13 @@ function mapPlainOffsetsToDom(plainText, domText) {
 
 /**
  * Rend le HTML DOCX avec highlights ancrés sur textStart/textEnd du plain text.
- * @param {{ onSelect?: (id: string) => void, selectedId?: string|null, scale?: number }} [opts]
+ * @param {{ onSelect?: (id: string) => void, onAction?: (id: string, action: string) => void, selectedId?: string|null, scale?: number }} [opts]
  */
 export function renderHtmlPreview(container, html, plainText, annotations, opts = {}) {
   container.innerHTML = "";
   container.classList.add("cv-preview-html");
   container.classList.remove("cv-preview-pdf");
+  container._annOnAction = opts.onAction || null;
   const article = document.createElement("article");
   article.className = "cv-html-doc";
   article.innerHTML = html || "<p>(aperçu indisponible)</p>";
@@ -333,7 +335,15 @@ export function renderHtmlPreview(container, html, plainText, annotations, opts 
       const mapped = mapper(ann.textStart, ann.textEnd);
       if (mapped.start >= 0 && mapped.end > mapped.start) {
         const index = buildTextIndex(article);
-        applied = highlightRange(index, mapped.start, mapped.end, ann, opts.onSelect, selectedId);
+        applied = highlightRange(
+          index,
+          mapped.start,
+          mapped.end,
+          ann,
+          opts.onSelect,
+          selectedId,
+          opts.onAction
+        );
       }
     }
 
@@ -345,13 +355,36 @@ export function renderHtmlPreview(container, html, plainText, annotations, opts 
         let idx = hay.indexOf(ann.quote);
         if (idx === -1) idx = hay.toLowerCase().indexOf(String(ann.quote).toLowerCase());
         if (idx === -1) break;
-        applied = highlightRange(index, idx, idx + ann.quote.length, ann, opts.onSelect, selectedId);
+        applied = highlightRange(
+          index,
+          idx,
+          idx + ann.quote.length,
+          ann,
+          opts.onSelect,
+          selectedId,
+          opts.onAction
+        );
         break;
       }
     }
 
     if (!applied) {
       prependInsertBanner(article, ann, selectedId, opts.onSelect, t);
+    }
+  }
+
+  // Callout on selected insert banner
+  if (selectedId) {
+    const banner = container.querySelector(`.ann-approx-banner.is-selected`);
+    const ann = (annotations || []).find((a) => a.id === selectedId);
+    if (banner && ann) {
+      const tip = buildCallout(ann, "ann-callout-inline", opts.onAction);
+      if (tip) {
+        tip.style.position = "relative";
+        tip.style.display = "block";
+        tip.style.marginTop = "0.35rem";
+        banner.insertAdjacentElement("afterend", tip);
+      }
     }
   }
 
@@ -382,8 +415,9 @@ export function computeHtmlFitScale(containerWidth) {
  * @param {HTMLElement} container
  * @param {string|null} selectedId
  * @param {object[]} [annotations]
+ * @param {{ onAction?: (id: string, action: string) => void }} [opts]
  */
-export function syncPreviewSelection(container, selectedId, annotations = []) {
+export function syncPreviewSelection(container, selectedId, annotations = [], opts = {}) {
   if (!container) return;
   container.classList.toggle("has-selection", Boolean(selectedId));
   container.querySelectorAll(".ann-callout").forEach((el) => el.remove());
@@ -394,10 +428,11 @@ export function syncPreviewSelection(container, selectedId, annotations = []) {
 
   if (!selectedId) return;
   const ann = annotations.find((a) => a.id === selectedId);
+  const onAction = opts.onAction || container._annOnAction || null;
 
   const box = container.querySelector(`.ann-box.is-selected`);
   if (box) {
-    const tip = buildCallout(ann);
+    const tip = buildCallout(ann, "", onAction);
     if (tip) box.appendChild(tip);
   }
 
@@ -410,8 +445,19 @@ export function syncPreviewSelection(container, selectedId, annotations = []) {
       mark.parentNode?.insertBefore(wrap, mark);
       wrap.appendChild(mark);
     }
-    const tip = buildCallout(ann, "ann-callout-inline");
+    const tip = buildCallout(ann, "ann-callout-inline", onAction);
     if (tip) wrap.appendChild(tip);
+  }
+
+  const banner = container.querySelector(`.ann-approx-banner.is-selected`);
+  if (banner && !box && !mark) {
+    const tip = buildCallout(ann, "ann-callout-inline", onAction);
+    if (tip) {
+      tip.style.position = "relative";
+      tip.style.display = "block";
+      tip.style.marginTop = "0.35rem";
+      banner.insertAdjacentElement("afterend", tip);
+    }
   }
 }
 
@@ -434,13 +480,15 @@ export function scrollPreviewToAnnotation(container, id) {
 }
 
 /**
- * Bulle conseil au clic : titre + detail complet + reformulation.
+ * Bulle conseil au clic : titre + detail + reformulation + actions.
  * @param {object|null|undefined} ann
  * @param {string} [extraClass]
+ * @param {(id: string, action: string) => void} [onAction]
  * @returns {HTMLSpanElement|null}
  */
-function buildCallout(ann, extraClass = "") {
+function buildCallout(ann, extraClass = "", onAction = null) {
   if (!ann) return null;
+  const t = window.ATSi18n?.t || ((k) => k);
   const title = String(ann.title || ann.shortLabel || "").trim();
   const detail = String(ann.detail || "").trim();
   const quote = String(ann.quote || "").trim();
@@ -453,6 +501,9 @@ function buildCallout(ann, extraClass = "") {
 
   const tip = document.createElement("span");
   tip.className = `ann-callout${extraClass ? ` ${extraClass}` : ""}`;
+  tip.setAttribute("role", "dialog");
+  tip.setAttribute("aria-label", title || "Conseil");
+
   const parts = [];
   if (title) {
     parts.push(`<span class="ann-callout-title">${escapeHtml(title)}</span>`);
@@ -466,6 +517,41 @@ function buildCallout(ann, extraClass = "") {
     );
   }
   tip.innerHTML = parts.join("");
+
+  if (typeof onAction === "function" && ann.id && ann.status === "pending") {
+    const actions = document.createElement("span");
+    actions.className = "ann-callout-actions";
+    const mkBtn = (action, label, cls) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = cls;
+      b.textContent = label;
+      b.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onAction(ann.id, action);
+      });
+      return b;
+    };
+    if (quote && !/^\([^)]*\)$/.test(quote)) {
+      actions.appendChild(
+        mkBtn("copy", t("studio.actions.copyPassage"), "ann-callout-btn ann-callout-btn--primary")
+      );
+    }
+    if (showSug) {
+      actions.appendChild(
+        mkBtn("copy_reform", t("studio.actions.copyReform"), "ann-callout-btn")
+      );
+    }
+    actions.appendChild(
+      mkBtn("noted", t("studio.noted"), "ann-callout-btn")
+    );
+    actions.appendChild(
+      mkBtn("ignored", t("studio.actions.ignore"), "ann-callout-btn ann-callout-btn--ghost")
+    );
+    tip.appendChild(actions);
+  }
+
   return tip;
 }
 
