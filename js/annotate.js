@@ -117,11 +117,9 @@ export async function renderPdfPreview(container, pdfDoc, annotations, opts = {}
               ? `<span class="ann-strike">${escapeHtml(quote)}</span> → <span class="ann-new">${escapeHtml(sug)}</span>`
               : `<span class="ann-new">${escapeHtml(sug)}</span>`;
             box.appendChild(applied);
-          } else if (ann.id === selectedId && (ann.title || ann.detail)) {
-            const tip = document.createElement("span");
-            tip.className = "ann-callout";
-            tip.textContent = ann.title || "";
-            box.appendChild(tip);
+          } else if (ann.id === selectedId && (ann.title || ann.detail || ann.suggestion)) {
+            const tip = buildCallout(ann);
+            if (tip) box.appendChild(tip);
           }
         }
         box.addEventListener("click", (e) => {
@@ -194,10 +192,7 @@ function highlightRange(index, start, end, ann, onSelect, selectedId) {
       mark.textContent = mid;
     }
     mark.setAttribute("aria-label", `Annotation ${ann.id.replace("ann-", "")} : ${ann.title}`);
-    mark.title = ann.title || "";
-    if (ann.id === selectedId) {
-      mark.dataset.callout = ann.title || "";
-    }
+    mark.title = [ann.title, ann.detail].filter(Boolean).join(" — ") || "";
     mark.addEventListener("click", (e) => {
       e.preventDefault();
       onSelect?.(ann.id);
@@ -208,10 +203,8 @@ function highlightRange(index, start, end, ann, onSelect, selectedId) {
     wrapMark.className = "ann-mark-wrap";
     wrapMark.appendChild(mark);
     if (ann.id === selectedId) {
-      const tip = document.createElement("span");
-      tip.className = "ann-callout ann-callout-inline";
-      tip.textContent = ann.title || ann.shortLabel || "";
-      wrapMark.appendChild(tip);
+      const tip = buildCallout(ann, "ann-callout-inline");
+      if (tip) wrapMark.appendChild(tip);
     }
 
     const frag = document.createDocumentFragment();
@@ -401,18 +394,15 @@ export function syncPreviewSelection(container, selectedId, annotations = []) {
 
   if (!selectedId) return;
   const ann = annotations.find((a) => a.id === selectedId);
-  const title = ann?.title || ann?.shortLabel || "";
 
   const box = container.querySelector(`.ann-box.is-selected`);
-  if (box && title) {
-    const tip = document.createElement("span");
-    tip.className = "ann-callout";
-    tip.textContent = title;
-    box.appendChild(tip);
+  if (box) {
+    const tip = buildCallout(ann);
+    if (tip) box.appendChild(tip);
   }
 
   const mark = container.querySelector(`.ann-mark.is-selected`);
-  if (mark && title) {
+  if (mark) {
     let wrap = mark.closest(".ann-mark-wrap");
     if (!wrap) {
       wrap = document.createElement("span");
@@ -420,10 +410,8 @@ export function syncPreviewSelection(container, selectedId, annotations = []) {
       mark.parentNode?.insertBefore(wrap, mark);
       wrap.appendChild(mark);
     }
-    const tip = document.createElement("span");
-    tip.className = "ann-callout ann-callout-inline";
-    tip.textContent = title;
-    wrap.appendChild(tip);
+    const tip = buildCallout(ann, "ann-callout-inline");
+    if (tip) wrap.appendChild(tip);
   }
 }
 
@@ -443,6 +431,42 @@ export function scrollPreviewToAnnotation(container, id) {
   void el.offsetWidth;
   el.classList.add("ann-pulse");
   window.setTimeout(() => el.classList.remove("ann-pulse"), 1200);
+}
+
+/**
+ * Bulle conseil au clic : titre + detail complet + reformulation.
+ * @param {object|null|undefined} ann
+ * @param {string} [extraClass]
+ * @returns {HTMLSpanElement|null}
+ */
+function buildCallout(ann, extraClass = "") {
+  if (!ann) return null;
+  const title = String(ann.title || ann.shortLabel || "").trim();
+  const detail = String(ann.detail || "").trim();
+  const quote = String(ann.quote || "").trim();
+  const suggestion = String(ann.suggestion || "").trim();
+  const showSug =
+    Boolean(suggestion) &&
+    suggestion !== quote &&
+    !/^\[.+\]$/.test(suggestion);
+  if (!title && !detail && !showSug) return null;
+
+  const tip = document.createElement("span");
+  tip.className = `ann-callout${extraClass ? ` ${extraClass}` : ""}`;
+  const parts = [];
+  if (title) {
+    parts.push(`<span class="ann-callout-title">${escapeHtml(title)}</span>`);
+  }
+  if (detail) {
+    parts.push(`<span class="ann-callout-detail">${escapeHtml(detail)}</span>`);
+  }
+  if (showSug) {
+    parts.push(
+      `<span class="ann-callout-suggestion">${escapeHtml(suggestion)}</span>`
+    );
+  }
+  tip.innerHTML = parts.join("");
+  return tip;
 }
 
 function escapeHtml(str) {

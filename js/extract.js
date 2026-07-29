@@ -31,6 +31,9 @@
  *   headerSparse?: boolean,
  *   readingOrderOk?: boolean,
  *   profilePhotoHint?: boolean,
+ *   imageOnlyPages?: number[],
+ *   pdfCreator?: string|null,
+ *   pdfProducer?: string|null,
  *   originalBuffer?: ArrayBuffer|null,
  *   objectUrl?: string|null
  * }} ExtractResult
@@ -214,6 +217,17 @@ export async function extractFromPdf(file) {
     }
   }
 
+  let pdfCreator = null;
+  let pdfProducer = null;
+  try {
+    const meta = await doc.getMetadata();
+    const info = meta?.info || {};
+    pdfCreator = info.Creator ? String(info.Creator) : null;
+    pdfProducer = info.Producer ? String(info.Producer) : null;
+  } catch {
+    /* metadata optional */
+  }
+
   return {
     text,
     pages: doc.numPages,
@@ -226,8 +240,11 @@ export async function extractFromPdf(file) {
     tableHint: layout.tableHint,
     headerSparse: layout.headerSparse,
     readingOrderOk: layout.readingOrderOk,
+    imageOnlyPages: layout.imageOnlyPages || [],
     profilePhotoHint,
     profileImagePreview,
+    pdfCreator,
+    pdfProducer,
     originalBuffer,
     objectUrl,
   };
@@ -337,18 +354,32 @@ export async function extractPdfProfileImagePreview(pdfDoc) {
 }
 
 /**
- * Heuristiques layout PDF : tableaux / bandeau contact / ordre de lecture.
+ * Heuristiques layout PDF : tableaux / bandeau contact / ordre de lecture / pages image.
  * @param {PageGeo[]} pagesGeo
  */
 export function analyzePdfLayout(pagesGeo) {
-  const page1 = pagesGeo?.[0];
-  if (!page1?.items?.length) {
-    return { tableCount: 0, tableHint: false, headerSparse: false, readingOrderOk: true };
+  const pages = Array.isArray(pagesGeo) ? pagesGeo : [];
+  if (!pages.length) {
+    return {
+      tableCount: 0,
+      tableHint: false,
+      headerSparse: false,
+      readingOrderOk: true,
+      imageOnlyPages: [],
+    };
   }
 
-  const items = page1.items.filter((it) => it.str?.trim() && it.rect);
-  const tableHint = detectTableHint(items);
-  const tableCount = tableHint ? 1 : 0;
+  const page1 = pages[0];
+  const items = (page1?.items || []).filter((it) => it.str?.trim() && it.rect);
+
+  // Table detection across all pages (count how many pages look tabular)
+  let tablePages = 0;
+  for (const pg of pages) {
+    const pgItems = (pg.items || []).filter((it) => it.str?.trim() && it.rect);
+    if (detectTableHint(pgItems)) tablePages += 1;
+  }
+  const tableHint = tablePages > 0;
+  const tableCount = tablePages;
 
   // Contact header density: few items in top band while body is rich → likely graphic header
   const headerItems = items.filter((it) => (it.rect?.y ?? 1) < 0.12);
@@ -356,13 +387,41 @@ export function analyzePdfLayout(pagesGeo) {
   const headerChars = headerItems.reduce((n, it) => n + (it.str?.trim().length || 0), 0);
   const headerSparse = bodyItems.length >= 20 && headerItems.length <= 2 && headerChars < 12;
 
-  const readingOrderOk = !detectReadingOrderDivergence(page1);
+  // Reading order: fail if any early page diverges
+  let readingOrderOk = true;
+  for (const pg of pages.slice(0, 2)) {
+    if (detectReadingOrderDivergence(pg)) {
+      readingOrderOk = false;
+      break;
+    }
+  }
 
-  return { tableCount, tableHint, headerSparse, readingOrderOk };
+  const imageOnlyPages = detectImageOnlyPages(pages);
+
+  return { tableCount, tableHint, headerSparse, readingOrderOk, imageOnlyPages };
+}
+
+/**
+ * Pages avec très peu de texte extractible → scan / image dominante.
+ * @param {PageGeo[]} pagesGeo
+ * @returns {number[]}
+ */
+function detectImageOnlyPages(pagesGeo) {
+  const out = [];
+  for (const pg of pagesGeo || []) {
+    const items = (pg.items || []).filter((it) => (it.str || "").trim());
+    const chars = items.reduce((n, it) => n + (it.str || "").trim().length, 0);
+    // Quasi-empty text page (typical scanned CV page)
+    if (items.length <= 4 && chars < 40) {
+      out.push(pg.page || out.length + 1);
+    }
+  }
+  return out;
 }
 
 /**
  * Grille / fragments courts alignés → indices de tableau.
+ * Distingue grille régulière (tableau) des simples colonnes (2 blocs).
  * @param {TextItem[]} items
  */
 function detectTableHint(items) {
@@ -376,24 +435,28 @@ function detectTableHint(items) {
   }
   let multiColRows = 0;
   let shortFragRows = 0;
+  let threePlusCellRows = 0;
   for (const row of rows.values()) {
     if (row.length < 3) continue;
+    threePlusCellRows += 1;
     const xs = row.map((r) => r.rect.x).sort((a, b) => a - b);
     const gaps = [];
     for (let i = 1; i < xs.length; i++) gaps.push(xs[i] - xs[i - 1]);
     const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
     const regular =
       gaps.length >= 2 &&
-      gaps.every((g) => Math.abs(g - avgGap) < Math.max(0.04, avgGap * 0.45));
-    if (regular && xs[xs.length - 1] - xs[0] > 0.35) multiColRows += 1;
+      gaps.every((g) => Math.abs(g - avgGap) < Math.max(0.035, avgGap * 0.4));
+    // ≥3 cells spanning width → table grid (not just 2-column sidebar)
+    if (regular && row.length >= 3 && xs[xs.length - 1] - xs[0] > 0.4) multiColRows += 1;
     const short = row.filter((r) => (r.str || "").trim().length <= 12).length;
     if (short >= 3 && row.length >= 3) shortFragRows += 1;
   }
+  // Stronger: need grid evidence (3+ aligned rows) not just 2-column layout
   if (multiColRows >= 3) return true;
-  if (shortFragRows >= 4) return true;
-  // Dense micro-fragments overall
+  if (shortFragRows >= 4 && threePlusCellRows >= 3) return true;
+  // Dense micro-fragments overall (cell-like tokens)
   const micro = items.filter((it) => (it.str || "").trim().length <= 4).length;
-  if (micro >= 25 && micro / items.length > 0.35) return true;
+  if (micro >= 28 && micro / items.length > 0.38 && threePlusCellRows >= 2) return true;
   return false;
 }
 
@@ -536,8 +599,10 @@ export async function extractFromDocx(file) {
     html,
     approximate: true,
     tableCount,
+    tableHint: tableCount > 0,
     profilePhotoHint,
     profileImagePreview,
+    imageOnlyPages: [],
     originalBuffer: arrayBuffer,
   };
 }

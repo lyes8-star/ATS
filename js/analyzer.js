@@ -911,25 +911,78 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
     });
   }
 
-  if (scores.readability.hasColumnsSmell || scores.readability.hasTables) {
+  if (scores.readability.hasTables) {
+    const alsoCols = scores.readability.hasColumnsSmell;
     push({
-      kind: "layout",
+      kind: "no_tables",
       axis: "readability",
-      shortLabel: isEn ? "Layout" : "Mise en page",
+      shortLabel: isEn ? "Tables" : "Tableaux",
       severity: "warning",
       textStart: 0,
       textEnd: Math.min(30, text.length),
       quote: text.slice(0, Math.min(30, text.length)).trim() || "(document)",
       title: isEn
-        ? "Layout may confuse ATS (columns/tables)"
-        : "Mise en page risquée pour les ATS (colonnes/tableaux)",
+        ? "Tables confuse ATS parsers"
+        : "Tableaux illisibles pour les ATS",
       detail: isEn
-        ? "We detected column or table signals. Prefer a single-column, linear layout in your original file for ATS applications."
-        : "Colonnes ou tableaux détectés. Préférez une mise en page linéaire (une colonne) dans votre fichier d’origine pour les candidatures ATS.",
+        ? alsoCols
+          ? "We detected table grids and column signals. ATS often read cells out of order. Rebuild as a single-column linear layout (no tables) in your original file."
+          : "Table grids scramble cell order in many ATS. Convert tables to plain paragraphs or bullet lists in a single column."
+        : alsoCols
+          ? "Grilles de tableaux et indices de colonnes détectés. Les ATS mélangent souvent l’ordre des cellules. Refaites une mise en page linéaire mono-colonne (sans tableaux) dans votre fichier d’origine."
+          : "Les grilles de tableaux brouillent l’ordre des cellules dans beaucoup d’ATS. Convertissez les tableaux en paragraphes ou listes à puces, en une seule colonne.",
       suggestion: "",
       applyMode: "replace",
       approximate: true,
-      checkId: scores.readability.hasTables ? "no_tables" : "single_column",
+      checkId: "no_tables",
+    });
+  } else if (scores.readability.hasColumnsSmell) {
+    push({
+      kind: "single_column",
+      axis: "readability",
+      shortLabel: isEn ? "Columns" : "Colonnes",
+      severity: "warning",
+      textStart: 0,
+      textEnd: Math.min(30, text.length),
+      quote: text.slice(0, Math.min(30, text.length)).trim() || "(document)",
+      title: isEn
+        ? "Multi-column layout may confuse ATS"
+        : "Colonnes risquées pour les ATS",
+      detail: isEn
+        ? "Two-column or sidebar layouts often reverse reading order for ATS. Prefer one continuous column: contact → experience → education → skills."
+        : "Les mises en page à deux colonnes ou barre latérale inversent souvent l’ordre de lecture ATS. Préférez une seule colonne continue : contact → expérience → formation → compétences.",
+      suggestion: "",
+      applyMode: "replace",
+      approximate: true,
+      checkId: "single_column",
+    });
+  }
+
+  if (scores.readability.imageOnly || (scores.readability.imageOnlyPages || []).length > 0) {
+    const pages = scores.readability.imageOnlyPages || [];
+    const pageHint = pages.length
+      ? isEn
+        ? ` (pages ${pages.join(", ")})`
+        : ` (pages ${pages.join(", ")})`
+      : "";
+    push({
+      kind: "image_scan",
+      axis: "readability",
+      shortLabel: isEn ? "Scan" : "Scan",
+      severity: "critical",
+      textStart: 0,
+      textEnd: Math.min(40, text.length),
+      quote: text.slice(0, Math.min(40, text.length)).trim() || "(document)",
+      title: isEn
+        ? `Image/scanned page — little extractable text${pageHint}`
+        : `Page image/scan — peu de texte extractible${pageHint}`,
+      detail: isEn
+        ? "ATS cannot read text locked in images. Export a text PDF or DOCX from Word/Google Docs (File → Export), not a photo or flattened Canva export."
+        : "Les ATS ne lisent pas le texte figé dans des images. Exportez un PDF texte ou un DOCX depuis Word/Google Docs (Fichier → Exporter), pas une photo ni un export Canva aplati.",
+      suggestion: "",
+      applyMode: "replace",
+      approximate: true,
+      checkId: "extractable_text",
     });
   }
 
@@ -968,9 +1021,11 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ? "Contact likely in a graphic header"
         : "Contact probablement dans une en-tête graphique",
       detail: isEn
-        ? "Very little plain text in the top band while the body is rich — put email/phone as selectable text."
-        : "Peu de texte extractible en haut de page alors que le corps est riche — placez e-mail/téléphone en texte sélectionnable.",
-      suggestion: "[votre.email@domaine.fr] · [06 XX XX XX XX]",
+        ? "Very little plain text in the top band while the body is rich — contact is likely drawn as an image. Put your full name, email and phone as selectable text at the top (not in a banner graphic)."
+        : "Peu de texte extractible en haut de page alors que le corps est riche — le contact est probablement dans une image/bandeau. Placez prénom, nom, e-mail et téléphone en texte sélectionnable en tête (pas dans un bandeau graphique).",
+      suggestion: isEn
+        ? "[First Last] · [you@email.com] · [+33 6 XX XX XX XX]"
+        : "[Prénom Nom] · [votre.email@domaine.fr] · [06 XX XX XX XX]",
       applyMode: "insert_header",
       section: "Coordonnées",
       approximate: true,
@@ -994,8 +1049,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ? "Skills shown as graphics (ATS-blind)"
         : "Compétences en graphiques illisibles ATS",
       detail: isEn
-        ? "Stars, bars or level gauges are not read as keywords. List skill names in plain text."
-        : "Étoiles, barres ou jauges de niveau ne sont pas lues comme mots-clés. Listez les compétences en texte clair.",
+        ? "Stars, bars or level gauges are not read as keywords. Delete the graphics and list skill names in plain text (comma-separated or bullets)."
+        : "Étoiles, barres ou jauges de niveau ne sont pas lues comme mots-clés. Supprimez les graphiques et listez les compétences en texte clair (séparées par des virgules ou en puces).",
       suggestion: isEn
         ? "Skills: [tool], [method], [domain]"
         : "Compétences : [outil], [méthode], [domaine]",
@@ -1064,8 +1119,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
           ? "Profile photo may hurt ATS parsing"
           : "Photo de profil risquée pour les ATS",
         detail: isEn
-          ? "Images in the header are often ignored or scramble reading order. Prefer plain-text contact."
-          : "Une image en en-tête est souvent ignorée ou brouille l'ordre de lecture. Préférez des coordonnées en texte.",
+          ? "A profile photo in the header is often ignored or scrambles reading order. Remove the photo for ATS applications and keep name, email and phone as plain text only."
+          : "Une photo de profil en en-tête est souvent ignorée ou brouille l'ordre de lecture. Retirez la photo pour les candidatures ATS et gardez nom, e-mail et téléphone en texte clair uniquement.",
         suggestion: "",
         applyMode: "replace",
         approximate: true,
@@ -1324,6 +1379,9 @@ function shortLabelFor(kind) {
     role_keywords: "Pack métier",
     length: "Longueur",
     layout: "Mise en page",
+    no_tables: "Tableaux",
+    single_column: "Colonnes",
+    image_scan: "Scan",
     reading_order: "Ordre",
     header_sparse: "En-tête",
     graphic_skills: "Compétences",
@@ -1462,6 +1520,30 @@ function scoreReadability(text, fileMeta) {
   const hasTables = !!(layout?.tableHint || fileMeta.tableHint || (fileMeta.tableCount || 0) > 0);
   const headerSparse = !!(layout?.headerSparse || fileMeta.headerSparse);
   const readingOrderOk = layout?.readingOrderOk !== false && fileMeta.readingOrderOk !== false;
+  const imageOnlyPages = Array.isArray(fileMeta.imageOnlyPages)
+    ? fileMeta.imageOnlyPages
+    : Array.isArray(layout?.imageOnlyPages)
+      ? layout.imageOnlyPages
+      : [];
+  const imageOnly =
+    imageOnlyPages.length > 0 ||
+    (!!fileMeta.approximate && len < 120) ||
+    !extractable;
+
+  if (imageOnlyPages.length > 0) {
+    score = Math.max(0, score - 4);
+    const extractCheck = checks.find((c) => c.id === "extractable_text");
+    if (extractCheck) {
+      extractCheck.ok = false;
+      extractCheck.label = `Page(s) quasi image/scan détectée(s) : ${imageOnlyPages.join(", ")}.`;
+    } else {
+      checks.push({
+        id: "extractable_text",
+        ok: false,
+        label: `Page(s) quasi image/scan détectée(s) : ${imageOnlyPages.join(", ")}.`,
+      });
+    }
+  }
 
   if (weirdChars === 0 && !hasColumnsSmell && !hasTables && readingOrderOk) {
     score += 7;
@@ -1639,6 +1721,8 @@ function scoreReadability(text, fileMeta) {
     headerSparse,
     readingOrderOk,
     standardHeadings,
+    imageOnlyPages,
+    imageOnly,
   };
 }
 
@@ -2358,12 +2442,31 @@ function buildDiagnostics(text, scores) {
     });
   }
 
-  if (scores.readability?.hasColumnsSmell || scores.readability?.hasTables) {
+  if (scores.readability?.hasTables) {
     diagnostics.push({
       severity: "warning",
-      title: "Mise en page potentiellement hostile ATS",
-      body: "Colonnes ou tableaux peuvent faire lire le texte dans le désordre par certains robots.",
-      tip: "→ Préférez une lecture linéaire (une colonne) dans votre fichier d’origine ; évitez colonnes et tableaux pour les candidatures ATS.",
+      title: "Tableaux hostiles aux ATS",
+      body: "Les grilles de tableaux font souvent lire les cellules dans le désordre.",
+      tip: "→ Convertissez les tableaux en listes ou paragraphes mono-colonne dans votre fichier d’origine.",
+      checkId: "no_tables",
+    });
+  } else if (scores.readability?.hasColumnsSmell) {
+    diagnostics.push({
+      severity: "warning",
+      title: "Colonnes potentiellement hostiles ATS",
+      body: "Une mise en page à colonnes peut inverser l’ordre de lecture des robots.",
+      tip: "→ Préférez une lecture linéaire (une colonne) pour les candidatures ATS.",
+      checkId: "single_column",
+    });
+  }
+
+  if (scores.readability?.imageOnly || (scores.readability?.imageOnlyPages || []).length > 0) {
+    diagnostics.push({
+      severity: "critical",
+      title: "CV image / scan peu extractible",
+      body: "Peu de texte sélectionnable — les ATS ne lisent pas les pages image.",
+      tip: "→ Exportez un PDF texte ou un DOCX (pas une photo ni un export aplati).",
+      checkId: "extractable_text",
     });
   }
 
@@ -2877,6 +2980,10 @@ export function analyzeCv(rawText, fileMeta = {}) {
             : "Texte extractible, mise en page, encodage — est-ce que votre CV peut être lu par un robot ?",
         bar: barClass(readability.score),
         color: scoreColor(readability.score),
+        hasTables: !!readability.hasTables,
+        hasColumnsSmell: !!readability.hasColumnsSmell,
+        imageOnly: !!readability.imageOnly,
+        imageOnlyPages: readability.imageOnlyPages || [],
       },
       structure: {
         name: uiLang === "en" ? "Structure" : "Structure",
