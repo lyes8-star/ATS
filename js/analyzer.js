@@ -24,8 +24,8 @@ const ACTION_VERBS = [
 ];
 
 const SECTION_PATTERNS = {
-  experience: /\b(exp[ée]rience|exp[ée]riences?\s+professionnelles?|parcours|emploi|career|work\s+experience|professional\s+experience)\b/i,
-  education: /\b(formation|formations?|education|éducation|dipl[ôo]mes?|études|etudes|academic)\b/i,
+  experience: /\b(exp[ée]rience|exp[ée]riences?\s+professionnelles?|parcours\s+professionnel|emploi|career|work\s+experience|professional\s+experience)\b/i,
+  education: /\b(formations?|education|éducation|dipl[ôo]mes?|études|etudes|academic|cursus|scolarité|parcours\s+académique)\b/i,
   skills: /\b(comp[ée]tences?|skills?|savoir[-\s]?faire|technologies|outils|hard\s+skills)\b/i,
   languages: /\b(langues?|languages?)\b/i,
   summary: /\b(profil|r[ée]sum[ée]|objective|objectif|about|à propos|synth[èe]se)\b/i,
