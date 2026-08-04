@@ -2405,4 +2405,102 @@ Diplôme master info.
   console.log("✓ anti-placebo Pro heuristic tagged Secours OK");
 }
 
+// ── Matching CV↔offre précision ──
+{
+  const {
+    buildAho,
+    ahoFind,
+    hasTermBoundary,
+    termBoundaryOk,
+    matchJdOverlap,
+    matchSkills,
+    parseJdRequirementZones,
+    resetSkillsMatchCaches,
+  } = await import("./skills-match.js");
+  resetSkillsMatchCaches?.();
+
+  // Boundaries: no substring FPs
+  assert.equal(hasTermBoundary("empower big decisions", "power bi"), false, "power bi not in empower big");
+  assert.equal(hasTermBoundary("soci/cdrom archive", "ci/cd"), false, "ci/cd not in soci/cdrom");
+  assert.equal(hasTermBoundary("built with power bi dashboards", "power bi"), true, "real power bi matches");
+  assert.equal(hasTermBoundary("pipeline ci/cd on aws", "ci/cd"), true, "real ci/cd matches");
+  assert.equal(termBoundaryOk("preact.js", 1, 1 + "react.js".length), false, "react.js span in preact.js fails boundary");
+
+  const reactAho = buildAho([{ label: "react", aliases: ["react.js", "reactjs"] }]);
+  const preactHits = ahoFind(reactAho, "Built UI with Preact.js components");
+  assert.equal(preactHits.has("react"), false, "preact.js must not match react.js alias");
+  const reactHits = ahoFind(reactAho, "Built UI with React.js components");
+  assert.ok(reactHits.has("react"), "react.js still folds to react");
+  console.log("✓ matching boundaries power bi / ci/cd / preact OK");
+
+  // Nice-to-have section → not mustMissing
+  const niceJd = await matchJdOverlap(
+    "Dev React Node.js AWS Docker",
+    `Required: React, Node.js, AWS.
+Nice to have: Kubernetes, Terraform.
+Soft skills: leadership.`
+  );
+  assert.ok(niceJd.mustTerms?.some((t) => t === "react" || t === "node.js" || t === "aws"), "required hard in must");
+  assert.ok(
+    !niceJd.mustMissing?.includes("kubernetes"),
+    "kubernetes in nice section must not be mustMissing"
+  );
+  assert.ok(
+    niceJd.niceTerms?.includes("kubernetes") || niceJd.niceTerms?.includes("terraform"),
+    "nice section hard skills land in niceTerms"
+  );
+  assert.ok(niceJd.niceTerms?.includes("leadership"), "soft stays nice");
+  const zones = parseJdRequirementZones(`Required: React\nNice to have: Kubernetes`);
+  assert.equal(zones.hasSections, true, "JD sections detected");
+  console.log("✓ matching nice-to-have vs must OK", {
+    must: niceJd.mustTerms,
+    nice: niceJd.niceTerms,
+    missing: niceJd.mustMissing,
+  });
+
+  // Soft-only JD terms remain nice
+  const softJd = await matchJdOverlap(
+    "Profile with communication and leadership",
+    "Looking for communication, leadership, teamwork and creativity in a collaborative environment."
+  );
+  assert.ok((softJd.mustTerms || []).length === 0 || softJd.mustTerms.every((t) => !["communication", "leadership", "teamwork", "creativity"].includes(t)));
+  assert.ok(
+    (softJd.niceTerms || []).some((t) => /communication|leadership|teamwork|creativity/.test(t)),
+    "soft JD terms are nice"
+  );
+  console.log("✓ matching soft-only JD → nice OK");
+
+  // Ambiguous short skills do not green prose CV
+  const prose = await matchSkills(
+    "I rest by the sea and lean on the word of the team. We go to the table for lunch near the UI board."
+  );
+  for (const bad of ["rest", "sea", "lean", "go", "word", "tableau", "ui"]) {
+    assert.ok(!prose.hardHits.includes(bad), `ambiguous ${bad} must not hit prose`);
+  }
+  const techGo = await matchSkills("Backend services in Golang and REST API design with Tableau Desktop");
+  assert.ok(techGo.hardHits.includes("go"), "golang → go");
+  assert.ok(techGo.hardHits.includes("rest"), "rest api → rest");
+  assert.ok(techGo.hardHits.includes("tableau"), "tableau desktop → tableau");
+  console.log("✓ matching ambiguous shorts gated OK", techGo.hardHits.slice(0, 8));
+
+  // Pack expansion does not flood must without signal
+  const thinJd = await matchJdOverlap(
+    "Commercial terrain",
+    "Poste de commercial : relation client et négociation. Excel apprécié pour le reporting."
+  );
+  assert.ok(
+    !(thinJd.mustTerms || []).includes("kubernetes"),
+    "unrelated pack terms must not enter must"
+  );
+  console.log("✓ matching pack expansion scoped OK", {
+    must: thinJd.mustTerms?.slice(0, 8),
+    nice: thinJd.niceTerms?.slice(0, 8),
+  });
+
+  // Pro-style boundary helper parity (unit)
+  assert.equal(hasTermBoundary("preact.js toolkit", "react.js"), false);
+  assert.equal(hasTermBoundary("uses react.js daily", "react.js"), true);
+  console.log("✓ matching Pro-style boundary unit OK");
+}
+
 console.log("Tous les tests OK");

@@ -240,6 +240,7 @@ function matchPanelBlock(session) {
   const mustMissing = jd.mustMissing || [];
   const missingSet = new Set(mustMissing.map((x) => String(x).toLowerCase()));
   const mustPresent = mustTerms.filter((term) => !missingSet.has(String(term).toLowerCase()));
+  const niceTerms = jd.niceTerms || [];
   const overlap = jd.overlap || [];
   const score = jd.score != null ? jd.score : "—";
   const mustCov = jd.mustCoverage != null ? jd.mustCoverage : null;
@@ -304,6 +305,7 @@ function matchPanelBlock(session) {
       </div>
       ${chipRow(t("studio.match.mustPresent"), mustPresent, "ok")}
       ${chipRow(t("studio.match.mustMissing"), mustMissing, "miss")}
+      ${chipRow(t("studio.match.niceTerms"), niceTerms, "nice")}
       ${chipRow(t("studio.match.overlap"), overlap, "overlap")}
       ${
         mustMissing.length

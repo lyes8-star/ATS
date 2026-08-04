@@ -20,6 +20,82 @@ let roleKeywords = null;
 /** @type {null | Set<string>} */
 let techWhitelist = null;
 
+/** Hard skills trop ambigus en forme courte — indexés via alias longs uniquement. */
+const AMBIGUOUS_SHORT_SKILLS = new Set([
+  "rest",
+  "sea",
+  "lean",
+  "go",
+  "r",
+  "ui",
+  "ux",
+  "word",
+  "ats",
+  "tableau",
+]);
+
+const AMBIGUOUS_CONTEXT = {
+  rest: /\b(api|restful|http|endpoint|json|webservice|web\s*service)\b/i,
+  sea: /\b(ads?|sem|marketing|google|campagnes?|advertising|paid\s*search)\b/i,
+  lean: /\b(six\s*sigma|management|manufacturing|startup|agile|kanban)\b/i,
+  go: /\b(golang|gopher|backend|module|goroutine|gin\b)\b/i,
+  r: /\b(rstudio|tidyverse|cran|ggplot|dplyr|statistics|statistique)\b/i,
+  ui: /\b(design|figma|interface|ux|css|front[- ]?end)\b/i,
+  ux: /\b(design|research|figma|ui|user\s*experience|usabilit)\b/i,
+  word: /\b(microsoft|ms\s*office|docx?|rédaction|office)\b/i,
+  ats: /\b(applicant|tracking|recrutement|sirh|talent|cv\s*parsing)\b/i,
+  tableau: /\b(software|desktop|server|bi\b|dashboard|viz|salesforce)\b/i,
+};
+
+/**
+ * True if hay[start..end) is bounded by non-letter/digit on both sides (Unicode-aware).
+ * Used for single tokens and multi-word / dotted / slashed spans alike.
+ * @param {string} hay
+ * @param {number} start
+ * @param {number} end exclusive
+ */
+export function termBoundaryOk(hay, start, end) {
+  if (start < 0 || end > (hay || "").length || start >= end) return false;
+  const before = start > 0 ? hay[start - 1] : " ";
+  const after = end < hay.length ? hay[end] : " ";
+  const isWord = (ch) => /[\p{L}\p{N}_]/u.test(ch);
+  return !isWord(before) && !isWord(after);
+}
+
+function isAmbiguousShortLabel(label) {
+  const t = String(label || "").toLowerCase().trim();
+  if (!t) return false;
+  if (AMBIGUOUS_SHORT_SKILLS.has(t)) return true;
+  return t.length <= 3 && !/[/. ]/.test(t);
+}
+
+function hasAmbiguousContext(haystack, term) {
+  const t = String(term || "").toLowerCase().trim();
+  const re = AMBIGUOUS_CONTEXT[t];
+  if (!re) return false;
+  return re.test(String(haystack || ""));
+}
+
+/** Variants indexed in the automaton for one lexicon entry (drop bare ambiguous shorts). */
+function indexableVariants(entry) {
+  const label = String(entry.label || "").toLowerCase().trim();
+  const aliases = Array.isArray(entry.aliases)
+    ? entry.aliases.map((a) => String(a).toLowerCase().trim()).filter(Boolean)
+    : [];
+  const all = [label, ...aliases].filter(Boolean);
+  if (!isAmbiguousShortLabel(label)) return [...new Set(all)];
+  // Never index the bare ambiguous label — only longer / multi-token aliases
+  return [
+    ...new Set(
+      all.filter(
+        (v) =>
+          v !== label &&
+          (v.length >= 5 || v.includes(" ") || v.includes("/") || v.includes(".") || v.includes("-"))
+      )
+    ),
+  ];
+}
+
 /**
  * Aho–Corasick minimal (lowercase patterns).
  * Accepts string labels or `{ label, tier, aliases }` lexicon entries.
@@ -34,13 +110,13 @@ export function buildAho(patterns) {
     let variants = [];
     if (typeof raw === "string") {
       canonical = raw.toLowerCase().trim();
-      variants = [canonical];
+      variants = indexableVariants({ label: canonical, aliases: [] });
     } else if (raw && typeof raw === "object") {
       canonical = String(raw.label || raw.name || "").toLowerCase().trim();
-      const aliases = Array.isArray(raw.aliases)
-        ? raw.aliases.map((a) => String(a).toLowerCase().trim()).filter(Boolean)
-        : [];
-      variants = [canonical, ...aliases];
+      variants = indexableVariants({
+        label: canonical,
+        aliases: Array.isArray(raw.aliases) ? raw.aliases : [],
+      });
     }
     if (!canonical || canonical.length < 2) continue;
     for (const p of variants) {
@@ -92,17 +168,8 @@ export function ahoFind(root, text) {
         const p = typeof entry === "string" ? entry : entry.pattern;
         const canonical = typeof entry === "string" ? entry : entry.canonical;
         if (!p || p.length < 2) continue;
-        // Word-ish boundary: avoid matching inside longer alphanumerics when pattern is short
         const start = i - p.length + 1;
-        const before = start > 0 ? hay[start - 1] : " ";
-        const after = i + 1 < hay.length ? hay[i + 1] : " ";
-        const boundaryOk = p.length <= 2
-          ? !/[a-z0-9à-ü._/-]/.test(before)
-          : !/[a-z0-9à-ü]/.test(before) || p.includes(" ") || p.includes("/") || p.includes(".");
-        const afterOk = p.length <= 2
-          ? !/[a-z0-9à-ü._/-]/.test(after)
-          : !/[a-z0-9à-ü]/.test(after) || p.includes(" ") || p.includes(".") || p.includes("/");
-        if (!boundaryOk || !afterOk) continue;
+        if (!termBoundaryOk(hay, start, i + 1)) continue;
         counts.set(canonical, (counts.get(canonical) || 0) + 1);
       }
     }
@@ -110,16 +177,28 @@ export function ahoFind(root, text) {
   return counts;
 }
 
-/** Terme présent avec frontières de mot (évite faux positifs `.includes` courts). */
-export function hasTermBoundary(haystack, term) {
+/**
+ * First boundary-ok index of term in haystack, or -1.
+ * @param {string} haystack
+ * @param {string} term
+ */
+export function findTermBoundaryIndex(haystack, term) {
   const t = String(term || "").toLowerCase().trim();
-  if (!t || t.length < 2) return false;
+  if (!t || t.length < 2) return -1;
   const hay = String(haystack || "").toLowerCase();
-  if (t.includes(" ") || t.includes("/") || t.includes(".")) {
-    return hay.includes(t);
+  let from = 0;
+  while (from <= hay.length - t.length) {
+    const idx = hay.indexOf(t, from);
+    if (idx < 0) return -1;
+    if (termBoundaryOk(hay, idx, idx + t.length)) return idx;
+    from = idx + 1;
   }
-  const re = new RegExp(`(?:^|[^a-z0-9à-ü])${escapeReg(t)}(?=[^a-z0-9à-ü]|$)`, "i");
-  return re.test(hay);
+  return -1;
+}
+
+/** Terme présent avec frontières Unicode (y compris multi-mots / ci\/cd / react.js). */
+export function hasTermBoundary(haystack, term) {
+  return findTermBoundaryIndex(haystack, term) >= 0;
 }
 
 async function fetchJson(path) {
@@ -213,7 +292,8 @@ export async function loadAtsLayoutRules() {
 export async function matchSkills(text) {
   const { automaton, skills, tierByLabel } = await loadSkillsLexicon();
   const found = ahoFind(automaton, text || "");
-  const hits = [...found.keys()].filter((h) => String(h).length >= 3).sort();
+  // Keep short canonicals (go, r, ui…) when matched via long aliases; drop 1-char noise only
+  const hits = [...found.keys()].filter((h) => String(h).length >= 2).sort();
   const hardHits = hits.filter((h) => (tierByLabel?.[h] || "hard") === "hard");
   const softHits = hits.filter((h) => tierByLabel?.[h] === "soft");
   const words = (text || "").split(/\s+/).filter(Boolean).length || 1;
@@ -291,12 +371,70 @@ export async function matchRoleKeywordGaps(text, hints = {}) {
   };
 }
 
+const NICE_HEADER_RE =
+  /(?:^|\n)\s*(?:nice\s*[- ]?\s*to\s*[- ]?\s*haves?|souhait[ée]e?s?|bonuses?|appréci[ée]e?s?|optionnel(?:le)?s?|optional|atouts?|a\s+plus)\s*:/gi;
+const MUST_HEADER_RE =
+  /(?:^|\n)\s*(?:must\s*[- ]?\s*haves?|requis|obligatoire(?:s)?|required|essentiel(?:le)?s?|compétences?\s+requises?|requirements?|qualifications?)\s*:/gi;
+
 /**
- * Overlap offre d'emploi ↔ CV (must = hard skills du JD, nice = pack/soft).
+ * Découpe l'offre en zones must / nice / body à partir des en-têtes de section.
+ * @param {string} jdText
+ * @returns {{ zones: { start: number, end: number, kind: 'must'|'nice'|'body' }[], hasSections: boolean }}
+ */
+export function parseJdRequirementZones(jdText) {
+  const text = String(jdText || "");
+  /** @type {{ index: number, kind: 'must'|'nice', headerEnd: number }}[] */
+  const headers = [];
+  for (const re of [
+    { re: NICE_HEADER_RE, kind: /** @type {'nice'} */ ("nice") },
+    { re: MUST_HEADER_RE, kind: /** @type {'must'} */ ("must") },
+  ]) {
+    re.re.lastIndex = 0;
+    let m;
+    while ((m = re.re.exec(text)) !== null) {
+      headers.push({ index: m.index, kind: re.kind, headerEnd: m.index + m[0].length });
+    }
+  }
+  headers.sort((a, b) => a.index - b.index || (a.kind === "must" ? -1 : 1));
+  // Dedupe overlapping headers (keep earlier)
+  const cleaned = [];
+  for (const h of headers) {
+    if (cleaned.length && h.index < cleaned[cleaned.length - 1].headerEnd) continue;
+    cleaned.push(h);
+  }
+  if (!cleaned.length) {
+    return {
+      zones: [{ start: 0, end: text.length, kind: "body" }],
+      hasSections: false,
+    };
+  }
+  /** @type {{ start: number, end: number, kind: 'must'|'nice'|'body' }[]} */
+  const zones = [];
+  if (cleaned[0].index > 0) {
+    zones.push({ start: 0, end: cleaned[0].index, kind: "body" });
+  }
+  for (let i = 0; i < cleaned.length; i++) {
+    const start = cleaned[i].headerEnd;
+    const end = i + 1 < cleaned.length ? cleaned[i + 1].index : text.length;
+    if (start < end) zones.push({ start, end, kind: cleaned[i].kind });
+  }
+  return { zones, hasSections: true };
+}
+
+function zoneKindAt(zones, index) {
+  for (const z of zones) {
+    if (index >= z.start && index < z.end) return z.kind;
+  }
+  return "body";
+}
+
+/**
+ * Overlap offre d'emploi ↔ CV (must = hard hors zone nice, nice = soft / zone nice / pack-only).
  * @param {string} cvText
  * @param {string} jdText
+ * @param {{ headline?: string, roleTitle?: string }} [hints]
  */
-export async function matchJdOverlap(cvText, jdText) {
+export async function matchJdOverlap(cvText, jdText, hints = {}) {
   if (!jdText || jdText.trim().length < 20) {
     return {
       overlap: [],
@@ -308,19 +446,61 @@ export async function matchJdOverlap(cvText, jdText) {
       niceTerms: [],
     };
   }
-  const { automaton, tierByLabel } = await loadSkillsLexicon();
+  const { automaton, tierByLabel, entries } = await loadSkillsLexicon();
   const roles = await loadRoleKeywords();
   const jdHits = ahoFind(automaton, jdText);
   const cvHits = ahoFind(automaton, cvText);
   const jdLower = jdText.toLowerCase();
-  const packTerms = new Set();
-  for (const terms of Object.values(roles.roles || {})) {
+  const { zones, hasSections } = parseJdRequirementZones(jdText);
+  const entryByLabel = Object.fromEntries((entries || []).map((e) => [e.label, e]));
+
+  const findSkillIdx = (label) => {
+    let idx = findTermBoundaryIndex(jdText, label);
+    if (idx >= 0) return idx;
+    for (const a of entryByLabel[label]?.aliases || []) {
+      idx = findTermBoundaryIndex(jdText, a);
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+
+  // Packs ciblés : ≥ 2 termes déjà dans l'offre, ou pack inféré CV
+  const PACK_CAP = 8;
+  const packOnly = new Set();
+  const packScores = [];
+  for (const [role, terms] of Object.entries(roles.roles || {})) {
+    let hit = 0;
     for (const t of terms) {
       const k = String(t).toLowerCase();
-      if (k.length >= 3 && hasTermBoundary(jdLower, k)) packTerms.add(k);
+      if (k.length < 3) continue;
+      if (jdHits.has(k) || hasTermBoundary(jdLower, k)) hit += 1;
+    }
+    packScores.push({ role, terms, hit });
+  }
+  packScores.sort((a, b) => b.hit - a.hit);
+  let selected = packScores.filter((p) => p.hit >= 2).slice(0, 2);
+  if (!selected.length) {
+    const inferred = await matchRoleKeywordGaps(cvText, hints);
+    if (inferred?.role) {
+      const pack = packScores.find((p) => p.role === inferred.role);
+      if (pack && pack.hit >= 1) selected = [pack];
     }
   }
-  const jdTerms = new Set([...jdHits.keys(), ...packTerms]);
+  let added = 0;
+  for (const pack of selected) {
+    for (const t of pack.terms) {
+      if (added >= PACK_CAP) break;
+      const k = String(t).toLowerCase();
+      if (k.length < 3) continue;
+      if (jdHits.has(k)) continue;
+      if (!hasTermBoundary(jdLower, k)) continue;
+      if (isAmbiguousShortLabel(k) && !hasAmbiguousContext(jdLower, k)) continue;
+      packOnly.add(k);
+      added += 1;
+    }
+  }
+
+  const jdTerms = new Set([...jdHits.keys(), ...packOnly]);
   if (!jdTerms.size) {
     return {
       overlap: [],
@@ -333,14 +513,32 @@ export async function matchJdOverlap(cvText, jdText) {
     };
   }
 
-  const mustTerms = [...jdTerms].filter((t) => (tierByLabel?.[t] || "hard") === "hard");
-  const niceTerms = [...jdTerms].filter((t) => !mustTerms.includes(t));
+  const mustTerms = [];
+  const niceTerms = [];
+  for (const t of jdTerms) {
+    const tier = tierByLabel?.[t] || "hard";
+    const fromPackOnly = packOnly.has(t) && !jdHits.has(t);
+    if (tier === "soft" || fromPackOnly) {
+      niceTerms.push(t);
+      continue;
+    }
+    // Hard from Aho: classify by JD zone when sections exist
+    const idx = findSkillIdx(t);
+    const zone = idx >= 0 ? zoneKindAt(zones, idx) : "body";
+    if (hasSections && zone === "nice") {
+      niceTerms.push(t);
+    } else {
+      // No sections → all hard = must (comportement historique)
+      // With sections → must zone + body = must
+      mustTerms.push(t);
+    }
+  }
+
   const inCv = (t) => cvHits.has(t) || hasTermBoundary(cvText, t);
   const overlap = [...jdTerms].filter(inCv);
   const mustPresent = mustTerms.filter(inCv);
   const mustMissing = mustTerms.filter((t) => !inCv(t));
   const mustCoverage = mustTerms.length ? mustPresent.length / mustTerms.length : 1;
-  // Score pondéré : 70 % couverture must + 30 % overlap global
   const globalRatio = overlap.length / jdTerms.size;
   const score = Math.round((mustCoverage * 0.7 + globalRatio * 0.3) * 100);
 

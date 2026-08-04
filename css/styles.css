@@ -1002,6 +1002,11 @@ html.a11y-motion .ats-ticker-slide { animation: none !important; }
   background: rgba(251, 191, 36, 0.18);
 }
 
+.studio-match-chip--nice {
+  border-color: rgba(59, 110, 143, 0.4);
+  background: rgba(59, 110, 143, 0.1);
+}
+
 .studio-match-chip--overlap {
   border-color: rgba(196, 163, 90, 0.55);
   background: rgba(196, 163, 90, 0.12);
