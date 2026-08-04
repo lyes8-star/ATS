@@ -188,6 +188,8 @@ function findGrammarIssues(text, lang) {
   const issues = [];
   const seen = new Set();
   for (const tip of COMMON_GRAMMAR) {
+    if (tip.skipCheck || tip.noFire) continue;
+    if (tip.right == null) continue;
     tip.wrong.lastIndex = 0;
     let m;
     while ((m = tip.wrong.exec(text)) !== null) {
@@ -199,8 +201,9 @@ function findGrammarIssues(text, lang) {
       let ctx = text.slice(start, end).replace(/\s+/g, " ").trim();
       if (start > 0) ctx = "…" + ctx;
       if (end < text.length) ctx = ctx + "…";
-      const right = tip.right.includes("→")
-        ? tip.right
+      const rightRaw = String(tip.right);
+      const right = rightRaw.includes("→")
+        ? rightRaw
         : m[0].replace(tip.wrong, tip.right);
       tip.wrong.lastIndex = 0;
       issues.push({
@@ -268,7 +271,8 @@ function countResultMetrics(text) {
   const patterns = [
     /\b\d+([.,]\d+)?\s*%/gi,
     /\b\d+([.,]\d+)?\s*(€|\$|k€|m€|M€)\b/gi,
-    /\b\d+([.,]\d+)?\s*k\b/gi,
+    /* Resserré : k€ / k$ seulement — pas le bare « 3 k » (faux KPI) */
+    /\b\d+([.,]\d+)?\s*k(?:€|\$)\b/gi,
     /\b\d{1,3}(?:[\s.,]\d{3})+\s*(?:clients?|users?|utilisateurs?|membres?|personnes?|collaborateurs?|développeurs?|équipes?|jours?|semaines?|mois|projets?|tickets?|commandes?|ventes?|leads?)?\b/gi,
     /\b\d+([.,]\d+)?\s*(?:clients?|users?|utilisateurs?|membres?|personnes?|collaborateurs?|développeurs?|équipes?|jours?|semaines?|mois|projets?|tickets?|commandes?|ventes?|leads?)\b/gi,
     /\b(?:équipe|team|budget|ca|chiffre)\s*(?:de\s+)?\d+/gi,
@@ -727,7 +731,9 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       detail: isEn
         ? `Design tools and AI resume builders often produce graphic layouts ATS cannot parse reliably, and recruiters may distrust generic AI-looking CVs. Rebuild in Word or Google Docs as plain selectable text, single column, no banners.`
         : `Les outils de design et builders IA produisent souvent des mises en page graphiques mal lues par les ATS, et les recruteurs peuvent douter d’un CV « généré ». Reprenez sous Word ou Google Docs en texte sélectionnable, une colonne, sans bandeaux.`,
-      suggestion: "",
+      suggestion: isEn
+        ? "Word/Google Docs → single column → File → Download as PDF (text, not image)."
+        : "Word/Google Docs → une colonne → Fichier → Télécharger en PDF (texte, pas image).",
       applyMode: "replace",
       approximate: true,
       checkId: "cv_source",
@@ -1144,7 +1150,9 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ? isEn
           ? "- [Action verb] … ([metric])"
           : "- [Verbe d'action] … ([chiffre])"
-        : "",
+        : isEn
+          ? "Cut older roles to title + 1 bullet; drop redundant soft-skill lists."
+          : "Réduire postes anciens à intitulé + 1 puce ; retirer listes soft redondantes.",
       applyMode: tooShort ? "insert_after" : "replace",
       approximate: true,
       checkId: "concision",
@@ -1382,9 +1390,12 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       detail: isEn
         ? "Cut older roles to title + 1 bullet; remove redundant soft skills lists."
         : "Réduisez les postes anciens à intitulé + 1 puce ; retirez les listes de soft skills redondantes.",
-      suggestion: tail,
+      suggestion: isEn
+        ? "Keep 1–2 pages: recent roles with metrics; older roles → title + dates only."
+        : "Gardez 1–2 pages : rôles récents avec chiffres ; postes anciens → intitulé + dates seuls.",
       applyMode: "replace",
       approximate: true,
+      checkId: "page_length",
     });
   }
 
@@ -1429,7 +1440,9 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         : alsoCols
           ? "Grilles de tableaux et indices de colonnes détectés. Les ATS mélangent souvent l’ordre des cellules. Refaites une mise en page linéaire mono-colonne (sans tableaux) dans votre fichier d’origine."
           : "Les grilles de tableaux brouillent l’ordre des cellules dans beaucoup d’ATS. Convertissez les tableaux en paragraphes ou listes à puces, en une seule colonne.",
-      suggestion: "",
+      suggestion: isEn
+        ? "Word: Table → Convert to Text. Docs: copy cells into a bullet list. One column only."
+        : "Word : Tableau → Convertir en texte. Docs : collez les cellules en liste à puces. Une seule colonne.",
       applyMode: "replace",
       approximate: true,
       checkId: "no_tables",
@@ -1449,7 +1462,9 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       detail: isEn
         ? "Two-column or sidebar layouts often reverse reading order for ATS. Prefer one continuous column: contact → experience → education → skills."
         : "Les mises en page à deux colonnes ou barre latérale inversent souvent l’ordre de lecture ATS. Préférez une seule colonne continue : contact → expérience → formation → compétences.",
-      suggestion: "",
+      suggestion: isEn
+        ? "Rebuild as one column: Contact → Experience → Education → Skills (no sidebar)."
+        : "Refaire en une colonne : Contact → Expérience → Formation → Compétences (sans barre latérale).",
       applyMode: "replace",
       approximate: true,
       checkId: "single_column",
@@ -1477,7 +1492,9 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       detail: isEn
         ? "ATS cannot read text locked in images. Export a text PDF or DOCX from Word/Google Docs (File → Export), not a photo or flattened Canva export."
         : "Les ATS ne lisent pas le texte figé dans des images. Exportez un PDF texte ou un DOCX depuis Word/Google Docs (Fichier → Exporter), pas une photo ni un export Canva aplati.",
-      suggestion: "",
+      suggestion: isEn
+        ? "Re-export: Word/Docs → Download as PDF (text selectable) or .docx — not a scan/photo."
+        : "Réexporterz : Word/Docs → Télécharger en PDF (texte sélectionnable) ou .docx — pas un scan/photo.",
       applyMode: "replace",
       approximate: true,
       checkId: "extractable_text",
@@ -1499,7 +1516,9 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       detail: isEn
         ? "Extraction order diverges from visual order — ATS may scramble sections."
         : "L'ordre d'extraction diverge de l'ordre visuel — un ATS peut mélanger les sections.",
-      suggestion: "",
+      suggestion: isEn
+        ? "Use a single-column Word/Docs layout so visual order = ATS reading order."
+        : "Passez en mise en page Word/Docs mono-colonne pour aligner ordre visuel et lecture ATS.",
       applyMode: "replace",
       approximate: true,
       checkId: "reading_order",
@@ -1619,7 +1638,9 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         detail: isEn
           ? "A profile photo in the header is often ignored or scrambles reading order. Remove the photo for ATS applications and keep name, email and phone as plain text only."
           : "Une photo de profil en en-tête est souvent ignorée ou brouille l'ordre de lecture. Retirez la photo pour les candidatures ATS et gardez nom, e-mail et téléphone en texte clair uniquement.",
-        suggestion: "",
+        suggestion: isEn
+          ? "Remove the photo; keep « First Last · email · phone » as selectable text at the top."
+          : "Retirez la photo ; gardez « Prénom Nom · e-mail · téléphone » en texte sélectionnable en tête.",
         applyMode: "replace",
         approximate: true,
         checkId: "profile_photo",
@@ -1779,7 +1800,9 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       detail: isEn
         ? "With 3+ roles, recruiters and ATS expect Experience first — move Education after."
         : "Avec 3+ postes, les recruteurs et ATS s'attendent à voir l'Expérience en premier — déplacez la Formation après.",
-      suggestion: "",
+      suggestion: isEn
+        ? "Move the Education block below Experience."
+        : "Déplacez le bloc Formation sous Expérience.",
       applyMode: "replace",
       approximate: true,
       checkId: "section_order",
@@ -1805,7 +1828,9 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       detail: isEn
         ? "Some roles have overlapping date ranges — ATS may flag inconsistency."
         : "Certains postes ont des plages de dates qui se chevauchent — un ATS peut signaler une incohérence.",
-      suggestion: "",
+      suggestion: isEn
+        ? "Job title — Company (YYYY – YYYY) — adjust end/start so ranges do not overlap unless concurrent."
+        : "Intitulé — Entreprise (AAAA – AAAA) — ajustez fin/début pour éviter le chevauchement sauf cumul.",
       applyMode: "replace",
       approximate: true,
       checkId: "overlapping_dates",
@@ -1829,10 +1854,98 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       detail: isEn
         ? "ATS and recruiters expect the most recent role first."
         : "Les ATS et recruteurs s'attendent à voir le poste le plus récent en premier.",
-      suggestion: "",
+      suggestion: isEn
+        ? "Reorder roles: most recent employer first, then older roles."
+        : "Réordonnez : employeur le plus récent en premier, puis les postes plus anciens.",
       applyMode: "replace",
       approximate: true,
       checkId: "reverse_chronology",
+    });
+  }
+
+  // Bridge: standard_headings KO (even if per-section anns exist)
+  const headingsKo =
+    scores.readability?.standardHeadings === false ||
+    (scores.structure?.checks || []).some((c) => c.id === "standard_headings" && c.ok === false) ||
+    (scores.readability?.checks || []).some((c) => c.id === "standard_headings" && c.ok === false);
+  if (headingsKo && !annotations.some((a) => a.checkId === "standard_headings")) {
+    const hasExp = hasParsedSection(parsed, "experience");
+    const hasEdu = hasParsedSection(parsed, "education");
+    const hasSkills = hasParsedSection(parsed, "skills");
+    const missing = [
+      !hasExp ? (isEn ? "Experience" : "Expérience") : null,
+      !hasEdu ? (isEn ? "Education" : "Formation") : null,
+      !hasSkills ? (isEn ? "Skills" : "Compétences") : null,
+    ].filter(Boolean);
+    push({
+      kind: "missing_section",
+      axis: "readability",
+      shortLabel: isEn ? "Headings" : "Titres",
+      severity: "critical",
+      textStart: Math.max(0, text.length - 1),
+      textEnd: text.length,
+      quote: "(fin du document)",
+      title: isEn
+        ? `Add ATS-standard headings (${missing.join(" / ") || "Experience / Education / Skills"})`
+        : `Ajouter des titres ATS standards (${missing.join(" / ") || "Expérience / Formation / Compétences"})`,
+      detail: isEn
+        ? "ATS look for clear Experience / Education / Skills section titles. Rename creative headings to these labels."
+        : "Les ATS cherchent des titres clairs Expérience / Formation / Compétences. Renommez les intitulés créatifs avec ces libellés.",
+      suggestion: isEn
+        ? "EXPERIENCE\nEDUCATION\nSKILLS"
+        : "EXPÉRIENCE PROFESSIONNELLE\nFORMATION\nCOMPÉTENCES",
+      applyMode: "insert_after",
+      approximate: true,
+      checkId: "standard_headings",
+    });
+  }
+
+  // Bridge: encoding KO
+  const encodingKo = (scores.readability?.checks || []).some((c) => c.id === "encoding" && c.ok === false);
+  if (encodingKo && !annotations.some((a) => a.checkId === "encoding")) {
+    push({
+      kind: "encoding",
+      axis: "readability",
+      shortLabel: isEn ? "Encoding" : "Encodage",
+      severity: "warning",
+      textStart: 0,
+      textEnd: Math.min(40, text.length),
+      quote: text.slice(0, Math.min(40, text.length)).trim() || "(document)",
+      title: isEn
+        ? "Unreadable characters (encoding / OCR)"
+        : "Caractères illisibles (encodage / OCR)",
+      detail: isEn
+        ? "Strange symbols often come from a bad export or scan OCR. Re-export as UTF-8 text PDF or DOCX from Word/Docs."
+        : "Des symboles bizarres viennent souvent d'un mauvais export ou d'un OCR de scan. Réexportez en PDF texte UTF-8 ou DOCX depuis Word/Docs.",
+      suggestion: isEn
+        ? "Re-save from Word/Google Docs as PDF (text) or .docx — avoid scanned image PDFs."
+        : "Réenregistrez depuis Word/Google Docs en PDF (texte) ou .docx — évitez les PDF image/scan.",
+      applyMode: "replace",
+      approximate: true,
+      checkId: "encoding",
+    });
+  }
+
+  // Bridge: job_title KO
+  const jobTitleKo = (scores.structure?.checks || []).some((c) => c.id === "job_title" && c.ok === false);
+  if (jobTitleKo && !annotations.some((a) => a.checkId === "job_title" || a.checkId === "job_title_headline")) {
+    push({
+      kind: "missing_headline",
+      axis: "structure",
+      shortLabel: isEn ? "Title" : "Titre",
+      severity: "warning",
+      textStart: 0,
+      textEnd: Math.min(40, text.length),
+      quote: (parsed?.contact?.name || text.slice(0, 40)).trim(),
+      title: isEn ? "Add a clear job title under your name" : "Ajouter un intitulé de poste sous votre nom",
+      detail: isEn
+        ? "No parsed headline or role title at the top — ATS need a clear target job title."
+        : "Aucun intitulé (headline) ni titre de poste parsé en tête — les ATS ont besoin d'un poste cible clair.",
+      suggestion: isEn ? "[Target job title]" : "[Intitulé de poste ciblé]",
+      applyMode: "insert_header",
+      section: "Coordonnées",
+      approximate: true,
+      checkId: "job_title",
     });
   }
 
@@ -2362,8 +2475,8 @@ function scoreStructure(text, fileMeta = {}) {
 
   const hasHeadline = Boolean(parsed?.headline && parsed.headline.trim());
   const hasRoleTitle = Boolean(parsed?.roles?.[0]?.title && parsed.roles[0].title.length > 2);
-  const hasTitleHint = JOB_TITLE_HINTS.test(text.slice(0, 800));
-  if (hasHeadline || hasRoleTitle || hasTitleHint) {
+  /* Points seulement si headline / rôle parsé — pas un match JOB_TITLE_HINTS libre dans le texte */
+  if (hasHeadline || hasRoleTitle) {
     score += 3;
     checks.push({ id: "job_title", ok: true, label: "Titre/intitulé de poste présent." });
   } else {
@@ -2547,9 +2660,14 @@ function scoreContent(text, fileMeta = {}) {
   let score = 0;
   const words = text.split(/\s+/).filter(Boolean);
   const verbInfo = fileMeta.verbStats;
-  const verbHits = verbInfo
-    ? verbInfo.strong
-    : ACTION_VERBS.filter((v) => text.toLowerCase().includes(v.toLowerCase())).length;
+  /* Toujours compter via verbStats (async) ou boundaries \b — jamais .includes (faux + sur « unmanaged ») */
+  let verbHits;
+  let verbsVerified = true;
+  if (verbInfo && typeof verbInfo.strong === "number") {
+    verbHits = verbInfo.strong;
+  } else {
+    verbHits = countActionVerbsBounded(text);
+  }
   const weakHits = verbInfo?.weak || 0;
 
   if (verbHits >= 6) {
@@ -2561,6 +2679,13 @@ function scoreContent(text, fileMeta = {}) {
       id: "action_verbs",
       ok: false,
       label: `Peu de verbes d'action (${verbHits}) — renforcez l'impact.`,
+    });
+  } else if (!verbsVerified) {
+    checks.push({
+      id: "action_verbs",
+      ok: null,
+      na: true,
+      label: "Verbes d'action : non vérifiés (lexique indisponible).",
     });
   } else {
     checks.push({
@@ -2603,18 +2728,7 @@ function scoreContent(text, fileMeta = {}) {
       }
     }
   }
-  /* Fallback document-wide si peu de rôles parsés */
-  if (bullets < 2) {
-    bullets = 0;
-    bulletsWithMetrics = 0;
-    bulletsWithAction = 0;
-    for (const line of text.split(/\n/)) {
-      if (!/^[\s•\-\*]+/.test(line)) continue;
-      bullets += 1;
-      if (bulletHasResultMetric(line)) bulletsWithMetrics += 1;
-      if (ACTION_LINE.test(line)) bulletsWithAction += 1;
-    }
-  }
+  /* Hors rôles parsés : pas de full credit document-wide — metrics ne verdit pas */
   const metrics = countResultMetrics(text);
   const metricsRatio = bullets ? bulletsWithMetrics / bullets : 0;
   if (bullets >= 2) {
@@ -2639,25 +2753,14 @@ function scoreContent(text, fileMeta = {}) {
         label: "Presque aucun résultat chiffré sur les rôles récents — les ATS et RH valorisent les preuves.",
       });
     }
-  } else if (metrics >= 5) {
-    score += 9;
-    checks.push({
-      id: "metrics",
-      ok: true,
-      label: `Résultats chiffrés présents (${metrics} indicateurs).`,
-    });
-  } else if (metrics >= 2) {
-    score += 4;
-    checks.push({
-      id: "metrics",
-      ok: false,
-      label: "Quelques chiffres — ajoutez davantage de métriques (seuil 50 % des puces récentes).",
-    });
   } else {
     checks.push({
       id: "metrics",
       ok: false,
-      label: "Presque aucun résultat chiffré — les ATS et RH valorisent les preuves.",
+      label:
+        metrics > 0
+          ? "Chiffres hors puces d'expérience — ajoutez des métriques sur les rôles récents (seuil 50 %)."
+          : "Presque aucun résultat chiffré sur les rôles récents — les ATS et RH valorisent les preuves.",
     });
   }
 
@@ -2694,36 +2797,61 @@ function scoreContent(text, fileMeta = {}) {
   const spellingIssues = Array.isArray(fileMeta.spelling) ? fileMeta.spelling : [];
   const typoCount = spellingIssues.filter((s) => s.kind !== "grammar").length;
   const grammarCount = spellingIssues.filter((s) => s.kind === "grammar").length;
+  const spellDeep = !!fileMeta.spellingDeep;
+  const grammarDeep = !!fileMeta.grammarDeep;
+  const detectedLang = fileMeta.lang || detectLanguage(text);
   const spellPenalty = Math.min(4, typoCount);
   if (spellPenalty > 0) {
     score = Math.max(0, score - spellPenalty);
   }
-  if (typoCount === 0) {
+  if (typoCount > 0) {
+    checks.push({
+      id: "spelling_quality",
+      ok: false,
+      label: `Orthographe : ${typoCount} faute(s) fréquente(s) (−${spellPenalty} pt).`,
+    });
+  } else if (spellDeep) {
     checks.push({
       id: "spelling_quality",
       ok: true,
       label: "Orthographe : pas de faute fréquente détectée.",
     });
   } else {
+    /* Mini-lexique local sans hit → non vérifié (pas de faux vert) */
     checks.push({
       id: "spelling_quality",
-      ok: false,
-      label: `Orthographe : ${typoCount} faute(s) fréquente(s) (−${spellPenalty} pt).`,
+      ok: null,
+      na: true,
+      label: "Orthographe : non vérifiée en profondeur (lexique local).",
     });
   }
 
-  if (grammarCount === 0) {
+  if (grammarCount > 0) {
+    score = Math.max(0, score - Math.min(2, grammarCount));
+    checks.push({
+      id: "grammar_quality",
+      ok: false,
+      label: `Grammaire : ${grammarCount} tournure(s) à corriger.`,
+    });
+  } else if (detectedLang === "en" && !grammarDeep) {
+    checks.push({
+      id: "grammar_quality",
+      ok: null,
+      na: true,
+      label: "Grammar: not deeply verified (requires Extract / LanguageTool).",
+    });
+  } else if (grammarDeep) {
     checks.push({
       id: "grammar_quality",
       ok: true,
       label: "Grammaire : pas de tournure douteuse détectée.",
     });
   } else {
-    score = Math.max(0, score - Math.min(2, grammarCount));
     checks.push({
       id: "grammar_quality",
-      ok: false,
-      label: `Grammaire : ${grammarCount} tournure(s) à corriger.`,
+      ok: null,
+      na: true,
+      label: "Grammaire : non vérifiée en profondeur (lexique local).",
     });
   }
 
@@ -2734,6 +2862,22 @@ function scoreContent(text, fileMeta = {}) {
     weakHits,
     verbWeakHits: Array.isArray(verbInfo?.weakHits) ? verbInfo.weakHits : [],
   };
+}
+
+/** Compte les verbes d'action avec frontières Unicode (anti faux positifs sous-chaîne). */
+function countActionVerbsBounded(text) {
+  const lower = (text || "").toLowerCase();
+  let count = 0;
+  for (const v of ACTION_VERBS) {
+    /* \b JS ignore les accents (é ≠ word char) — utiliser frontiers Unicode */
+    const re = new RegExp(
+      `(?<![\\p{L}\\p{N}_])${escapeReg(v.toLowerCase())}(?![\\p{L}\\p{N}_])`,
+      "giu"
+    );
+    const m = lower.match(re);
+    if (m) count += m.length;
+  }
+  return count;
 }
 
 function scoreKeywords(text, fileMeta = {}) {
@@ -3141,7 +3285,7 @@ export function analyzeCv(rawText, fileMeta = {}) {
     }
   }
 
-  const meta = { ...fileMeta, parsed, spelling };
+  const meta = { ...fileMeta, parsed, spelling, lang: detectedLang };
 
   const readability = scoreReadability(text, meta);
   const structure = scoreStructure(text, meta);
@@ -3589,6 +3733,13 @@ export function analyzeCv(rawText, fileMeta = {}) {
   const actionVerbsOk = content.checks.some((c) => c.id === "action_verbs" && c.ok === true);
   const eduOk = structure.checks.some((c) => c.id === "section_education" && c.ok === true);
   const skillsOk = structure.checks.some((c) => c.id === "section_skills" && c.ok === true);
+  const standardHeadingsOk =
+    !!readability.standardHeadings ||
+    (!!structure.hasExp && eduOk && skillsOk) ||
+    structure.checks.some((c) => c.id === "standard_headings" && c.ok === true);
+  const softStuffingKo = keywords.checks.some(
+    (c) => c.id === "keyword_soft_stuffing" && c.ok === false
+  );
   const noColumnIssue = !readability.hasColumnsSmell;
   const noTableIssue = !readability.hasTables;
   const noHostileSource = !readability.cvSource?.hostile;
@@ -3602,6 +3753,8 @@ export function analyzeCv(rawText, fileMeta = {}) {
     noColumnIssue &&
     noTableIssue &&
     noHostileSource &&
+    standardHeadingsOk &&
+    !softStuffingKo &&
     (completeRoleOk || roleDatesOk) &&
     metricsOk &&
     actionVerbsOk &&
@@ -3800,8 +3953,8 @@ export { labelForScore, buildAnnotations, findSpellingIssues };
 export function mergeRemoteEnrichment(report, enrich = {}, opts = {}) {
   if (!report) return report;
   const isEn = opts.lang === "en";
-  const issues = enrich.grammar?.issues || [];
-  if (issues.length) {
+  if (enrich.grammar) {
+    const issues = enrich.grammar.issues || [];
     const spelling = [...(report.spelling || [])];
     const seen = new Set(spelling.map((s) => `${s.textStart}:${String(s.wrong || "").toLowerCase()}`));
     for (const issue of issues) {
@@ -3849,19 +4002,33 @@ export function mergeRemoteEnrichment(report, enrich = {}, opts = {}) {
       });
     }
 
-    // Update checklist content axes
+    // LanguageTool (or enrich) ran → deep verification; 0 hits = ok:true (not na)
     const typoCount = spelling.filter((s) => s.kind !== "grammar").length;
     const grammarCount = spelling.filter((s) => s.kind === "grammar").length;
-    upsertCheck(report, "spelling_quality", typoCount === 0, typoCount === 0
-      ? (isEn ? "Spelling: no common issues detected." : "Orthographe : pas de faute fréquente détectée.")
-      : (isEn
+    upsertCheck(
+      report,
+      "spelling_quality",
+      typoCount === 0,
+      typoCount === 0
+        ? isEn
+          ? "Spelling: no common issues detected."
+          : "Orthographe : pas de faute fréquente détectée."
+        : isEn
           ? `Spelling: ${typoCount} common issue(s).`
-          : `Orthographe : ${typoCount} faute(s) fréquente(s).`));
-    upsertCheck(report, "grammar_quality", grammarCount === 0, grammarCount === 0
-      ? (isEn ? "Grammar: no doubtful wording detected." : "Grammaire : pas de tournure douteuse détectée.")
-      : (isEn
+          : `Orthographe : ${typoCount} faute(s) fréquente(s).`
+    );
+    upsertCheck(
+      report,
+      "grammar_quality",
+      grammarCount === 0,
+      grammarCount === 0
+        ? isEn
+          ? "Grammar: no doubtful wording detected."
+          : "Grammaire : pas de tournure douteuse détectée."
+        : isEn
           ? `Grammar: ${grammarCount} wording issue(s) to fix.`
-          : `Grammaire : ${grammarCount} tournure(s) à corriger.`));
+          : `Grammaire : ${grammarCount} tournure(s) à corriger.`
+    );
 
     // Light content score penalty if not already low
     if (report.categories?.content && (typoCount || grammarCount)) {
@@ -3911,7 +4078,9 @@ export function mergeRemoteEnrichment(report, enrich = {}, opts = {}) {
         detail: isEn
           ? "Geocoding did not match a known place. Prefer City or ZIP + City in plain text."
           : "Le géocodage n’a pas trouvé de lieu connu. Préférez Ville ou CP + Ville en texte clair.",
-        suggestion: "",
+        suggestion: isEn
+          ? "City or ZIP + City (plain text)"
+          : "Ville ou CP + Ville (texte clair)",
         applyMode: "replace",
         checkId: "identity_address",
       });
@@ -3978,8 +4147,12 @@ function upsertCheck(report, id, ok, label) {
   if (existing) {
     existing.ok = ok;
     existing.label = label;
+    if (ok === null) existing.na = true;
+    else delete existing.na;
   } else {
-    report.checklist.push({ id, axis: "content", ok, label });
+    const row = { id, axis: "content", ok, label };
+    if (ok === null) row.na = true;
+    report.checklist.push(row);
   }
   for (const cat of Object.values(report.categories || {})) {
     // categories don't store checks on report — checklist is source of truth in UI
@@ -3988,7 +4161,7 @@ function upsertCheck(report, id, ok, label) {
   // Also patch strengths/blockers lightly
   const inBlockers = (report.blockers || []).find((b) => b.id === id);
   const inStrengths = (report.strengths || []).find((s) => s.id === id);
-  if (ok) {
+  if (ok === true) {
     report.blockers = (report.blockers || []).filter((b) => b.id !== id);
     if (!inStrengths) {
       report.strengths = report.strengths || [];
@@ -3996,7 +4169,7 @@ function upsertCheck(report, id, ok, label) {
     } else {
       inStrengths.label = label;
     }
-  } else {
+  } else if (ok === false) {
     report.strengths = (report.strengths || []).filter((s) => s.id !== id);
     if (!inBlockers) {
       report.blockers = report.blockers || [];
@@ -4004,5 +4177,9 @@ function upsertCheck(report, id, ok, label) {
     } else {
       inBlockers.label = label;
     }
+  } else {
+    /* na — remove from both strengths and blockers */
+    report.strengths = (report.strengths || []).filter((s) => s.id !== id);
+    report.blockers = (report.blockers || []).filter((b) => b.id !== id);
   }
 }
