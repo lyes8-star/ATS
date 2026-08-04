@@ -2555,4 +2555,146 @@ communication, leadership, collaboration, teamwork, créativité, autonomie
   console.log("✓ clarity analyzer copy OK", stuff.label, softR.categories.readability.name);
 }
 
+// ── Formation detection (parse + AI prompt) ──
+{
+  const { parseCv, isSectionHeader } = await import("./parse-cv.js");
+  const { buildAiCvPrompt, salvageEducationLines } = await import("./ai-prompt.js");
+
+  assert.equal(isSectionHeader({ text: "Parcours académique" }), "education");
+  assert.equal(isSectionHeader({ text: "Parcours professionnel" }), "experience");
+  assert.equal(isSectionHeader({ text: "Parcours" }), null);
+  assert.equal(isSectionHeader({ text: "Cursus" }), "education");
+  assert.equal(isSectionHeader({ text: "Scolarité" }), "education");
+  assert.equal(isSectionHeader({ text: "🎓 Formation" }), "education");
+  assert.equal(isSectionHeader({ text: "• Formation" }), null);
+  assert.equal(isSectionHeader({ text: "Mes formations" }), "education");
+
+  const parcoursCv = `
+Jean Dupont
+jean@mail.com | 06 12 34 56 78
+EXPÉRIENCE
+Développeur — Acme (2020 - 2023)
+- Développé des APIs REST
+PARCOURS ACADÉMIQUE
+Master Informatique — Université Paris (2018 - 2020)
+COMPÉTENCES
+Java, Python
+`;
+  const parcoursParsed = parseCv(parcoursCv);
+  assert.ok(
+    (parcoursParsed.sections.education || []).some((l) => /Master Informatique/i.test(l)),
+    "Parcours académique fills education section"
+  );
+  const parcoursReport = analyzeCv(parcoursCv, { pages: 1 });
+  assert.equal(
+    parcoursReport.checklist.find((c) => c.id === "section_education")?.ok,
+    true,
+    "section_education OK for Parcours académique"
+  );
+  const parcoursPrompt = buildAiCvPrompt(
+    { report: parcoursReport, annotations: [], extracted: { text: parcoursCv } },
+    { lang: "fr" }
+  );
+  const parcoursEdu = parcoursPrompt.match(/## Formation[\s\S]*?## Compétences/)?.[0] || "";
+  assert.ok(/Master Informatique/i.test(parcoursEdu), "prompt Formation includes Master");
+  assert.ok(!/À compléter : section Formation/i.test(parcoursEdu), "prompt not todo-only for Parcours académique");
+  console.log("✓ Formation Parcours académique → prompt OK");
+
+  const emojiCv = `
+Jean Dupont
+jean@mail.com | 06 12 34 56 78
+EXPÉRIENCE
+Développeur — Acme (2020 - 2023)
+- Développé des APIs
+🎓 Formation
+Master Informatique — Université Paris (2018 - 2020)
+COMPÉTENCES
+Java
+`;
+  const emojiReport = analyzeCv(emojiCv, { pages: 1 });
+  assert.equal(
+    emojiReport.checklist.find((c) => c.id === "section_education")?.ok,
+    true,
+    "emoji Formation heading detected"
+  );
+  console.log("✓ Formation emoji heading OK");
+
+  const cursusParsed = parseCv(`
+Alice Martin
+alice@mail.com | 01 23 45 67 89
+EXPÉRIENCE
+Analyste — Corp (2019 - 2022)
+- Piloté le reporting
+CURSUS
+Licence Économie — Lyon (2016 - 2019)
+COMPÉTENCES
+Excel
+`);
+  assert.ok(
+    (cursusParsed.sections.education || []).some((l) => /Licence/i.test(l)),
+    "Cursus → education"
+  );
+  const scolariteParsed = parseCv(`
+Alice Martin
+alice@mail.com | 01 23 45 67 89
+EXPÉRIENCE
+Analyste — Corp (2019 - 2022)
+SCOLARITÉ
+Bac S — Lycée Pasteur (2016)
+COMPÉTENCES
+Excel
+`);
+  assert.ok(
+    (scolariteParsed.sections.education || []).some((l) => /Bac S/i.test(l)),
+    "Scolarité → education"
+  );
+  console.log("✓ Formation Cursus / Scolarité OK");
+
+  // Regression: bullet « formation » ≠ section
+  const bulletCv = `
+Bob Martin
+bob@mail.com | 01 23 45 67 89
+EXPÉRIENCE
+Consultant — Firm (2020 - 2022)
+- Suivi de la formation interne des nouveaux arrivants
+COMPÉTENCES
+Excel, PowerPoint
+`;
+  const bulletReport = analyzeCv(bulletCv, { pages: 1 });
+  assert.equal(
+    bulletReport.checklist.find((c) => c.id === "section_education")?.ok,
+    false,
+    "formation in bullet ≠ Education section"
+  );
+  console.log("✓ Formation bullet regression OK");
+
+  // Salvage diploma lines into prompt when heading missing
+  const buriedCv = `
+Alice Martin
+alice@mail.com | 01 23 45 67 89
+EXPÉRIENCE PROFESSIONNELLE
+Développeuse — Startup (2020 - 2023)
+- Livré des features
+Master Droit — Université Assas (2015 - 2017)
+COMPÉTENCES
+Excel, Word
+`;
+  const buriedReport = analyzeCv(buriedCv, { pages: 1 });
+  assert.equal(
+    buriedReport.checklist.find((c) => c.id === "section_education")?.ok,
+    false,
+    "buried diploma without heading still fails checklist"
+  );
+  const salvage = salvageEducationLines(buriedReport.parsed, buriedCv);
+  assert.ok(salvage.some((l) => /Master Droit/i.test(l)), "salvage finds Master Droit");
+  const buriedPrompt = buildAiCvPrompt(
+    { report: buriedReport, annotations: [], extracted: { text: buriedCv } },
+    { lang: "fr" }
+  );
+  const buriedEdu = buriedPrompt.match(/## Formation[\s\S]*?## Compétences/)?.[0] || "";
+  assert.ok(/Master Droit/i.test(buriedEdu), "prompt salvages buried diploma");
+  assert.ok(/Extrait Formation probable|Likely education excerpt/i.test(buriedEdu), "salvage note present");
+  console.log("✓ Formation prompt salvage OK");
+}
+
 console.log("Tous les tests OK");

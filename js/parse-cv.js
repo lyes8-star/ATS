@@ -6,11 +6,11 @@
 const SECTION_HEADERS = [
   {
     key: "experience",
-    re: /^(exp[ée]riences?(?:\s+professionnelles?)?|parcours(?:\s+professionnel)?|emploi|career|work\s+experience|professional\s+experience)$/i,
+    re: /^(exp[ée]riences?(?:\s+professionnelles?)?|parcours\s+professionnel|emploi|career|work\s+experience|professional\s+experience)$/i,
   },
   {
     key: "education",
-    re: /^(formations?(?:\s+et\s+dipl[ôo]mes?)?|education|éducation|dipl[ôo]mes?|études|etudes|academic|formation\s+initiale)$/i,
+    re: /^(?:(?:mes\s+)?formations?(?:\s+et\s+(?:dipl[ôo]mes?|certifications?))?|formation\s+(?:initiale|continue)|education|éducation|dipl[ôo]mes?|études|etudes|academic(?:\s+background)?|background\s+académique|parcours\s+académique|cursus|scolarité)$/i,
   },
   {
     key: "skills",
@@ -228,13 +228,26 @@ export function linesFromText(text) {
   return out;
 }
 
+/**
+ * Retire emoji / pictogrammes en tête (🎓 Formation → Formation).
+ * Ne touche pas aux puces déjà rejetées par isSectionHeader.
+ * @param {string} raw
+ */
+export function stripLeadingDecorators(raw) {
+  return String(raw || "")
+    .replace(/^[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\u200D\uFE0E]+(?:\s+|(?=\p{L}))/u, "")
+    .replace(/^[^\p{L}\p{N}]+/u, "")
+    .trim();
+}
+
 function isSectionHeader(line) {
   const raw = String(line?.text || "").trim();
   if (!raw) return null;
   // Bullets / numbered lines are never section headers
   if (/^[-•●▪–—*□■▫◦‣]\s+/.test(raw) || /^\d+[.)]\s+/.test(raw)) return null;
 
-  const normalized = normalizeHeading(raw);
+  const stripped = stripLeadingDecorators(raw) || raw;
+  const normalized = normalizeHeading(stripped);
   // Guard: avoid matching long body lines (after normalize)
   if (normalized.length <= 64) {
     const exact = matchSectionKey(normalized);
@@ -268,7 +281,7 @@ function isSectionHeader(line) {
 
 /** Contenu éventuel après un titre « SECTION — reste ». */
 function headingRest(raw) {
-  const t = String(raw || "")
+  const t = stripLeadingDecorators(String(raw || ""))
     .replace(/[:：]\s*$/, "")
     .trim();
   const parts = t.split(/\s*[—–\-|]\s+/);

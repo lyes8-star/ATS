@@ -131,6 +131,46 @@ function actionableAnnotations(session) {
 }
 
 /**
+ * Signaux diplôme pour secours prompt quand la section Formation n'a pas été parsée.
+ */
+const DIPLOMA_SIGNAL =
+  /\b(master|licence|bachelor|mba|bts|dut|deug|mst|msc|ma[iî]trise|doctorat|phd|bac\s*\+?\s*\d|dipl[ôo]me|école|ecole|university|universit[ée]|iut|grande\s+[ée]cole|ingénieur|engineering\s+degree|cap\b|bep\b)\b/i;
+
+/**
+ * Récupère des lignes « diplôme » depuis expérience / other / brut si Formation est vide.
+ * @param {object|null} parsed
+ * @param {string} rawText
+ * @returns {string[]}
+ */
+export function salvageEducationLines(parsed, rawText = "") {
+  const out = [];
+  const seen = new Set();
+  const push = (line) => {
+    const t = String(line || "").trim();
+    if (!t || t.length < 4 || t.length > 220) return;
+    if (/^[-•●▪–—*]\s+/.test(t) && !DIPLOMA_SIGNAL.test(t)) return;
+    if (!DIPLOMA_SIGNAL.test(t)) return;
+    const key = t.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(t);
+  };
+
+  const pools = [
+    ...(parsed?.sections?.experience || []),
+    ...(parsed?.sections?.other || []),
+    ...(parsed?.sections?.header || []),
+    ...(parsed?.sections?.summary || []),
+  ];
+  for (const line of pools) push(line);
+
+  if (!out.length && rawText) {
+    for (const line of String(rawText).split(/\n+/)) push(line);
+  }
+  return out.slice(0, 8);
+}
+
+/**
  * Squelette ATS ordonné : Coordonnées → Profil → Expérience → Formation → Compétences → Langues → Autres.
  * Champs non lus → [À compléter : …] / [To complete: …].
  */
@@ -219,7 +259,13 @@ function formatSourceCv(parsed, rawText, L) {
     if (eduLines.length) {
       for (const line of eduLines) lines.push(line);
     } else {
-      lines.push(L.todoSectionEdu);
+      const salvage = salvageEducationLines(parsed, rawText);
+      if (salvage.length) {
+        lines.push(L.eduSalvageNote);
+        for (const line of salvage) lines.push(line);
+      } else {
+        lines.push(L.todoSectionEdu);
+      }
     }
   } else {
     for (const role of eduRoles) {
@@ -431,6 +477,8 @@ function labels(lang, opts = {}) {
       todoSummary: "[To complete: short professional summary]",
       todoSectionExp: "[To complete: Experience section — title, company, dates, bullets]",
       todoSectionEdu: "[To complete: Education section — degree, school, dates]",
+      eduSalvageNote:
+        "(Likely education excerpt recovered from other blocks — verify placement; do not invent degrees)",
       todoSkills: "[To complete: skills / tools]",
       todoLanguages: "[To complete: languages]",
       todoJobTitle: "[To complete: job title]",
@@ -522,6 +570,8 @@ function labels(lang, opts = {}) {
     todoSummary: "[À compléter : profil professionnel court]",
     todoSectionExp: "[À compléter : section Expérience — intitulé, entreprise, dates, puces]",
     todoSectionEdu: "[À compléter : section Formation — diplôme, école, dates]",
+    eduSalvageNote:
+      "(Extrait Formation probable récupéré ailleurs — vérifiez le classement ; n’inventez pas de diplômes)",
     todoSkills: "[À compléter : compétences / outils]",
     todoLanguages: "[À compléter : langues]",
     todoJobTitle: "[À compléter : intitulé de poste]",
