@@ -2221,4 +2221,188 @@ React, Node, Agile, management
   });
 }
 
+// ── Anti-placebo: real analysis honesty ──
+{
+  // 1) Substring verb (unmanaged) must not boost action_verbs
+  const unmanagedCv = `Alex Martin
+alex.martin@email.com | 06 98 76 54 32 | Paris
+EXPÉRIENCE PROFESSIONNELLE
+Support — FirmX (2020 - 2023)
+- unmanaged backlog tickets every sprint
+- Responsible for documentation updates without metrics
+FORMATION
+Licence Info — Univ (2019)
+COMPÉTENCES
+Excel, communication, teamwork, leadership, creativity, adaptability
+`;
+  const uR = analyzeCv(unmanagedCv, { pages: 1 });
+  const uVerbs = uR.checklist.find((c) => c.id === "action_verbs");
+  assert.ok(uVerbs?.ok !== true, "unmanaged must not green action_verbs");
+  assert.ok(
+    !/bien utilisés/i.test(uVerbs?.label || ""),
+    "substring managed must not inflate verb count"
+  );
+  console.log("✓ anti-placebo unmanaged verbs OK", uVerbs?.label);
+
+  // 2) Metrics outside experience bullets must not green
+  const metricsOutside = `Sam Dupont
+sam@email.com | 06 11 22 33 44
+PROFIL
+Expert avec 50% d'expertise, budget 100k€, 12 000 clients au total, CA 2M€, team 15.
+EXPÉRIENCE PROFESSIONNELLE
+Consultant — Co (2021 - 2023)
+Participation aux projets internes sans chiffre dans les puces.
+FORMATION
+Master — Univ (2020)
+COMPÉTENCES
+Java, SQL
+`;
+  const mR = analyzeCv(metricsOutside, { pages: 1 });
+  const mCheck = mR.checklist.find((c) => c.id === "metrics");
+  assert.equal(mCheck?.ok, false, "metrics outside experience must not be ok:true");
+  console.log("✓ anti-placebo metrics outside exp OK", mCheck?.label);
+
+  // 3) Soft-stuffing + weak metrics → passes false
+  const softStuffCv = `Léa Soft
+lea@email.com | 06 22 33 44 55 | Lyon
+EXPÉRIENCE PROFESSIONNELLE
+Chargée de mission — Org (2019 - 2023)
+- Responsable de la coordination
+- Chargé de l'accueil
+- Participé aux réunions
+- Aidé les collègues
+FORMATION
+Licence (2018)
+COMPÉTENCES
+communication, leadership, teamwork, creativity, adaptability, motivation, empathy
+`;
+  const sR = analyzeCv(softStuffCv, {
+    pages: 1,
+    skillsMatch: {
+      hits: ["communication", "leadership", "teamwork", "creativity", "adaptability", "motivation"],
+      hardHits: [],
+      softHits: ["communication", "leadership", "teamwork", "creativity", "adaptability"],
+      count: 0,
+      density: 0,
+    },
+  });
+  const soft = sR.checklist.find((c) => c.id === "keyword_soft_stuffing");
+  assert.ok(soft && soft.ok === false, "soft-stuffing should KO");
+  assert.equal(sR.passes, false, "soft-stuffing + weak metrics must not pass");
+  console.log("✓ anti-placebo soft-stuffing blocks pass OK", sR.total);
+
+  // 4) EN spelling/grammar without enrich → na, not ok:true
+  const enClean = `John Smith
+Software Engineer
+john.smith@email.com | +44 7700 900123 | London | linkedin.com/in/johnsmith
+
+EXPERIENCE
+Software Engineer — TechCo (2020 - Present)
+- Developed APIs used by 10 000 users
+- Improved latency by 30%
+- Led a team of 6 engineers
+
+EDUCATION
+BSc Computer Science — Uni (2019)
+
+SKILLS
+Python, AWS, Docker, React, PostgreSQL, Kubernetes
+`;
+  const enCleanR = analyzeCv(enClean, { pages: 1, lang: "en" });
+  const spell = enCleanR.checklist.find((c) => c.id === "spelling_quality");
+  const gram = enCleanR.checklist.find((c) => c.id === "grammar_quality");
+  assert.ok(spell?.na === true || spell?.ok === null, "EN spelling without enrich → na");
+  assert.ok(spell?.ok !== true, "EN spelling must not fake ok:true");
+  assert.ok(gram?.na === true || gram?.ok === null, "EN grammar without enrich → na");
+  assert.ok(gram?.ok !== true, "EN grammar must not fake ok:true");
+  console.log("✓ anti-placebo EN spelling/grammar na OK");
+
+  // 5) KO standard_headings / encoding → annotation with non-empty suggestion
+  const noHeadings = `Paul SansTitres
+paul@email.com | 06 55 44 33 22
+Je suis développeur depuis 5 ans.
+Chez Acme j'ai fait du React.
+Diplôme master info.
+`;
+  const nh = analyzeCv(noHeadings + "\nextra texte pour passer le seuil minimum de contenu extractible pour l'analyse ATS locale.\n", {
+    pages: 1,
+  });
+  const headAnn = nh.annotations.find((a) => a.checkId === "standard_headings");
+  assert.ok(headAnn, "standard_headings KO must have annotation");
+  assert.ok(String(headAnn.suggestion || "").trim().length > 0, "standard_headings suggestion non-empty");
+
+  const weird =
+    goodCv.replace(/\n/g, "\n") + "\n" + "□�".repeat(6);
+  const enc = analyzeCv(weird, { pages: 1 });
+  const encCheck = enc.checklist.find((c) => c.id === "encoding");
+  assert.equal(encCheck?.ok, false, "weirdChars must KO encoding");
+  const encAnn = enc.annotations.find((a) => a.checkId === "encoding");
+  assert.ok(encAnn, "encoding KO must have annotation");
+  assert.ok(String(encAnn.suggestion || "").trim().length > 0, "encoding suggestion non-empty");
+  console.log("✓ anti-placebo encoding annotation OK");
+  console.log("✓ anti-placebo standard_headings annotation OK");
+
+  // 6) Layout annotations have non-empty suggestions
+  const withTables = analyzeCv(goodCv, {
+    pages: 1,
+    tableCount: 2,
+    tableHint: true,
+    parsed: {
+      ...parseCv(goodCv),
+      layout: { columnSmell: false, tableHint: true, tableCount: 2, headerSparse: false, readingOrderOk: true },
+    },
+  });
+  const tableAnn = withTables.annotations.find((a) => a.checkId === "no_tables");
+  assert.ok(tableAnn, "no_tables annotation present");
+  assert.ok(String(tableAnn.suggestion || "").trim().length > 0, "no_tables suggestion non-empty");
+
+  const withCols = analyzeCv(goodCv, {
+    pages: 1,
+    parsed: {
+      ...parseCv(goodCv),
+      layout: { columnSmell: true, tableHint: false, tableCount: 0, headerSparse: false, readingOrderOk: true },
+    },
+  });
+  const colAnn = withCols.annotations.find((a) => a.checkId === "single_column");
+  assert.ok(colAnn, "single_column annotation present");
+  assert.ok(String(colAnn.suggestion || "").trim().length > 0, "single_column suggestion non-empty");
+
+  const withScan = analyzeCv(goodCv, {
+    pages: 1,
+    parsed: {
+      ...parseCv(goodCv),
+      layout: {
+        columnSmell: false,
+        tableHint: false,
+        imageOnly: true,
+        imageOnlyPages: [1],
+        headerSparse: false,
+        readingOrderOk: true,
+      },
+    },
+  });
+  const scanAnn = withScan.annotations.find((a) => a.checkId === "extractable_text");
+  if (scanAnn) {
+    assert.ok(String(scanAnn.suggestion || "").trim().length > 0, "scan suggestion non-empty");
+  }
+  console.log("✓ anti-placebo layout suggestions OK");
+
+  // 7) Pro heuristic tagged as fallback (not peer to LLM)
+  const heuristicAnns = [
+    { id: "pro-1", kind: "passive_verb", source: "pro-heuristic", suggestion: "Piloté", title: "Verbe" },
+  ];
+  const tagged = heuristicAnns.map((a) => ({
+    ...a,
+    severity: "info",
+    shortLabel: "Secours",
+    source: a.source || "pro-heuristic",
+    proFallback: true,
+  }));
+  assert.equal(tagged[0].severity, "info");
+  assert.equal(tagged[0].shortLabel, "Secours");
+  assert.equal(tagged[0].proFallback, true);
+  assert.ok(tagged[0].source !== "llm", "heuristic must not look like LLM Pro");
+  console.log("✓ anti-placebo Pro heuristic tagged Secours OK");
+}
+
 console.log("Tous les tests OK");

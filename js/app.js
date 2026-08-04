@@ -517,7 +517,22 @@ async function runAnalysis() {
             : Promise.resolve(null),
         ]);
         if (proAnns?.annotations?.length) {
-          const geo = attachGeometry(proAnns.annotations, extracted.pagesGeo, extractApi);
+          const isHeuristic =
+            proAnns.source === "heuristic" ||
+            proAnns.annotations.some(
+              (a) => a.source === "pro-heuristic" || a.source === "heuristic"
+            );
+          const lang = window.ATSi18n?.getLang?.() || "fr";
+          const prepared = isHeuristic
+            ? proAnns.annotations.map((a) => ({
+                ...a,
+                severity: "info",
+                shortLabel: lang === "en" ? "Fallback" : "Secours",
+                source: a.source || "pro-heuristic",
+                proFallback: true,
+              }))
+            : proAnns.annotations;
+          const geo = attachGeometry(prepared, extracted.pagesGeo, extractApi);
           session.annotations = [...session.annotations, ...geo];
           report.annotations = session.annotations;
           session.selectedId = session.annotations[0]?.id || null;
