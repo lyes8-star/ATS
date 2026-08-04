@@ -3908,7 +3908,10 @@ export async function analyzeCvAsync(rawText, fileMeta = {}, opts = {}) {
   let jdOverlap = null;
   const jd = (opts.jobDescription || fileMeta.jobDescription || "").trim();
   if (jd) {
-    jdOverlap = await matchJdOverlap(rawText, jd);
+    jdOverlap = await matchJdOverlap(rawText, jd, {
+      headline: parsed?.headline || "",
+      roleTitle: parsed?.roles?.[0]?.title || "",
+    });
   }
 
   let spelling = findSpellingIssues(normalizeText(rawText), detectedLang, techWhitelist);

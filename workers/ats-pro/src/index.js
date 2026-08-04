@@ -261,7 +261,7 @@ async function handleSkills(body, env) {
     terms = extractKeywordCandidates(jd);
   }
 
-  const overlap = terms.filter((t) => text.includes(t.toLowerCase()));
+  const overlap = terms.filter((t) => hasTermBoundaryLocal(text, t));
   const score = terms.length ? Math.round((overlap.length / terms.length) * 100) : 0;
   return {
     overlap,
@@ -270,6 +270,29 @@ async function handleSkills(body, env) {
     source: terms.length ? "esco+local" : "local",
     retainedSeconds: 0,
   };
+}
+
+/** Unicode-aware term boundary (mirrors js/skills-match termBoundaryOk). */
+function termBoundaryOkLocal(hay, start, end) {
+  if (start < 0 || end > (hay || "").length || start >= end) return false;
+  const before = start > 0 ? hay[start - 1] : " ";
+  const after = end < hay.length ? hay[end] : " ";
+  const isWord = (ch) => /[\p{L}\p{N}_]/u.test(ch);
+  return !isWord(before) && !isWord(after);
+}
+
+function hasTermBoundaryLocal(haystack, term) {
+  const t = String(term || "").toLowerCase().trim();
+  if (!t || t.length < 2) return false;
+  const hay = String(haystack || "").toLowerCase();
+  let from = 0;
+  while (from <= hay.length - t.length) {
+    const idx = hay.indexOf(t, from);
+    if (idx < 0) return false;
+    if (termBoundaryOkLocal(hay, idx, idx + t.length)) return true;
+    from = idx + 1;
+  }
+  return false;
 }
 
 async function fetchEscoTerms(jd, env) {
