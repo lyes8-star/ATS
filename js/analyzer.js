@@ -726,11 +726,11 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       textEnd: Math.min(40, text.length),
       quote: text.slice(0, Math.min(40, text.length)).trim() || "CV",
       title: isEn
-        ? `CV likely built with ${tool} — credibility & ATS risk`
-        : `CV probablement créé avec ${tool} — risque ATS et crédibilité`,
+        ? `CV likely built with ${tool} — credibility and automated-reading risk`
+        : `CV probablement créé avec ${tool} — risque lecture automatique et crédibilité`,
       detail: isEn
-        ? `Design tools and AI resume builders often produce graphic layouts ATS cannot parse reliably, and recruiters may distrust generic AI-looking CVs. Rebuild in Word or Google Docs as plain selectable text, single column, no banners.`
-        : `Les outils de design et builders IA produisent souvent des mises en page graphiques mal lues par les ATS, et les recruteurs peuvent douter d’un CV « généré ». Reprenez sous Word ou Google Docs en texte sélectionnable, une colonne, sans bandeaux.`,
+        ? `Design tools and AI resume builders often produce graphic layouts recruiting software cannot parse reliably, and recruiters may distrust generic AI-looking CVs. Rebuild in Word or Google Docs as plain selectable text, single column, no banners.`
+        : `Les outils de design et builders IA produisent souvent des mises en page graphiques mal lues par les logiciels de recrutement, et les recruteurs peuvent douter d’un CV « généré ». Reprenez sous Word ou Google Docs en texte sélectionnable, une colonne, sans bandeaux.`,
       suggestion: isEn
         ? "Word/Google Docs → single column → File → Download as PDF (text, not image)."
         : "Word/Google Docs → une colonne → Fichier → Télécharger en PDF (texte, pas image).",
@@ -1144,15 +1144,15 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
           ? "Add 2–4 concrete bullets under recent roles (verb + metric + context)."
           : "Ajoutez 2–4 puces concrètes sous les rôles récents (verbe + chiffre + contexte)."
         : isEn
-          ? "Cut older roles to title + 1 bullet; drop redundant soft-skill lists."
-          : "Réduisez les postes anciens à intitulé + 1 puce ; retirez les listes soft redondantes.",
+          ? "Cut older roles to title + 1 bullet; drop redundant personal-quality lists."
+          : "Réduisez les postes anciens à intitulé + 1 puce ; retirez les listes de qualités personnelles redondantes.",
       suggestion: tooShort
         ? isEn
           ? "- [Action verb] … ([metric])"
           : "- [Verbe d'action] … ([chiffre])"
         : isEn
-          ? "Cut older roles to title + 1 bullet; drop redundant soft-skill lists."
-          : "Réduire postes anciens à intitulé + 1 puce ; retirer listes soft redondantes.",
+          ? "Cut older roles to title + 1 bullet; drop redundant personal-quality lists."
+          : "Réduire postes anciens à intitulé + 1 puce ; retirer listes de qualités personnelles redondantes.",
       applyMode: tooShort ? "insert_after" : "replace",
       approximate: true,
       checkId: "concision",
@@ -1170,17 +1170,17 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
     push({
       kind: "role_keywords",
       axis: "keywords",
-      shortLabel: isEn ? "Role pack" : "Pack métier",
+      shortLabel: isEn ? "Role skills" : "Métier",
       severity: "warning",
       textStart: skills?.textStart ?? Math.max(0, text.length - 1),
       textEnd: skills?.textEnd ?? text.length,
       quote: skills?.quote || "(compétences)",
       title: isEn
-        ? `Add hard skills for « ${roleGaps.role} »`
-        : `Ajouter des termes hard du pack « ${roleGaps.role} »`,
+        ? `Add tools for « ${roleGaps.role} »`
+        : `Ajouter des outils du métier « ${roleGaps.role} »`,
       detail: isEn
-        ? `Missing from your CV vs the inferred role pack: ${missingList.join(", ")}. Only add tools you actually use.`
-        : `Manquants vs le pack de rôle inféré : ${missingList.join(", ")}. N'ajoutez que des outils que vous maîtrisez vraiment.`,
+        ? `Missing from your CV vs the inferred role: ${missingList.join(", ")}. Only add tools you actually use.`
+        : `Manquants vs le métier ciblé : ${missingList.join(", ")}. N'ajoutez que des outils que vous maîtrisez vraiment.`,
       suggestion,
       applyMode: "insert_after",
       approximate: true,
@@ -1267,11 +1267,11 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         detail:
           jd?.score != null
             ? isEn
-              ? `Job↔CV overlap ${jd.score}%${mustCov != null ? ` (must-have coverage ${mustCov}%)` : ""}. Missing required terms: ${terms.join(", ")}. Only keep terms you actually master.`
-              : `Alignement offre↔CV ${jd.score} %${mustCov != null ? ` (couverture must ${mustCov} %)` : ""}. Termes requis absents : ${terms.join(", ")}. Ne gardez que ceux que vous maîtrisez vraiment.`
+              ? `Job↔CV overlap ${jd.score}%${mustCov != null ? ` (requirement coverage ${mustCov}%)` : ""}. Missing required terms: ${terms.join(", ")}. Only keep terms you actually master.`
+              : `Alignement offre↔CV ${jd.score} %${mustCov != null ? ` (couverture des exigences ${mustCov} %)` : ""}. Termes requis absents : ${terms.join(", ")}. Ne gardez que ceux que vous maîtrisez vraiment.`
             : isEn
-              ? "These hard skills are weak or missing vs. typical target roles. Append only those you use."
-              : "Ces compétences hard sont absentes ou faibles par rapport aux offres types. N'ajoutez que celles que vous utilisez.",
+              ? "These tools and methods are weak or missing vs. typical target roles. Append only those you use."
+              : "Ces outils et méthodes sont absents ou faibles par rapport aux offres types. N'ajoutez que ceux que vous utilisez.",
         suggestion: isEn ? `Skills: ${line}` : `Compétences : ${line}`,
         applyMode: "insert_after",
         section: "Compétences",
@@ -1323,17 +1323,17 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       push({
         kind: "jd_must",
         axis: "keywords",
-        shortLabel: isEn ? "Must" : "Must",
+        shortLabel: isEn ? "Must" : "Exigence",
         severity: "warning",
         textStart: loc?.textStart ?? 0,
         textEnd: loc?.textEnd ?? Math.min(40, text.length),
         quote: (loc?.quote || String(term)).slice(0, 100),
         title: isEn
-          ? `Missing must-have « ${term} » — weave into Experience if true`
-          : `Must absent « ${term} » — intégrez-le en Expérience s'il est vrai`,
+          ? `Missing requirement « ${term} » — add to Experience if true`
+          : `Exigence absente « ${term} » — intégrez-la en Expérience si elle est vraie`,
         detail: isEn
-          ? `Job match lists « ${term} » as a missing must-have. Add it only if you actually used it — do not invent experience.`
-          : `Le matching liste « ${term} » comme must absent. Ajoutez-le uniquement si vous l'avez réellement utilisé — n'inventez pas d'expérience.`,
+          ? `Job match lists « ${term} » as a missing requirement. Add it only if you actually used it — do not invent experience.`
+          : `La correspondance liste « ${term} » comme exigence absente. Ajoutez-la uniquement si vous l'avez réellement utilisée — n'inventez pas d'expérience.`,
         suggestion: weave,
         applyMode: "replace",
         approximate: !loc || loc.quote === "(compétences)",
@@ -1356,17 +1356,17 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
     push({
       kind: "keyword",
       axis: "keywords",
-      shortLabel: isEn ? "Soft stuffing" : "Soft stuffing",
+      shortLabel: isEn ? "Soft skills" : "Qualités",
       severity: "warning",
       textStart: skills?.textStart ?? 0,
       textEnd: skills?.textEnd ?? Math.min(40, text.length),
       quote: skills?.quote || softList.join(", ") || "(compétences)",
       title: isEn
-        ? "Too many soft skills, too few hard tools"
-        : "Trop de soft skills, trop peu d'outils hard",
+        ? "Too many personal qualities, too few tools"
+        : "Trop de qualités personnelles, trop peu d'outils",
       detail: isEn
-        ? `Soft terms dominate (${softList.join(", ") || "soft skills"}). ATS Boolean filters look for concrete tools/methods — add hard skills you use daily.`
-        : `Les termes soft dominent (${softList.join(", ") || "soft skills"}). Les filtres booléens ATS cherchent des outils/méthodes concrets — ajoutez des hard skills de votre quotidien.`,
+        ? `Personal qualities dominate (${softList.join(", ") || "soft skills"}). Recruiting software looks for concrete tools and methods — add skills you use daily.`
+        : `Les qualités personnelles dominent (${softList.join(", ") || "qualités"}). Les logiciels de recrutement cherchent des outils et méthodes concrets — ajoutez ceux de votre quotidien.`,
       suggestion: isEn ? `Skills: ${hardFill}` : `Compétences : ${hardFill}`,
       applyMode: "insert_after",
       approximate: !skills,
@@ -1388,8 +1388,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ? `Shorten to 1–2 pages (now ~${scores.readability.pages})`
         : `Passer à 1–2 pages (actuellement ~${scores.readability.pages})`,
       detail: isEn
-        ? "Cut older roles to title + 1 bullet; remove redundant soft skills lists."
-        : "Réduisez les postes anciens à intitulé + 1 puce ; retirez les listes de soft skills redondantes.",
+        ? "Cut older roles to title + 1 bullet; remove redundant personal-quality lists."
+        : "Réduisez les postes anciens à intitulé + 1 puce ; retirez les listes de qualités personnelles redondantes.",
       suggestion: isEn
         ? "Keep 1–2 pages: recent roles with metrics; older roles → title + dates only."
         : "Gardez 1–2 pages : rôles récents avec chiffres ; postes anciens → intitulé + dates seuls.",
@@ -1432,14 +1432,14 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       quote: text.slice(0, Math.min(30, text.length)).trim() || "(document)",
       title: isEn
         ? "Tables confuse ATS parsers"
-        : "Tableaux illisibles pour les ATS",
+        : "Tableaux illisibles pour la lecture automatique",
       detail: isEn
         ? alsoCols
-          ? "We detected table grids and column signals. ATS often read cells out of order. Rebuild as a single-column linear layout (no tables) in your original file."
-          : "Table grids scramble cell order in many ATS. Convert tables to plain paragraphs or bullet lists in a single column."
+          ? "We detected table grids and column signals. Recruiting software often reads cells out of order. Rebuild as a single-column linear layout (no tables) in your original file."
+          : "Table grids scramble cell order in many recruiting systems. Convert tables to plain paragraphs or bullet lists in a single column."
         : alsoCols
           ? "Grilles de tableaux et indices de colonnes détectés. Les ATS mélangent souvent l’ordre des cellules. Refaites une mise en page linéaire mono-colonne (sans tableaux) dans votre fichier d’origine."
-          : "Les grilles de tableaux brouillent l’ordre des cellules dans beaucoup d’ATS. Convertissez les tableaux en paragraphes ou listes à puces, en une seule colonne.",
+          : "Les grilles de tableaux brouillent l’ordre des cellules dans beaucoup de logiciels de recrutement. Convertissez les tableaux en paragraphes ou listes à puces, en une seule colonne.",
       suggestion: isEn
         ? "Word: Table → Convert to Text. Docs: copy cells into a bullet list. One column only."
         : "Word : Tableau → Convertir en texte. Docs : collez les cellules en liste à puces. Une seule colonne.",
@@ -1457,11 +1457,11 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       textEnd: Math.min(30, text.length),
       quote: text.slice(0, Math.min(30, text.length)).trim() || "(document)",
       title: isEn
-        ? "Multi-column layout may confuse ATS"
-        : "Colonnes risquées pour les ATS",
+        ? "Multi-column layout may confuse automated readers"
+        : "Colonnes risquées pour la lecture automatique",
       detail: isEn
         ? "Two-column or sidebar layouts often reverse reading order for ATS. Prefer one continuous column: contact → experience → education → skills."
-        : "Les mises en page à deux colonnes ou barre latérale inversent souvent l’ordre de lecture ATS. Préférez une seule colonne continue : contact → expérience → formation → compétences.",
+        : "Les mises en page à deux colonnes ou barre latérale inversent souvent l’ordre de lecture automatique. Préférez une seule colonne continue : contact → expérience → formation → compétences.",
       suggestion: isEn
         ? "Rebuild as one column: Contact → Experience → Education → Skills (no sidebar)."
         : "Refaire en une colonne : Contact → Expérience → Formation → Compétences (sans barre latérale).",
@@ -1490,8 +1490,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ? `Image/scanned page — little extractable text${pageHint}`
         : `Page image/scan — peu de texte extractible${pageHint}`,
       detail: isEn
-        ? "ATS cannot read text locked in images. Export a text PDF or DOCX from Word/Google Docs (File → Export), not a photo or flattened Canva export."
-        : "Les ATS ne lisent pas le texte figé dans des images. Exportez un PDF texte ou un DOCX depuis Word/Google Docs (Fichier → Exporter), pas une photo ni un export Canva aplati.",
+        ? "Recruiting software cannot read text locked in images. Export a text PDF or DOCX from Word/Google Docs (File → Export), not a photo or flattened Canva export."
+        : "Les logiciels de recrutement ne lisent pas le texte figé dans des images. Exportez un PDF texte ou un DOCX depuis Word/Google Docs (Fichier → Exporter), pas une photo ni un export Canva aplati.",
       suggestion: isEn
         ? "Re-export: Word/Docs → Download as PDF (text selectable) or .docx — not a scan/photo."
         : "Réexporterz : Word/Docs → Télécharger en PDF (texte sélectionnable) ou .docx — pas un scan/photo.",
@@ -1514,11 +1514,11 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ? "Inconsistent reading order (columns/sidebar)"
         : "Ordre de lecture incohérent (colonnes/sidebar)",
       detail: isEn
-        ? "Extraction order diverges from visual order — ATS may scramble sections."
-        : "L'ordre d'extraction diverge de l'ordre visuel — un ATS peut mélanger les sections.",
+        ? "Extraction order diverges from visual order — recruiting software may scramble sections."
+        : "L'ordre d'extraction diverge de l'ordre visuel — un logiciel de recrutement peut mélanger les sections.",
       suggestion: isEn
-        ? "Use a single-column Word/Docs layout so visual order = ATS reading order."
-        : "Passez en mise en page Word/Docs mono-colonne pour aligner ordre visuel et lecture ATS.",
+        ? "Use a single-column Word/Docs layout so visual order = automated reading order."
+        : "Passez en mise en page Word/Docs mono-colonne pour aligner ordre visuel et lecture automatique.",
       applyMode: "replace",
       approximate: true,
       checkId: "reading_order",
@@ -1563,8 +1563,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       severity: "warning",
       ...sk,
       title: isEn
-        ? "Skills shown as graphics (ATS-blind)"
-        : "Compétences en graphiques illisibles ATS",
+        ? "Skills shown as graphics (unreadable by software)"
+        : "Compétences en graphiques illisibles automatiquement",
       detail: isEn
         ? "Stars, bars or level gauges are not read as keywords. Delete the graphics and list skill names in plain text (comma-separated or bullets)."
         : "Étoiles, barres ou jauges de niveau ne sont pas lues comme mots-clés. Supprimez les graphiques et listez les compétences en texte clair (séparées par des virgules ou en puces).",
@@ -1590,8 +1590,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       quote: (parsed?.contact?.name || text.slice(0, Math.min(40, text.length))).trim(),
       title: isEn ? "Add your full name (first + last) in plain text" : "Ajouter prénom et nom en texte clair",
       detail: isEn
-        ? "ATS need a clear first and last name at the top (not a job title or logo)."
-        : "Les ATS ont besoin d'un prénom + nom clairs en tête (pas un intitulé de poste ni un logo).",
+        ? "Recruiting software needs a clear first and last name at the top (not a job title or logo)."
+        : "Les logiciels de recrutement ont besoin d'un prénom + nom clairs en tête (pas un intitulé de poste ni un logo).",
       suggestion: "[Prénom Nom]",
       applyMode: "insert_header",
       section: "Coordonnées",
@@ -1611,8 +1611,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       quote: text.slice(0, Math.min(50, text.length)).trim(),
       title: isEn ? "Add a city or address in plain text" : "Ajouter une ville ou une adresse en texte",
       detail: isEn
-        ? "Location helps ATS location filters. Prefer City or ZIP + City (street optional)."
-        : "La localisation aide les filtres ATS. Indiquez Ville ou CP + Ville (rue optionnelle).",
+        ? "Location helps automated location filters. Prefer City or ZIP + City (street optional)."
+        : "La localisation aide les filtres automatiques. Indiquez Ville ou CP + Ville (rue optionnelle).",
       suggestion: isEn ? "City, Country" : "75001 Paris",
       applyMode: "insert_header",
       section: "Coordonnées",
@@ -1633,11 +1633,11 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         textEnd: Math.min(30, text.length),
         quote: text.slice(0, Math.min(30, text.length)).trim() || "(en-tête)",
         title: isEn
-          ? "Profile photo may hurt ATS parsing"
-          : "Photo de profil risquée pour les ATS",
+          ? "Profile photo may hurt automated reading"
+          : "Photo de profil risquée pour la lecture automatique",
         detail: isEn
-          ? "A profile photo in the header is often ignored or scrambles reading order. Remove the photo for ATS applications and keep name, email and phone as plain text only."
-          : "Une photo de profil en en-tête est souvent ignorée ou brouille l'ordre de lecture. Retirez la photo pour les candidatures ATS et gardez nom, e-mail et téléphone en texte clair uniquement.",
+          ? "A profile photo in the header is often ignored or scrambles reading order. Remove the photo for automated applications and keep name, email and phone as plain text only."
+          : "Une photo de profil en en-tête est souvent ignorée ou brouille l'ordre de lecture. Retirez la photo pour les candidatures via logiciels de recrutement et gardez nom, e-mail et téléphone en texte clair uniquement.",
         suggestion: isEn
           ? "Remove the photo; keep « First Last · email · phone » as selectable text at the top."
           : "Retirez la photo ; gardez « Prénom Nom · e-mail · téléphone » en texte sélectionnable en tête.",
@@ -1663,8 +1663,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       quote: (parsed?.contact?.name || text.slice(0, 40)).trim(),
       title: isEn ? "Add a clear job title under your name" : "Ajouter un intitulé de poste sous votre nom",
       detail: isEn
-        ? "A headline job title helps ATS and recruiters map your target role."
-        : "Un intitulé sous le nom aide les ATS et recruteurs à cibler votre poste.",
+        ? "A headline job title helps recruiting software and recruiters map your target role."
+        : "Un intitulé sous le nom aide les logiciels de recrutement et les recruteurs à cibler votre poste.",
       suggestion: isEn ? "[Target job title]" : "[Intitulé de poste ciblé]",
       applyMode: "insert_header",
       section: "Coordonnées",
@@ -1770,8 +1770,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ? "Complete at least one role (title + company + dates)"
         : "Compléter au moins un poste (intitulé + entreprise + dates)",
       detail: isEn
-        ? "No role was fully parsed with title, company and dates — ATS struggle to map your career."
-        : "Aucun poste n'a été entièrement parsé (intitulé, entreprise, dates) — les ATS peinent à cartographier le parcours.",
+        ? "No role was fully parsed with title, company and dates — recruiting software struggles to map your career."
+        : "Aucun poste n'a été entièrement parsé (intitulé, entreprise, dates) — les logiciels de recrutement peinent à cartographier le parcours.",
       suggestion: isEn
         ? "Job title — Company (YYYY – YYYY)"
         : "Intitulé — Entreprise (AAAA – AAAA)",
@@ -1798,8 +1798,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ? "Put Experience before Education"
         : "Placer Expérience avant Formation",
       detail: isEn
-        ? "With 3+ roles, recruiters and ATS expect Experience first — move Education after."
-        : "Avec 3+ postes, les recruteurs et ATS s'attendent à voir l'Expérience en premier — déplacez la Formation après.",
+        ? "With 3+ roles, recruiters and software expect Experience first — move Education after."
+        : "Avec 3+ postes, les recruteurs et logiciels de recrutement s'attendent à voir l'Expérience en premier — déplacez la Formation après.",
       suggestion: isEn
         ? "Move the Education block below Experience."
         : "Déplacez le bloc Formation sous Expérience.",
@@ -1826,8 +1826,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ? `Overlapping dates (${first.overlapYears}y between roles)`
         : `Dates qui se chevauchent (${first.overlapYears} an(s) entre postes)`,
       detail: isEn
-        ? "Some roles have overlapping date ranges — ATS may flag inconsistency."
-        : "Certains postes ont des plages de dates qui se chevauchent — un ATS peut signaler une incohérence.",
+        ? "Some roles have overlapping date ranges — recruiting software may flag inconsistency."
+        : "Certains postes ont des plages de dates qui se chevauchent — un logiciel de recrutement peut signaler une incohérence.",
       suggestion: isEn
         ? "Job title — Company (YYYY – YYYY) — adjust end/start so ranges do not overlap unless concurrent."
         : "Intitulé — Entreprise (AAAA – AAAA) — ajustez fin/début pour éviter le chevauchement sauf cumul.",
@@ -1852,8 +1852,8 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
         ? "List roles in reverse chronological order"
         : "Classez les postes du plus récent au plus ancien",
       detail: isEn
-        ? "ATS and recruiters expect the most recent role first."
-        : "Les ATS et recruteurs s'attendent à voir le poste le plus récent en premier.",
+        ? "Recruiting software and recruiters expect the most recent role first."
+        : "Les logiciels de recrutement et les recruteurs s'attendent à voir le poste le plus récent en premier.",
       suggestion: isEn
         ? "Reorder roles: most recent employer first, then older roles."
         : "Réordonnez : employeur le plus récent en premier, puis les postes plus anciens.",
@@ -1886,11 +1886,11 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       textEnd: text.length,
       quote: "(fin du document)",
       title: isEn
-        ? `Add ATS-standard headings (${missing.join(" / ") || "Experience / Education / Skills"})`
+        ? `Add standard section headings (${missing.join(" / ") || "Experience / Education / Skills"})`
         : `Ajouter des titres ATS standards (${missing.join(" / ") || "Expérience / Formation / Compétences"})`,
       detail: isEn
-        ? "ATS look for clear Experience / Education / Skills section titles. Rename creative headings to these labels."
-        : "Les ATS cherchent des titres clairs Expérience / Formation / Compétences. Renommez les intitulés créatifs avec ces libellés.",
+        ? "Recruiting software looks for clear Experience / Education / Skills section titles. Rename creative headings to these labels."
+        : "Les logiciels de recrutement cherchent des titres clairs Expérience / Formation / Compétences. Renommez les intitulés créatifs avec ces libellés.",
       suggestion: isEn
         ? "EXPERIENCE\nEDUCATION\nSKILLS"
         : "EXPÉRIENCE PROFESSIONNELLE\nFORMATION\nCOMPÉTENCES",
@@ -1939,7 +1939,7 @@ function buildAnnotations(text, scores, spelling, lang, parsed = null) {
       quote: (parsed?.contact?.name || text.slice(0, 40)).trim(),
       title: isEn ? "Add a clear job title under your name" : "Ajouter un intitulé de poste sous votre nom",
       detail: isEn
-        ? "No parsed headline or role title at the top — ATS need a clear target job title."
+        ? "No parsed headline or role title at the top — Recruiting software needs a clear target job title."
         : "Aucun intitulé (headline) ni titre de poste parsé en tête — les ATS ont besoin d'un poste cible clair.",
       suggestion: isEn ? "[Target job title]" : "[Intitulé de poste ciblé]",
       applyMode: "insert_header",
@@ -2016,8 +2016,8 @@ function shortLabelFor(kind) {
     missing_metric: "Chiffre",
     gap: "Gap",
     keyword: "Mots-clés",
-    jd_must: "Must",
-    role_keywords: "Pack métier",
+    jd_must: "Exigence",
+    role_keywords: "Métier",
     length: "Longueur",
     layout: "Mise en page",
     no_tables: "Tableaux",
@@ -2123,14 +2123,14 @@ function scoreReadability(text, fileMeta) {
     checks.push({
       id: "extractable_text",
       ok: true,
-      label: "Texte correctement extractible par les ATS.",
+      label: "Texte correctement extractible par les logiciels de recrutement.",
     });
   } else if (profile.extractability === "sparse") {
     score += 6;
     checks.push({
       id: "extractable_text",
       ok: false,
-      label: "Texte extractible mais sparse — complétez le contenu ou vérifiez l'export.",
+      label: "Peu de texte exploitable — complétez le contenu ou vérifiez l'export.",
     });
   } else if (profile.extractability === "scan_like") {
     checks.push({
@@ -2171,7 +2171,7 @@ function scoreReadability(text, fileMeta) {
     checks.push({
       id: "page_length",
       ok: false,
-      label: `CV trop long (${pages} pages) — risque de rejet ATS/RH.`,
+      label: `CV trop long (${pages} pages) — risque de rejet par les logiciels de recrutement ou les RH.`,
     });
   }
 
@@ -2194,7 +2194,7 @@ function scoreReadability(text, fileMeta) {
     checks.push({
       id: "single_column",
       ok: true,
-      label: "Mise en page linéaire, favorable aux ATS.",
+      label: "Mise en page linéaire, favorable à la lecture automatique.",
     });
     checks.push({ id: "no_tables", ok: true, label: "Pas de tableaux détectés." });
   } else if (weirdChars > 0) {
@@ -2208,14 +2208,14 @@ function scoreReadability(text, fileMeta) {
       id: "single_column",
       ok: !hasColumnsSmell,
       label: hasColumnsSmell
-        ? "Indices de colonnes/tableaux — certains ATS mélangent l'ordre du texte."
-        : "Mise en page linéaire, favorable aux ATS.",
+        ? "Indices de colonnes/tableaux — certains logiciels de recrutement mélangent l'ordre du texte."
+        : "Mise en page linéaire, favorable à la lecture automatique.",
     });
     checks.push({
       id: "no_tables",
       ok: !hasTables,
       label: hasTables
-        ? "Tableaux détectés — certains ATS mélangent l'ordre des cellules."
+        ? "Tableaux détectés — certains logiciels de recrutement mélangent l'ordre des cellules."
         : "Pas de tableaux détectés.",
     });
   } else if (hasTables) {
@@ -2223,13 +2223,13 @@ function scoreReadability(text, fileMeta) {
     checks.push({
       id: "no_tables",
       ok: false,
-      label: "Tableaux détectés — certains ATS mélangent l'ordre des cellules.",
+      label: "Tableaux détectés — certains logiciels de recrutement mélangent l'ordre des cellules.",
     });
     checks.push({
       id: "single_column",
       ok: !hasColumnsSmell,
       label: hasColumnsSmell
-        ? "Indices de colonnes — certains ATS mélangent l'ordre du texte."
+        ? "Indices de colonnes — certains logiciels de recrutement mélangent l'ordre du texte."
         : "Mise en page mono-colonne.",
     });
   } else if (!readingOrderOk) {
@@ -2237,20 +2237,20 @@ function scoreReadability(text, fileMeta) {
     checks.push({
       id: "reading_order",
       ok: false,
-      label: "Ordre de lecture incohérent (colonnes/sidebar) — risque de mélange ATS.",
+      label: "Ordre de lecture incohérent (colonnes/sidebar) — risque de mélange par les logiciels de recrutement.",
     });
     checks.push({ id: "no_tables", ok: true, label: "Pas de tableaux détectés." });
     checks.push({
       id: "single_column",
       ok: false,
-      label: "Indices de colonnes/tableaux — certains ATS mélangent l'ordre du texte.",
+      label: "Indices de colonnes/tableaux — certains logiciels de recrutement mélangent l'ordre du texte.",
     });
   } else {
     score += 3;
     checks.push({
       id: "single_column",
       ok: false,
-      label: "Indices de colonnes/tableaux — certains ATS mélangent l'ordre du texte.",
+      label: "Indices de colonnes/tableaux — certains logiciels de recrutement mélangent l'ordre du texte.",
     });
     checks.push({ id: "no_tables", ok: true, label: "Pas de tableaux détectés." });
   }
@@ -2277,7 +2277,7 @@ function scoreReadability(text, fileMeta) {
     checks.push({
       id: "graphic_skills",
       ok: false,
-      label: "Compétences représentées en graphiques (étoiles/barres) — illisibles pour les ATS.",
+      label: "Compétences représentées en graphiques (étoiles/barres) — illisibles pour les logiciels de recrutement.",
     });
   }
 
@@ -2298,7 +2298,7 @@ function scoreReadability(text, fileMeta) {
     checks.push({
       id: "profile_photo",
       ok: false,
-      label: "Photo de profil détectée — souvent ignorée ou nuisible aux parseurs ATS ; préférez le texte.",
+      label: "Photo de profil détectée — souvent ignorée ou nuisible aux logiciels de recrutement ; préférez le texte.",
     });
   } else {
     checks.push({
@@ -2333,7 +2333,7 @@ function scoreReadability(text, fileMeta) {
     checks.push({
       id: "standard_headings",
       ok: false,
-      label: `Titres de sections non lisibles par un ATS (${missing}).`,
+      label: `Titres de sections peu lisibles automatiquement (${missing}).`,
     });
   } else {
     checks.push({
@@ -2363,7 +2363,7 @@ function scoreReadability(text, fileMeta) {
     checks.push({
       id: "cv_source",
       ok: false,
-      label: `CV probablement créé avec ${cvSource.label} — risque ATS et crédibilité.`,
+      label: `CV probablement créé avec ${cvSource.label} — risque lecture automatique et crédibilité.`,
     });
   } else if (cvSource.id === "word" || cvSource.id === "google_docs" || cvSource.id === "latex") {
     checks.push({
@@ -2469,7 +2469,7 @@ function scoreStructure(text, fileMeta = {}) {
     checks.push({
       id: "identity_address",
       ok: false,
-      label: "Localisation absente (ville/adresse) — utile pour le filtrage ATS.",
+      label: "Localisation absente (ville/adresse) — utile pour le filtrage automatique.",
     });
   }
 
@@ -2642,7 +2642,7 @@ function scoreStructure(text, fileMeta = {}) {
     ok: standardHeadings,
     label: standardHeadings
       ? "Titres de sections standards détectés."
-      : "Titres de sections non lisibles par un ATS (Expérience/Formation/Compétences).",
+      : "Titres de sections peu lisibles automatiquement (Expérience/Formation/Compétences).",
   });
 
   return {
@@ -2915,20 +2915,20 @@ function scoreKeywords(text, fileMeta = {}) {
     checks.push({
       id: "keyword_density",
       ok: true,
-      label: `Mots-clés métier hard détectés (${unique.size}).`,
+      label: `Outils et méthodes détectés (${unique.size}).`,
     });
   } else if (unique.size >= 6) {
     score += 6;
     checks.push({
       id: "keyword_density",
       ok: false,
-      label: `Densité hard moyenne (${unique.size}) — ajoutez outils/méthodes concrets.`,
+      label: `Densité d'outils moyenne (${unique.size}) — ajoutez outils et méthodes concrets.`,
     });
   } else {
     checks.push({
       id: "keyword_density",
       ok: false,
-      label: "Peu de mots-clés métier hard — alignez-vous sur les outils de votre cible.",
+      label: "Peu d'outils et méthodes — alignez-vous sur ceux de votre cible.",
     });
   }
 
@@ -2938,7 +2938,7 @@ function scoreKeywords(text, fileMeta = {}) {
     checks.push({
       id: "keyword_soft_stuffing",
       ok: false,
-      label: `Sur-représentation soft (${softCount}) vs hard (${unique.size}) — privilégiez outils et méthodes.`,
+      label: `Trop de qualités personnelles (${softCount}) vs outils (${unique.size}) — privilégiez outils et méthodes.`,
     });
   }
 
@@ -2954,7 +2954,7 @@ function scoreKeywords(text, fileMeta = {}) {
     checks.push({
       id: "keyword_diversity",
       ok: false,
-      label: "Diversifiez les outils/méthodes (pas seulement des soft skills).",
+      label: "Diversifiez les outils et méthodes (pas seulement des qualités personnelles).",
     });
   }
 
@@ -2963,7 +2963,7 @@ function scoreKeywords(text, fileMeta = {}) {
     checks.push({
       id: "role_keywords",
       ok: false,
-      label: `Pack « ${roleGaps.role} » : ${roleGaps.missing.length} terme(s) hard manquant(s) (ex. ${roleGaps.missing.slice(0, 3).join(", ")}).`,
+      label: `Métier « ${roleGaps.role} » : ${roleGaps.missing.length} outil(s) ou méthode(s) manquant(s) (ex. ${roleGaps.missing.slice(0, 3).join(", ")}).`,
     });
     score = Math.max(0, score - Math.min(4, roleGaps.missing.length));
   } else if (roleGaps?.role) {
@@ -2971,7 +2971,7 @@ function scoreKeywords(text, fileMeta = {}) {
     checks.push({
       id: "role_keywords",
       ok: true,
-      label: `Pack « ${roleGaps.role} » bien couvert.`,
+      label: `Compétences du métier « ${roleGaps.role} » bien couvertes.`,
     });
   }
 
@@ -2983,7 +2983,7 @@ function scoreKeywords(text, fileMeta = {}) {
       checks.push({
         id: "jd_overlap",
         ok: true,
-        label: `Alignement offre ↔ CV : ${jd.score}% (must ${mustCov}%, ${jd.overlap?.length || 0} termes communs).`,
+        label: `Alignement offre ↔ CV : ${jd.score}% (exigences ${mustCov}%, ${jd.overlap?.length || 0} termes communs).`,
       });
     } else {
       score += 1;
@@ -2991,7 +2991,7 @@ function scoreKeywords(text, fileMeta = {}) {
         id: "jd_overlap",
         ok: false,
         label: mustMiss.length
-          ? `Faible alignement offre (${jd.score}%) — must absents : ${mustMiss.slice(0, 4).join(", ")}.`
+          ? `Faible alignement offre (${jd.score}%) — exigences manquantes : ${mustMiss.slice(0, 4).join(", ")}.`
           : `Faible alignement avec l'offre (${jd.score}%) — reprenez les termes clés.`,
       });
     }
@@ -3095,7 +3095,7 @@ function buildDiagnostics(text, scores) {
       id: "standard_headings",
       severity: "critical",
       title: "Titres de sections non standards",
-      tip: "→ Utilisez Expérience / Formation / Compétences (libellés ATS).",
+      tip: "→ Utilisez Expérience / Formation / Compétences (libellés standards).",
     },
     {
       id: "metrics",
@@ -3106,13 +3106,13 @@ function buildDiagnostics(text, scores) {
     {
       id: "keyword_density",
       severity: "warning",
-      title: "Densité de mots-clés hard insuffisante",
-      tip: "→ Listez outils et méthodes concrets (pas seulement des soft skills).",
+      title: "Trop peu d’outils et méthodes",
+      tip: "→ Listez outils et méthodes concrets (pas seulement des qualités personnelles).",
     },
     {
       id: "role_keywords",
       severity: "warning",
-      title: "Termes hard du pack métier manquants",
+      title: "Compétences du métier ciblé manquantes",
       tip: "→ Complétez la section Compétences avec les outils de votre cible.",
     },
   ];
@@ -3156,7 +3156,7 @@ function buildDiagnostics(text, scores) {
   if (scores.readability?.pages > 2) {
     diagnostics.push({
       severity: "warning",
-      title: "CV trop long pour les filtres ATS",
+      title: "CV trop long pour les filtres automatiques",
       body: "Au-delà de 2 pages, le signal dilue et certains parseurs tronquent le contenu.",
       tip: "→ Condenser expériences anciennes et retirer les détails non pertinents.",
       checkId: "page_length",
@@ -3166,7 +3166,7 @@ function buildDiagnostics(text, scores) {
   if (scores.readability?.hasTables) {
     diagnostics.push({
       severity: "warning",
-      title: "Tableaux hostiles aux ATS",
+      title: "Tableaux mal lus automatiquement",
       body: "Les grilles de tableaux font souvent lire les cellules dans le désordre.",
       tip: "→ Convertissez les tableaux en listes ou paragraphes mono-colonne dans votre fichier d’origine.",
       checkId: "no_tables",
@@ -3174,9 +3174,9 @@ function buildDiagnostics(text, scores) {
   } else if (scores.readability?.hasColumnsSmell) {
     diagnostics.push({
       severity: "warning",
-      title: "Colonnes potentiellement hostiles ATS",
+      title: "Colonnes potentiellement mal lues",
       body: "Une mise en page à colonnes peut inverser l’ordre de lecture des robots.",
-      tip: "→ Préférez une lecture linéaire (une colonne) pour les candidatures ATS.",
+      tip: "→ Préférez une lecture linéaire (une colonne) pour les candidatures via logiciels de recrutement.",
       checkId: "single_column",
     });
   }
@@ -3185,7 +3185,7 @@ function buildDiagnostics(text, scores) {
     diagnostics.push({
       severity: "critical",
       title: "CV image / scan peu extractible",
-      body: "Peu de texte sélectionnable — les ATS ne lisent pas les pages image.",
+      body: "Peu de texte sélectionnable — les logiciels de recrutement ne lisent pas les pages image.",
       tip: "→ Exportez un PDF texte ou un DOCX (pas une photo ni un export aplati).",
       checkId: "extractable_text",
     });
@@ -3196,7 +3196,7 @@ function buildDiagnostics(text, scores) {
     diagnostics.push({
       severity: "critical",
       title: `CV créé avec ${tool} — crédibilité en jeu`,
-      body: "Canva, builders IA et templates graphiques brouillent souvent le parsing ATS et peuvent paraître génériques aux recruteurs.",
+      body: "Canva, builders IA et templates graphiques brouillent souvent la lecture automatique et peuvent paraître génériques aux recruteurs.",
       tip: "→ Reprenez le contenu en Word/Google Docs, texte linéaire mono-colonne.",
       checkId: "cv_source",
     });
@@ -3306,14 +3306,14 @@ export function analyzeCv(rawText, fileMeta = {}) {
   );
 
   const strengths = [
-    ...readability.checks.filter((c) => c.ok === true).map((c) => ({ category: "Lisibilité ATS", ...c })),
+    ...readability.checks.filter((c) => c.ok === true).map((c) => ({ category: "Lecture automatique", ...c })),
     ...structure.checks.filter((c) => c.ok === true).map((c) => ({ category: "Structure", ...c })),
     ...content.checks.filter((c) => c.ok === true).map((c) => ({ category: "Qualité du contenu", ...c })),
     ...keywords.checks.filter((c) => c.ok === true).map((c) => ({ category: "Mots-clés", ...c })),
   ];
 
   const blockers = [
-    ...readability.checks.filter((c) => c.ok === false).map((c) => ({ category: "Lisibilité ATS", ...c })),
+    ...readability.checks.filter((c) => c.ok === false).map((c) => ({ category: "Lecture automatique", ...c })),
     ...structure.checks.filter((c) => c.ok === false).map((c) => ({ category: "Structure", ...c })),
     ...content.checks.filter((c) => c.ok === false).map((c) => ({ category: "Qualité du contenu", ...c })),
     ...keywords.checks.filter((c) => c.ok === false).map((c) => ({ category: "Mots-clés", ...c })),
@@ -3323,7 +3323,9 @@ export function analyzeCv(rawText, fileMeta = {}) {
     const translateCategory = (cat) => {
       switch (cat) {
         case "Lisibilité ATS":
-          return "ATS readability";
+          return "Automated reading";
+        case "Lecture automatique":
+          return "Automated reading";
         case "Qualité du contenu":
           return "Content quality";
         case "Mots-clés":
@@ -3336,26 +3338,26 @@ export function analyzeCv(rawText, fileMeta = {}) {
     const translateCheckLabel = (label) => {
       const s = String(label || "").trim();
       const exact = {
-        "Texte correctement extractible par les ATS.": "Text clearly extractable by ATS.",
+        "Texte correctement extractible par les ATS.": "Text clearly extractable by recruiting software.",
         "Texte difficilement extractible — le CV semble scanné ou en image.":
           "Text hard to extract — the CV looks scanned/image-based.",
-        "Mise en page linéaire, favorable aux ATS.":
-          "Linear layout, ATS-friendly.",
+        "Mise en page linéaire, favorable à la lecture automatique.":
+          "Linear layout, friendly to automated reading.",
         "Caractères illisibles détectés (encodage ou OCR défaillant).":
           "Unreadable characters detected (encoding/OCR issue).",
-        "Indices de colonnes/tableaux — certains ATS mélangent l'ordre du texte.":
-          "Column/table layout clues — some ATS may mix text order.",
-        "Tableaux détectés — certains ATS mélangent l'ordre des cellules.":
-          "Tables detected — some ATS mix cell reading order.",
+        "Indices de colonnes/tableaux — certains logiciels de recrutement mélangent l'ordre du texte.":
+          "Column/table layout clues — some recruiting software may mix text order.",
+        "Tableaux détectés — certains logiciels de recrutement mélangent l'ordre des cellules.":
+          "Tables detected — some recruiting software mix cell reading order.",
         "Pas de tableaux détectés.": "No tables detected.",
         "Mise en page mono-colonne.": "Single-column layout.",
         "Ordre de lecture cohérent.": "Consistent reading order.",
-        "Ordre de lecture incohérent (colonnes/sidebar) — risque de mélange ATS.":
+        "Ordre de lecture incohérent (colonnes/sidebar) — risque de mélange par les logiciels de recrutement.":
           "Inconsistent reading order (columns/sidebar) — ATS scramble risk.",
         "Bandeau haut peu textuel — contact probablement dans une image/en-tête graphique.":
           "Sparse top band — contact likely in an image/graphic header.",
-        "Compétences représentées en graphiques (étoiles/barres) — illisibles pour les ATS.":
-          "Skills shown as graphics (stars/bars) — ATS cannot read them.",
+        "Compétences représentées en graphiques (étoiles/barres) — illisibles pour les logiciels de recrutement.":
+          "Skills shown as graphics (stars/bars) — Recruiting software cannot read them.",
         "Coordonnées en texte clair.": "Contact details in plain text.",
         "Coordonnées absentes ou non textuelles.": "Contact details missing or not plain text.",
         "Nom candidat détecté.": "Candidate name detected.",
@@ -3365,9 +3367,9 @@ export function analyzeCv(rawText, fileMeta = {}) {
           "First/last name missing or unclear (avoid a job title instead).",
         "Localisation détectée.": "Location detected.",
         "Adresse ou localisation détectée.": "Address or location detected.",
-        "Localisation absente (ville/CP) — utile pour le filtrage ATS.":
+        "Localisation absente (ville/CP) — utile pour le filtrage automatique.":
           "Location missing (city/ZIP) — useful for ATS filtering.",
-        "Localisation absente (ville/adresse) — utile pour le filtrage ATS.":
+        "Localisation absente (ville/adresse) — utile pour le filtrage automatique.":
           "Location missing (city/address) — useful for ATS filtering.",
         "Intitulé (headline) sous le nom détecté.": "Headline job title under the name detected.",
         "Pas d'intitulé clair sous le nom — ajoutez un titre de poste ciblé.":
@@ -3388,7 +3390,7 @@ export function analyzeCv(rawText, fileMeta = {}) {
           "No role with start/end dates (or “present”) parseable.",
         "Dates de postes : non applicable (aucun rôle détecté).":
           "Role dates: not applicable (no roles detected).",
-        "Photo de profil détectée — souvent ignorée ou nuisible aux parseurs ATS ; préférez le texte.":
+        "Photo de profil détectée — souvent ignorée ou nuisible aux logiciels de recrutement ; préférez le texte.":
           "Profile photo detected — often ignored or harmful to ATS parsers; prefer plain text.",
         "Pas de photo de profil détectée en en-tête.": "No profile photo detected in the header.",
         "Orthographe : pas de faute fréquente détectée.": "Spelling: no common issues detected.",
@@ -3399,20 +3401,20 @@ export function analyzeCv(rawText, fileMeta = {}) {
           "No complete role (title + company + dates) parseable.",
         "Titres de sections standards détectés.": "Standard section headings detected.",
         "Titres de sections standards recommandés.": "Standard section headings recommended.",
-        "Titres de sections non lisibles par un ATS (Expérience/Formation/Compétences).":
-          "Section headings not ATS-readable (Experience/Education/Skills).",
-        "Titres de sections non lisibles par un ATS (Expérience).":
-          "Section headings not ATS-readable (Experience).",
-        "Titres de sections non lisibles par un ATS (Formation).":
-          "Section headings not ATS-readable (Education).",
-        "Titres de sections non lisibles par un ATS (Compétences).":
-          "Section headings not ATS-readable (Skills).",
-        "Titres de sections non lisibles par un ATS (Expérience/Formation).":
-          "Section headings not ATS-readable (Experience/Education).",
-        "Titres de sections non lisibles par un ATS (Expérience/Compétences).":
-          "Section headings not ATS-readable (Experience/Skills).",
-        "Titres de sections non lisibles par un ATS (Formation/Compétences).":
-          "Section headings not ATS-readable (Education/Skills).",
+        "Titres de sections peu lisibles automatiquement (Expérience/Formation/Compétences).":
+          "Section headings hard to read automatically (Experience/Education/Skills).",
+        "Titres de sections peu lisibles automatiquement (Expérience).":
+          "Section headings hard to read automatically (Experience).",
+        "Titres de sections peu lisibles automatiquement (Formation).":
+          "Section headings hard to read automatically (Education).",
+        "Titres de sections peu lisibles automatiquement (Compétences).":
+          "Section headings hard to read automatically (Skills).",
+        "Titres de sections peu lisibles automatiquement (Expérience/Formation).":
+          "Section headings hard to read automatically (Experience/Education).",
+        "Titres de sections peu lisibles automatiquement (Expérience/Compétences).":
+          "Section headings hard to read automatically (Experience/Skills).",
+        "Titres de sections peu lisibles automatiquement (Formation/Compétences).":
+          "Section headings hard to read automatically (Education/Skills).",
         "Longueur idéale (1 page).": "Ideal length (1 page).",
         "CV un peu long (3 pages) — visez 1 à 2 pages.":
           "A bit long (3 pages) — aim for 1 to 2 pages.",
@@ -3437,6 +3439,21 @@ export function analyzeCv(rawText, fileMeta = {}) {
           "Action verbs almost absent — rephrase as achievements.",
         "Quelques chiffres — ajoutez davantage de métriques.":
           "Some figures — add more metrics.",
+        "Outils et méthodes détectés":
+          "Tools and methods detected",
+        "Densité d'outils moyenne":
+          "Average tool density",
+        "Peu d'outils et méthodes — alignez-vous sur ceux de votre cible.":
+          "Few tools and methods — align with those of your target role.",
+        "Trop de qualités personnelles":
+          "Too many personal qualities",
+        "Bonne diversité d'outils et méthodes.": "Good diversity of tools and methods.",
+        "Diversifiez les outils et méthodes (pas seulement des qualités personnelles).":
+          "Diversify tools and methods (not only personal qualities).",
+        "Texte correctement extractible par les logiciels de recrutement.":
+          "Text clearly extractable by recruiting software.",
+        "Texte extractible mais peu abondant — complétez le contenu ou vérifiez l'export.":
+          "Little extractable text — add content or check your export.",
         "Presque aucun résultat chiffré — les ATS et RH valorisent les preuves.":
           "Almost no quantified results — ATS and HR value proof.",
         "Bonne diversité lexicale pour matcher les offres.":
@@ -3452,8 +3469,11 @@ export function analyzeCv(rawText, fileMeta = {}) {
       m = s.match(/^Longueur acceptable \((\d+) pages\)\.$/);
       if (m) return `Acceptable length (${m[1]} pages).`;
 
+      m = s.match(/^CV trop long \((\d+) pages\) — risque de rejet par les logiciels de recrutement ou les RH\.$/);
+      if (m) return `Too long (${m[1]} pages) — risk of rejection by recruiting software or HR.`;
+
       m = s.match(/^CV trop long \((\d+) pages\) — risque de rejet ATS\/RH\.$/);
-      if (m) return `Too long (${m[1]} pages) — risk of ATS/HR rejection.`;
+      if (m) return `Too long (${m[1]} pages) — risk of rejection by recruiting software or HR.`;
 
       m = s.match(/^Longueur acceptable \((\d+) page\)\.$/);
       if (m) return `Acceptable length (${m[1]} page).`;
@@ -3473,17 +3493,38 @@ export function analyzeCv(rawText, fileMeta = {}) {
       m = s.match(/^Formulations faibles détectées \((\d+)\) — préférez des verbes d'action\.$/);
       if (m) return `Weak wording detected (${m[1]}) — prefer action verbs.`;
 
+      m = s.match(/^Alignement offre ↔ CV : (\d+)% \(exigences (\d+)%, (\d+) termes communs\)\.$/);
+      if (m) return `Job ↔ CV alignment: ${m[1]}% (requirements ${m[2]}%, ${m[3]} shared terms).`;
+
       m = s.match(/^Alignement offre ↔ CV : (\d+)% \(must (\d+)%, (\d+) termes communs\)\.$/);
-      if (m) return `Job ↔ CV alignment: ${m[1]}% (must ${m[2]}%, ${m[3]} shared terms).`;
+      if (m) return `Job ↔ CV alignment: ${m[1]}% (requirements ${m[2]}%, ${m[3]} shared terms).`;
+
+      m = s.match(/^Faible alignement offre \((\d+)%\) — exigences manquantes : (.+)\.$/);
+      if (m) return `Weak job alignment (${m[1]}%) — missing requirements: ${m[2]}.`;
 
       m = s.match(/^Faible alignement offre \((\d+)%\) — must absents : (.+)\.$/);
-      if (m) return `Weak job alignment (${m[1]}%) — missing must-haves: ${m[2]}.`;
+      if (m) return `Weak job alignment (${m[1]}%) — missing requirements: ${m[2]}.`;
 
       m = s.match(/^Faible alignement avec l'offre \((\d+)%\) — reprenez les termes clés\.$/);
       if (m) return `Weak job alignment (${m[1]}%) — reuse key terms.`;
 
+      m = s.match(/^Trop de qualités personnelles \((\d+)\) vs outils \((\d+)\) — privilégiez outils et méthodes\.$/);
+      if (m) return `Too many personal qualities (${m[1]}) vs tools (${m[2]}) — prefer tools and methods.`;
+
       m = s.match(/^Sur-représentation soft \((\d+)\) vs hard \((\d+)\) — privilégiez outils et méthodes\.$/);
-      if (m) return `Soft skills dominate (${m[1]}) vs hard (${m[2]}) — prefer tools and methods.`;
+      if (m) return `Too many personal qualities (${m[1]}) vs tools (${m[2]}) — prefer tools and methods.`;
+
+      m = s.match(/^Métier « (.+) » : (\d+) outil\(s\) ou méthode\(s\) manquant\(s\) \(ex\. (.+)\)\.$/);
+      if (m) return `Role « ${m[1]} »: ${m[2]} missing tool(s) or method(s) (e.g. ${m[3]}).`;
+
+      m = s.match(/^Compétences du métier « (.+) » bien couvertes\.$/);
+      if (m) return `Role skills for « ${m[1]} » well covered.`;
+
+      m = s.match(/^Outils et méthodes détectés \((\d+)\)\.$/);
+      if (m) return `Tools and methods detected (${m[1]}).`;
+
+      m = s.match(/^Densité d'outils moyenne \((\d+)\) — ajoutez outils et méthodes concrets\.$/);
+      if (m) return `Average tool density (${m[1]}) — add concrete tools and methods.`;
 
       m = s.match(/^Alignement offre ↔ CV : (\d+)% \((\d+) termes communs\)\.$/);
       if (m) return `Job ↔ CV alignment: ${m[1]}% (${m[2]} shared terms).`;
@@ -3515,7 +3556,7 @@ export function analyzeCv(rawText, fileMeta = {}) {
       m = s.match(/^Page\(s\) quasi image\/scan détectée\(s\) : (.+)\.$/);
       if (m) return `Near image/scan page(s) detected: ${m[1]}.`;
 
-      m = s.match(/^CV probablement créé avec (.+) — risque ATS et crédibilité\.$/);
+      m = s.match(/^CV probablement créé avec (.+) — risque lecture automatique et crédibilité\.$/);
       if (m) return `CV likely built with ${m[1]} — ATS and credibility risk.`;
 
       m = s.match(/^Source favorable détectée \((.+)\)\.$/);
@@ -3530,8 +3571,14 @@ export function analyzeCv(rawText, fileMeta = {}) {
       m = s.match(/^Trop de formulations faibles \((\d+)\) — remplacez par des verbes d'action\.$/);
       if (m) return `Too many weak formulations (${m[1]}) — replace with action verbs.`;
 
+      m = s.match(/^Peu de texte exploitable — complétez le contenu ou vérifiez l'export\.$/);
+      if (m) return `Little usable text — add content or check your export.`;
+
+      m = s.match(/^Texte extractible mais peu abondant — complétez le contenu ou vérifiez l'export\.$/);
+      if (m) return `Little usable text — add content or check your export.`;
+
       m = s.match(/^Texte extractible mais sparse — complétez le contenu ou vérifiez l'export\.$/);
-      if (m) return `Extractable but sparse text — add content or check the export.`;
+      if (m) return `Little usable text — add content or check your export.`;
 
       return s;
     };
@@ -3575,14 +3622,14 @@ export function analyzeCv(rawText, fileMeta = {}) {
             "→ Reframe your research in terms of impact, budget you managed, and results applicable to the industry.",
         },
         "Mise en page potentiellement hostile ATS": {
-          title: "Layout may be ATS-hostile",
+          title: "Layout may confuse automated reading",
           body: "Columns or tables can make some parsers read text out of order.",
-          tip: "→ Prefer linear reading order (single column) in your original file; avoid columns and tables for ATS applications.",
+          tip: "→ Prefer linear reading order (single column) in your original file; avoid columns and tables for automated applications.",
         },
         "Manque de résultats chiffrés": {
           title: "Missing quantified results",
           body:
-            "Without metrics (%, €, volumes, deadlines), your impact is hard for an ATS to score and for HR to evaluate.",
+            "Without metrics (%, €, volumes, deadlines), your impact is hard for recruiting software to score and for HR to evaluate.",
           tip: "→ Add metrics on ≥ 50% of bullets in your 2 most recent roles.",
         },
         "E-mail manquant": {
@@ -3602,45 +3649,65 @@ export function analyzeCv(rawText, fileMeta = {}) {
         },
         "Titres de sections non standards": {
           title: "Non-standard section headings",
-          body: "ATS-friendly headings (Experience / Education / Skills) were not detected.",
-          tip: "→ Use Experience / Education / Skills (ATS labels).",
+          body: "Standard headings (Experience / Education / Skills) were not detected.",
+          tip: "→ Use Experience / Education / Skills (standard labels).",
+        },
+        "Trop peu d’outils et méthodes": {
+          title: "Too few tools and methods",
+          body: "Too few concrete tools/methods detected.",
+          tip: "→ List concrete tools and methods (not only personal qualities).",
         },
         "Densité de mots-clés hard insuffisante": {
-          title: "Insufficient hard keyword density",
+          title: "Too few tools and methods",
           body: "Too few concrete tools/methods detected.",
-          tip: "→ List concrete tools and methods (not only soft skills).",
+          tip: "→ List concrete tools and methods (not only personal qualities).",
+        },
+        "Compétences du métier ciblé manquantes": {
+          title: "Missing skills for the target role",
+          body: "Your CV is missing key tools/methods for the inferred role.",
+          tip: "→ Complete the Skills section with tools from your target role.",
         },
         "Termes hard du pack métier manquants": {
-          title: "Missing hard terms from role pack",
-          body: "Your CV is missing key hard skills for the inferred role pack.",
+          title: "Missing skills for the target role",
+          body: "Your CV is missing key tools/methods for the inferred role.",
           tip: "→ Complete the Skills section with tools from your target role.",
         },
         "Coordonnées incomplètes": {
           title: "Incomplete contact details",
           body:
-            "An ATS and recruiters must be able to reach you immediately. Email and phone are essential.",
+            "Recruiting software and recruiters must be able to reach you immediately. Email and phone are essential.",
           tip:
             "→ Place your email + phone at the top of the CV, in plain text (not inside an image).",
         },
-        "CV trop long pour les filtres ATS": {
-          title: "CV too long for ATS filters",
+        "CV trop long pour les filtres automatiques": {
+          title: "CV too long for automated filters",
           body:
             "Beyond 2 pages, the signal dilutes and some parsers truncate content.",
           tip: "→ Condense older experiences and remove non-relevant details.",
         },
-        "Tableaux hostiles aux ATS": {
-          title: "Tables hostile to ATS",
-          body: "Table grids often make ATS read cells out of order.",
+        "Tableaux mal lus automatiquement": {
+          title: "Tables poorly read automatically",
+          body: "Table grids often make recruiting software read cells out of order.",
           tip: "→ Convert tables to single-column lists or paragraphs in your original file.",
         },
-        "Colonnes potentiellement hostiles ATS": {
-          title: "Columns potentially hostile to ATS",
+        "Tableaux hostiles aux ATS": {
+          title: "Tables poorly read automatically",
+          body: "Table grids often make recruiting software read cells out of order.",
+          tip: "→ Convert tables to single-column lists or paragraphs in your original file.",
+        },
+        "Colonnes potentiellement mal lues": {
+          title: "Columns may be misread",
           body: "A multi-column layout can reverse reading order for bots.",
-          tip: "→ Prefer linear reading (one column) for ATS applications.",
+          tip: "→ Prefer linear reading (one column) for automated applications.",
+        },
+        "Colonnes potentiellement hostiles ATS": {
+          title: "Columns may be misread",
+          body: "A multi-column layout can reverse reading order for bots.",
+          tip: "→ Prefer linear reading (one column) for automated applications.",
         },
         "CV image / scan peu extractible": {
           title: "Image / scan CV — little extractable text",
-          body: "Little selectable text — ATS cannot read image pages.",
+          body: "Little selectable text — recruiting software cannot read image pages.",
           tip: "→ Export a text PDF or DOCX (not a photo or flattened export).",
         },
         "Formulations passives ou descriptives": {
@@ -3667,7 +3734,7 @@ export function analyzeCv(rawText, fileMeta = {}) {
         if (hostile) {
           d.title = `CV built with ${hostile[1]} — credibility at risk`;
           d.body =
-            "Canva, AI builders and graphic templates often scramble ATS parsing and can look generic to recruiters.";
+            "Canva, AI builders and graphic templates often scramble automated reading and can look generic to recruiters.";
           d.tip = "→ Rewrite in Word/Google Docs as linear single-column text.";
         }
       }
@@ -3772,13 +3839,13 @@ export function analyzeCv(rawText, fileMeta = {}) {
     documentProfile: readability.documentProfile || null,
     categories: {
       readability: {
-        name: uiLang === "en" ? "ATS readability" : "Lisibilité ATS",
+        name: uiLang === "en" ? "Automated reading" : "Lecture automatique",
         score: readability.score,
         max: 25,
         desc:
           uiLang === "en"
-            ? "Extractable text, layout and encoding — can your CV be read by an ATS?"
-            : "Texte extractible, mise en page, encodage — est-ce que votre CV peut être lu par un robot ?",
+            ? "Extractable text, layout and encoding — can recruiting software read your CV?"
+            : "Texte extractible, mise en page, encodage — votre CV est-il lisible automatiquement ?",
         bar: barClass(readability.score),
         color: scoreColor(readability.score),
         hasTables: !!readability.hasTables,
@@ -4131,7 +4198,7 @@ export function mergeRemoteEnrichment(report, enrich = {}, opts = {}) {
         false,
         isEn
           ? "Profile photo detected — often ignored or harmful to ATS parsers; prefer plain text."
-          : "Photo de profil détectée — souvent ignorée ou nuisible aux parseurs ATS ; préférez le texte."
+          : "Photo de profil détectée — souvent ignorée ou nuisible aux logiciels de recrutement ; préférez le texte."
       );
     }
   }

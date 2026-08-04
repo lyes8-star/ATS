@@ -1670,6 +1670,13 @@ communication, leadership, collaboration, teamwork, créativité, autonomie
     softStuff.annotations.some((a) => a.checkId === "keyword_soft_stuffing"),
     "soft-stuffing annotation"
   );
+  const stuffAnn = softStuff.annotations.find((a) => a.checkId === "keyword_soft_stuffing");
+  assert.ok(stuffAnn && !/Soft stuffing/i.test(stuffAnn.shortLabel || ""), "no Soft stuffing shortLabel");
+  assert.ok(stuffAnn && !/\bhard\b/i.test(stuffAnn.title || ""), "soft-stuffing title without hard jargon");
+  assert.ok(
+    /qualités personnelles|outils/i.test(stuffing.label || ""),
+    "soft-stuffing checklist label plain language"
+  );
   console.log("✓ soft-stuffing check + annotation OK");
 
   // Ambiguous role pack should not penalize
@@ -2501,6 +2508,51 @@ Soft skills: leadership.`
   assert.equal(hasTermBoundary("preact.js toolkit", "react.js"), false);
   assert.equal(hasTermBoundary("uses react.js daily", "react.js"), true);
   console.log("✓ matching Pro-style boundary unit OK");
+}
+
+// ── Clarté analyse (langage utilisateur) ──
+{
+  const { shortCheckLabel } = await import("./studio.js");
+  assert.equal(shortCheckLabel("long jargon sentence here that truncates", "email"), "E-mail");
+  assert.equal(shortCheckLabel("x", "metrics"), "Chiffres");
+  assert.equal(shortCheckLabel("x", "keyword_soft_stuffing"), "Outils manquants");
+  assert.equal(shortCheckLabel("x", "standard_headings"), "Titres de sections");
+  assert.equal(shortCheckLabel("x", "jd_overlap"), "Offre");
+  console.log("✓ clarity KO chip labels OK");
+
+  const softCv = `
+Pat Soft
+pat@mail.com | 01 23 45 67 89
+EXPÉRIENCE
+Assistant — Corp (2020 - 2022)
+- Responsable de la communication interne sans chiffre
+FORMATION
+Licence (2018 - 2020)
+COMPÉTENCES
+communication, leadership, collaboration, teamwork, créativité, autonomie
+`;
+  const softR = analyzeCv(softCv, {
+    pages: 1,
+    skillsMatch: {
+      hits: ["communication", "leadership", "collaboration", "teamwork", "créativité", "autonomie"],
+      hardHits: [],
+      softHits: ["communication", "leadership", "collaboration", "teamwork", "créativité"],
+      count: 0,
+      density: 0,
+    },
+  });
+  const stuff = softR.checklist.find((c) => c.id === "keyword_soft_stuffing");
+  assert.ok(stuff && !/\bhard\b/i.test(stuff.label) && !/\bsoft\b/i.test(stuff.label.replace(/soft skills/i, "")), "checklist without hard/soft jargon");
+  assert.ok(/qualités personnelles|outils/i.test(stuff.label), "plain-language soft-stuffing label");
+  const ann = softR.annotations.find((a) => a.checkId === "keyword_soft_stuffing");
+  assert.ok(ann && ann.shortLabel !== "Soft stuffing", "annotation shortLabel clarified");
+  assert.ok(ann && !/\bhard\b/i.test(ann.title || ""), "annotation title without hard");
+  assert.ok(
+    softR.categories.readability.name === "Lecture automatique" ||
+      /Lecture|Automated|Lisibilité/i.test(softR.categories.readability.name),
+    "readability axis plain name"
+  );
+  console.log("✓ clarity analyzer copy OK", stuff.label, softR.categories.readability.name);
 }
 
 console.log("Tous les tests OK");

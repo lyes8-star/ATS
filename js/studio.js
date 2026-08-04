@@ -97,12 +97,30 @@ function studioShell(session) {
       ? t("studio.pass.risk")
       : t("studio.pass.fail");
 
+  const scoreDescKey =
+    total >= 85
+      ? "results.scoreDesc.high"
+      : total >= 70
+        ? "results.scoreDesc.good"
+        : total >= 50
+          ? "results.scoreDesc.mid"
+          : "results.scoreDesc.low";
+  const scoreMeaning = `${t("studio.score.meaning")} — ${t(scoreDescKey)}`;
+
   const axisBar = (key) => {
     const c = cats[key];
     if (!c) return "";
     const pct = Math.round(((c.score || 0) / (c.max || 25)) * 100);
-    return `<div class="studio-axis" title="${escapeHtml(c.name)}: ${c.score}/${c.max}">
-      <span class="studio-axis-name">${escapeHtml(c.name)}</span>
+    const axisName = t(`studio.axis.${key}`) || c.name;
+    const tip = c.desc ? `${axisName}: ${c.desc}` : `${axisName}: ${c.score}/${c.max}`;
+    const descLine = c.desc
+      ? `<span class="studio-axis-desc">${escapeHtml(c.desc)}</span>`
+      : "";
+    return `<div class="studio-axis" title="${escapeHtml(tip)}">
+      <div class="studio-axis-copy">
+        <span class="studio-axis-name">${escapeHtml(axisName)}</span>
+        ${descLine}
+      </div>
       <span class="studio-axis-track"><span class="studio-axis-fill ${escapeHtml(c.bar || "bg-amber")}" style="width:${pct}%"></span></span>
       <span class="studio-axis-score">${c.score}/${c.max}</span>
     </div>`;
@@ -120,7 +138,7 @@ function studioShell(session) {
     ? `<div class="studio-checklist-kos" id="studio-checklist-kos">${visibleKos
         .map((c) => {
           const full = String(c.label || c.id || "").trim();
-          const short = shortCheckLabel(full);
+          const short = shortCheckLabel(full, c.id);
           return `<button type="button" class="studio-ko-id" data-check-id="${escapeHtml(
             c.id
           )}" title="${escapeHtml(full)}">${escapeHtml(short)}</button>`;
@@ -175,6 +193,7 @@ function studioShell(session) {
             <span class="studio-label">${escapeHtml(label)}</span>
             <span class="studio-pass-pill ${pass ? "is-ok" : "is-risk"}">${escapeHtml(passLabel)}</span>
           </p>
+          <p class="studio-score-meaning">${escapeHtml(scoreMeaning)}</p>
           <p class="studio-hint">${escapeHtml(t("studio.hint"))}</p>
         </div>
       </div>
@@ -307,6 +326,7 @@ function matchPanelBlock(session) {
       ${chipRow(t("studio.match.mustMissing"), mustMissing, "miss")}
       ${chipRow(t("studio.match.niceTerms"), niceTerms, "nice")}
       ${chipRow(t("studio.match.overlap"), overlap, "overlap")}
+      <p class="studio-match-explain">${escapeHtml(t("studio.match.explain"))}</p>
       ${
         mustMissing.length
           ? `<p class="studio-match-prompt-note">${escapeHtml(t("studio.match.promptNote"))}</p>`
@@ -701,8 +721,88 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+/** Libellés courts pour chips checklist (par checkId, sinon troncature). */
+const CHECK_CHIP_LABELS_FR = {
+  email: "E-mail",
+  phone: "Téléphone",
+  identity_name: "Nom",
+  identity_address: "Adresse",
+  linkedin: "LinkedIn",
+  job_title: "Intitulé",
+  job_title_headline: "Titre",
+  metrics: "Chiffres",
+  action_verbs: "Verbes",
+  weak_verbs: "Verbes",
+  concision: "Longueur",
+  spelling_quality: "Orthographe",
+  grammar_quality: "Grammaire",
+  keyword_density: "Outils",
+  keyword_diversity: "Outils",
+  keyword_soft_stuffing: "Outils manquants",
+  role_keywords: "Métier",
+  jd_overlap: "Offre",
+  standard_headings: "Titres de sections",
+  section_experience: "Expérience",
+  section_education: "Formation",
+  section_skills: "Compétences",
+  no_tables: "Tableaux",
+  single_column: "Colonnes",
+  encoding: "Encodage",
+  extractable_text: "Texte",
+  page_length: "Pages",
+  profile_photo: "Photo",
+  cv_source: "Source",
+  contact_plaintext: "Coordonnées",
+  complete_role: "Poste",
+  role_dates: "Dates",
+  reading_order: "Ordre",
+  graphic_skills: "Compétences",
+};
+
+const CHECK_CHIP_LABELS_EN = {
+  email: "Email",
+  phone: "Phone",
+  identity_name: "Name",
+  identity_address: "Location",
+  linkedin: "LinkedIn",
+  job_title: "Job title",
+  job_title_headline: "Headline",
+  metrics: "Metrics",
+  action_verbs: "Verbs",
+  weak_verbs: "Verbs",
+  concision: "Length",
+  spelling_quality: "Spelling",
+  grammar_quality: "Grammar",
+  keyword_density: "Tools",
+  keyword_diversity: "Tools",
+  keyword_soft_stuffing: "Missing tools",
+  role_keywords: "Role skills",
+  jd_overlap: "Job match",
+  standard_headings: "Headings",
+  section_experience: "Experience",
+  section_education: "Education",
+  section_skills: "Skills",
+  no_tables: "Tables",
+  single_column: "Columns",
+  encoding: "Encoding",
+  extractable_text: "Text",
+  page_length: "Pages",
+  profile_photo: "Photo",
+  cv_source: "Source",
+  contact_plaintext: "Contact",
+  complete_role: "Role",
+  role_dates: "Dates",
+  reading_order: "Order",
+  graphic_skills: "Skills",
+};
+
 /** Libellé court pour chips checklist (max ~28 car.) */
-function shortCheckLabel(label) {
+export function shortCheckLabel(label, checkId = "") {
+  const i18n = typeof globalThis !== "undefined" ? globalThis.ATSi18n : undefined;
+  const lang = i18n?.getLang?.() || "fr";
+  const map = lang === "en" ? CHECK_CHIP_LABELS_EN : CHECK_CHIP_LABELS_FR;
+  const id = String(checkId || "").trim();
+  if (id && map[id]) return map[id];
   const s = String(label || "").trim();
   if (s.length <= 28) return s;
   return `${s.slice(0, 27)}…`;
